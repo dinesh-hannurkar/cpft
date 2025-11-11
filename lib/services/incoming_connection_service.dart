@@ -6,8 +6,8 @@ class IncomingConnectionService {
   final int port;
   final String deviceName;
   ServerSocket? _serverSocket;
-  // Listeners now receive the accepted Socket plus a broadcast stream of its data and the remote device name
-  final List<Function(Socket, Stream<List<int>>, String)> _connectionListeners = [];
+  // Listeners receive the accepted Socket and the remote device name
+  final List<Function(Socket, String)> _connectionListeners = [];
   bool _isListening = false;
 
   IncomingConnectionService({
@@ -19,12 +19,12 @@ class IncomingConnectionService {
   bool get isListening => _isListening;
 
   /// Add connection listener
-  void addConnectionListener(Function(Socket, Stream<List<int>>, String) listener) {
+  void addConnectionListener(Function(Socket, String) listener) {
     _connectionListeners.add(listener);
   }
 
   /// Remove connection listener
-  void removeConnectionListener(Function(Socket, Stream<List<int>>, String) listener) {
+  void removeConnectionListener(Function(Socket, String) listener) {
     _connectionListeners.remove(listener);
   }
 
@@ -66,17 +66,17 @@ class IncomingConnectionService {
     final remoteAddress = socket.remoteAddress.address;
     print('[IncomingConnection] 📞 Incoming connection from $remoteAddress');
 
-    // Immediately convert to broadcast and notify listeners (UI will accept/decline)
-    final broadcast = socket.asBroadcastStream();
-    print('[IncomingConnection] 🎯 Notifying listeners with socket & broadcast (no handshake expected)');
-    _notifyListeners(socket, broadcast, remoteAddress);
+    // Don't convert to broadcast - just pass the socket directly
+    // The ConnectionService will attach its own listener
+    print('[IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)');
+    _notifyListeners(socket, remoteAddress);
   }
 
   /// Notify listeners about new connection
-  void _notifyListeners(Socket socket, Stream<List<int>> broadcastStream, String remoteName) {
+  void _notifyListeners(Socket socket, String remoteName) {
     for (final listener in _connectionListeners) {
       try {
-        listener(socket, broadcastStream, remoteName);
+        listener(socket, remoteName);
       } catch (e) {
         print('[IncomingConnection] ❌ Error notifying listener: $e');
       }

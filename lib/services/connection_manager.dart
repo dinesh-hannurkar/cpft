@@ -91,58 +91,6 @@ class ConnectionManager {
     }
   }
 
-  /// Handle incoming connection with provided broadcast stream (preferred)
-  Future<void> handleIncomingConnectionWithStream(
-    Socket socket,
-    Stream<List<int>> broadcastStream,
-    String remoteName,
-  ) async {
-    try {
-      print('[ConnectionManager] 📞 Handling incoming connection (with stream) from $remoteName');
-      print('[ConnectionManager] 🔍 Socket details - Address: ${socket.remoteAddress.address}, Port: ${socket.remotePort}');
-
-      final existingService = _activeConnections[remoteName];
-      if (existingService != null) {
-        if (existingService.isConnected) {
-          print('[ConnectionManager] ⚠️  Already connected to $remoteName, rejecting duplicate incoming connection');
-          try { socket.close(); } catch (_) {}
-          return;
-        } else {
-          print('[ConnectionManager] 🗑️  Removing stale (not connected) existing connection to $remoteName');
-          _activeConnections.remove(remoteName);
-          try {
-            await existingService.disconnect();
-            await existingService.dispose();
-            print('[ConnectionManager] ✅ Stale connection to $remoteName fully disposed');
-          } catch (e) {
-            print('[ConnectionManager] ⚠️  Error disposing stale connection to $remoteName: $e');
-          }
-        }
-      }
-
-      print('[ConnectionManager] Creating new connection service for $remoteName');
-      final service = ConnectionService(deviceName: this.deviceName);
-      _activeConnections[remoteName] = service;
-      print('[ConnectionManager] 🔍 Got ConnectionService for $remoteName');
-
-      print('[ConnectionManager] 🔄 Calling acceptConnectionWithStream...');
-      final success = await service.acceptConnectionWithStream(socket, broadcastStream, remoteName);
-
-      if (success) {
-        print('[ConnectionManager] ✅ Incoming connection from $remoteName accepted');
-  _notifyConnectionListeners(remoteName, service, isIncoming: true);
-      } else {
-        print('[ConnectionManager] ❌ Failed to accept connection from $remoteName');
-        _activeConnections.remove(remoteName);
-      }
-    } catch (e, stackTrace) {
-      print('[ConnectionManager] ❌ Exception handling incoming connection (with stream): $e');
-      print('[ConnectionManager] Stack trace: $stackTrace');
-      _activeConnections.remove(remoteName);
-      try { socket.close(); } catch (_) {}
-    }
-  }
-
   /// Add listener for new connections
   void addConnectionListener(Function(String deviceName, ConnectionService service, bool isIncoming) listener) {
     _connectionListeners.add(listener);

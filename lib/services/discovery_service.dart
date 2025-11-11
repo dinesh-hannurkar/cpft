@@ -179,7 +179,7 @@ class DiscoveryService {
   }
 
   /// Handle incoming P2P connection
-  void _onIncomingConnection(Socket socket, Stream<List<int>> broadcastStream, String remoteName) async {
+  void _onIncomingConnection(Socket socket, String remoteName) async {
     final ip = socket.remoteAddress.address;
     final port = socket.remotePort;
     print('[DiscoveryService] 📞 Incoming P2P connection from $remoteName');
@@ -199,7 +199,7 @@ class DiscoveryService {
     // Build accept/decline closures
     Future<void> accept() async {
       print('[DiscoveryService] ✅ Accepting incoming connection from $displayName');
-      await _connectionManager.handleIncomingConnectionWithStream(socket, broadcastStream, displayName);
+      await _connectionManager.handleIncomingConnection(socket, displayName);
     }
 
     Future<void> decline() async {

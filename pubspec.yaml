@@ -15,6 +15,11 @@ dependencies:
   crypto: ^3.0.3
   wakelock_plus: ^1.2.8
   nsd: ^4.0.3  # For Bonjour/mDNS on iOS
+  file_picker: ^8.0.2
+  path_provider: ^2.1.4
+  shared_preferences: ^2.2.3
+  open_filex: ^4.5.0
+  share_plus: ^10.0.2
 
 dev_dependencies:
   flutter_test:
