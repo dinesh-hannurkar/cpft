@@ -1,0 +1,25 @@
+name: cpft
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  permission_handler: ^11.3.1
+  shelf: ^1.4.1
+  http: ^1.1.0
+  crypto: ^3.0.3
+  wakelock_plus: ^1.2.8
+  nsd: ^4.0.3  # For Bonjour/mDNS on iOS
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
