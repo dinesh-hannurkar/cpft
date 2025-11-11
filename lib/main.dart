@@ -130,21 +130,49 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
       cleanHostname = cleanHostname.substring(0, cleanHostname.length - 6);
     }
     
+    // Remove common suffixes and clean up
+    cleanHostname = cleanHostname
+        .replaceAll('.', '-')
+        .replaceAll('_', '-')
+        .replaceAll(' ', '-');
+    
+    // Generate a unique 4-character ID based on hostname hash
+    // Ensure it's always exactly 4 digits by padding with zeros if needed
+    final hashValue = hostname.hashCode.abs() % 10000; // Ensure max 4 digits
+    final uniqueId = hashValue.toString().padLeft(4, '0');
+    
+    print('[Main] 🏷️  Generated device name components:');
+    print('[Main]   - Original hostname: $hostname');
+    print('[Main]   - Cleaned hostname: $cleanHostname');
+    print('[Main]   - Unique ID: $uniqueId');
+    
     // For iOS devices, use a more descriptive name
     if (Platform.isIOS) {
       // iOS devices often have generic hostnames, so add a platform identifier
-      return 'iPhone-$cleanHostname';
+      final deviceName = 'iPhone-$cleanHostname-$uniqueId';
+      print('[Main] ✅ Final device name: $deviceName');
+      return deviceName;
     } else if (Platform.isAndroid) {
-      return 'Android-$cleanHostname';
+      final deviceName = 'Android-$cleanHostname-$uniqueId';
+      print('[Main] ✅ Final device name: $deviceName');
+      return deviceName;
     } else if (Platform.isMacOS) {
-      return 'Mac-$cleanHostname';
+      final deviceName = 'Mac-$cleanHostname-$uniqueId';
+      print('[Main] ✅ Final device name: $deviceName');
+      return deviceName;
     } else if (Platform.isWindows) {
-      return 'Windows-$cleanHostname';
+      final deviceName = 'Windows-$cleanHostname-$uniqueId';
+      print('[Main] ✅ Final device name: $deviceName');
+      return deviceName;
     } else if (Platform.isLinux) {
-      return 'Linux-$cleanHostname';
+      final deviceName = 'Linux-$cleanHostname-$uniqueId';
+      print('[Main] ✅ Final device name: $deviceName');
+      return deviceName;
     }
     
     // Fallback
-    return 'Device-$cleanHostname';
+    final deviceName = 'Device-$cleanHostname-$uniqueId';
+    print('[Main] ✅ Final device name: $deviceName');
+    return deviceName;
   }
 }

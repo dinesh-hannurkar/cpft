@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../services/discovery_service.dart';
 import '../utils/permissions.dart';
+import 'connection_screen.dart';
 
 class DeviceDiscoveryScreen extends StatefulWidget {
   final String deviceName;
@@ -24,6 +25,8 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   bool _isInitialized = false;
   bool _isRefreshing = false;
   Map<String, String> _discoveredDevices = {};
+  // Track pending incoming prompts to avoid duplicates
+  final Set<String> _pendingIncoming = {};
 
   @override
   void initState() {
@@ -57,6 +60,8 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       print('Initializing LocalSend-style discovery...');
       await _discoveryService.initialize();
       _discoveryService.addDiscoveryListener(_onDeviceDiscovered);
+  // Listen for incoming connection requests (pre-accept)
+  _discoveryService.addIncomingRequestListener(_onIncomingRequest);
 
       if (mounted) {
         setState(() {
@@ -91,6 +96,72 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       print('[UI] ✅ UI updated: Device discovered - $deviceName at $ipAddress:$port');
     } else {
       print('[UI] ⚠️  Widget not mounted - cannot update UI');
+    }
+  }
+
+  void _onIncomingRequest(
+    String deviceName,
+    String ipAddress,
+    int port,
+    Future<void> Function() accept,
+    Future<void> Function() decline,
+  ) async {
+    if (_pendingIncoming.contains(deviceName)) return;
+    _pendingIncoming.add(deviceName);
+    await _handleIncomingConnectionUI(deviceName, ipAddress, port, accept, decline);
+  }
+
+  Future<void> _handleIncomingConnectionUI(
+    String deviceName,
+    String ipAddress,
+    int port,
+    Future<void> Function() accept,
+    Future<void> Function() decline,
+  ) async {
+    if (!mounted) return;
+
+    // If you prefer auto-open, you can short-circuit here by pushing without dialog.
+    // For now, show a prompt so user can accept/decline.
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Incoming chat request'),
+          content: Text('$deviceName wants to chat.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Decline'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Accept'),
+            ),
+          ],
+        );
+      },
+    );
+
+    _pendingIncoming.remove(deviceName);
+
+    if (result == true && mounted) {
+      // Accept the socket and then open chat
+      await accept();
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ConnectionScreen(
+            deviceName: deviceName,
+            ipAddress: ipAddress,
+            port: port,
+            myDeviceName: widget.deviceName,
+            connectionManager: _discoveryService.connectionManager!,
+          ),
+        ),
+      );
+    } else if (result == false) {
+      // Declined: close the socket
+      await decline();
     }
   }
 
@@ -149,6 +220,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     WakelockPlus.disable();
     
     _discoveryService.removeDiscoveryListener(_onDeviceDiscovered);
+  _discoveryService.removeIncomingRequestListener(_onIncomingRequest);
     _discoveryService.dispose();
     super.dispose();
   }
@@ -207,18 +279,72 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
           // Status badges
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildStatusBadge(
-                  icon: _isInitialized ? Icons.wifi : Icons.wifi_off,
-                  label: _isInitialized ? 'Discovering' : 'Initializing',
-                  color: _isInitialized ? Colors.green : Colors.orange,
+                // This Device Info Card
+                Card(
+                  elevation: 1,
+                  color: Colors.blue.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(
+                      children: [
+                        Icon(Icons.smartphone, color: Colors.blue.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'This Device',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue.shade900,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.deviceName,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _buildStatusBadge(
-                  icon: Icons.screen_lock_portrait,
-                  label: 'Screen stays on',
-                  color: Colors.blue,
+                const SizedBox(height: 12),
+                // Status badges row - scrollable to prevent overflow
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildStatusBadge(
+                        icon: _isInitialized ? Icons.wifi : Icons.wifi_off,
+                        label: _isInitialized ? 'Discovering' : 'Initializing',
+                        color: _isInitialized ? Colors.green : Colors.orange,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildStatusBadge(
+                        icon: Icons.link,
+                        label: 'Ready to connect',
+                        color: _isInitialized ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildStatusBadge(
+                        icon: Icons.screen_lock_portrait,
+                        label: 'Screen on',
+                        color: Colors.blue,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -353,16 +479,20 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: deviceInfo['color'].withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(24),
+                  color: deviceInfo['color'].withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: deviceInfo['color'].withOpacity(0.3),
+                    width: 2,
+                  ),
                 ),
                 child: Icon(
                   deviceInfo['icon'],
                   color: deviceInfo['color'],
-                  size: 24,
+                  size: 26,
                 ),
               ),
               const SizedBox(width: 16),
@@ -382,33 +512,70 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        // Platform badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: deviceInfo['color'].withOpacity(0.1),
+                            color: deviceInfo['color'].withOpacity(0.15),
                             borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: deviceInfo['color'].withOpacity(0.3),
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             deviceInfo['platform'],
                             style: TextStyle(
                               fontSize: 10,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.bold,
                               color: deviceInfo['color'],
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ),
+                        // Device ID badge (if available)
+                        if (deviceInfo['deviceId'] != null) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.fingerprint, size: 10, color: Colors.grey[700]),
+                                const SizedBox(width: 3),
+                                Text(
+                                  deviceInfo['deviceId'],
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[700],
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.router, size: 12, color: Colors.grey[500]),
+                        Icon(Icons.wifi, size: 12, color: Colors.grey[500]),
                         const SizedBox(width: 4),
                         Text(
                           ipAddress,
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: Colors.grey[600],
                             fontFamily: 'monospace',
                           ),
@@ -433,39 +600,73 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   
   /// Parse device name to extract platform and display information
   Map<String, dynamic> _parseDeviceName(String deviceName) {
+    print('[UI] 🔍 Parsing device name: "$deviceName"');
+    
     IconData icon = Icons.devices;
     Color color = Colors.blue;
     String platform = 'Unknown';
     String displayName = deviceName;
+    String? deviceId;
+    
+    // Extract device ID if present (last 4 digits after last hyphen)
+    final parts = deviceName.split('-');
+    print('[UI] 📊 Split into ${parts.length} parts: $parts');
+    
+    if (parts.length > 1 && parts.last.length == 4 && int.tryParse(parts.last) != null) {
+      deviceId = parts.last;
+      print('[UI] ✅ Extracted device ID: $deviceId');
+      // Rebuild device name without the ID for display
+      final nameWithoutId = parts.sublist(0, parts.length - 1).join('-');
+      deviceName = nameWithoutId;
+      print('[UI] 📝 Device name without ID: "$deviceName"');
+    } else {
+      print('[UI] ⚠️  No valid device ID found (last part: "${parts.last}", length: ${parts.last.length})');
+    }
     
     if (deviceName.startsWith('iPhone-')) {
       icon = Icons.phone_iphone;
-      color = Colors.black;
+      color = const Color(0xFF000000); // Apple Black
       platform = 'iOS';
       displayName = deviceName.substring(7); // Remove "iPhone-" prefix
     } else if (deviceName.startsWith('Android-')) {
       icon = Icons.phone_android;
-      color = Colors.green;
+      color = const Color(0xFF3DDC84); // Android Green
       platform = 'Android';
       displayName = deviceName.substring(8); // Remove "Android-" prefix
     } else if (deviceName.startsWith('Mac-')) {
-      icon = Icons.computer;
-      color = Colors.blueGrey;
+      icon = Icons.laptop_mac;
+      color = const Color(0xFF0071E3); // Apple Blue
       platform = 'macOS';
       displayName = deviceName.substring(4); // Remove "Mac-" prefix
     } else if (deviceName.startsWith('Windows-')) {
       icon = Icons.desktop_windows;
-      color = Colors.indigo;
+      color = const Color(0xFF0078D4); // Windows Blue
       platform = 'Windows';
       displayName = deviceName.substring(8); // Remove "Windows-" prefix
     } else if (deviceName.startsWith('Linux-')) {
       icon = Icons.computer;
-      color = Colors.orange;
+      color = const Color(0xFFFF6600); // Linux Orange
       platform = 'Linux';
       displayName = deviceName.substring(6); // Remove "Linux-" prefix
     } else if (deviceName.startsWith('cpft-')) {
       // Legacy format - try to determine from hostname
       displayName = deviceName.substring(5); // Remove "cpft-" prefix
+      platform = 'Legacy';
+      color = Colors.grey;
+    }
+    
+    // Clean up display name
+    displayName = displayName
+        .replaceAll('-', ' ')
+        .replaceAll('_', ' ')
+        .trim();
+    
+    // Capitalize each word
+    if (displayName.isNotEmpty) {
+      displayName = displayName.split(' ').map((word) {
+        if (word.isEmpty) return word;
+        return word[0].toUpperCase() + word.substring(1).toLowerCase();
+      }).join(' ');
     }
     
     return {
@@ -473,20 +674,35 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       'color': color,
       'platform': platform,
       'displayName': displayName,
+      'deviceId': deviceId,
     };
   }
 
   void _onDeviceSelected(String deviceName, String ipAddress) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Selected $deviceName ($ipAddress)'),
-        action: SnackBarAction(
-          label: 'Connect',
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Connection feature coming soon!')),
-            );
-          },
+    print('[UI] 🔌 Device selected: $deviceName at $ipAddress');
+    
+    // Get connection manager from discovery service
+    final connectionManager = _discoveryService.connectionManager;
+    if (connectionManager == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connection service not ready. Please wait...'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    // Navigate to connection screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ConnectionScreen(
+          deviceName: deviceName,
+          ipAddress: ipAddress,
+          port: 53318, // Use P2P port
+          myDeviceName: widget.deviceName,
+          connectionManager: connectionManager,
         ),
       ),
     );

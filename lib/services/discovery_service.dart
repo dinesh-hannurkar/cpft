@@ -8,6 +8,8 @@ import 'http_server_service.dart';
 import 'http_discovery_client.dart';
 import 'multicast_platform_helper.dart';
 import 'bonjour_service.dart';
+import 'incoming_connection_service.dart';
+import 'connection_manager.dart';
 
 /// Unified discovery service combining UDP multicast and HTTP
 /// This matches LocalSend's architecture
@@ -15,6 +17,8 @@ class DiscoveryService {
   late final MulticastService _multicastService;
   late final HttpServerService _httpServer;
   late final HttpDiscoveryClient _httpClient;
+  late final IncomingConnectionService _incomingConnectionService;
+  late final ConnectionManager _connectionManager;
   BonjourService? _bonjourService;  // For iOS real devices
 
   final String alias;
@@ -24,8 +28,13 @@ class DiscoveryService {
 
   final List<Function(String, String, int)> _discoveryListeners = [];
   final Map<String, DeviceInfo> _discoveredDevices = {};
+  // Incoming connection request listeners (before acceptance)
+  final List<Function(String deviceName, String ipAddress, int port, Future<void> Function() accept, Future<void> Function() decline)> _incomingRequestListeners = [];
   
   bool _isInitialized = false;
+  
+  // P2P connection port (different from discovery port)
+  static const int p2pPort = 53318;
 
   DiscoveryService({
     required this.alias,
@@ -51,8 +60,24 @@ class DiscoveryService {
     _discoveryListeners.remove(listener);
   }
 
+  // Add/Remove incoming connection request listeners
+  void addIncomingRequestListener(
+    Function(String deviceName, String ipAddress, int port, Future<void> Function() accept, Future<void> Function() decline) listener,
+  ) {
+    _incomingRequestListeners.add(listener);
+  }
+
+  void removeIncomingRequestListener(
+    Function(String, String, int, Future<void> Function(), Future<void> Function()) listener,
+  ) {
+    _incomingRequestListeners.remove(listener);
+  }
+
   /// Check if VPN is detected (iOS specific issue)
   bool get isVpnDetected => _multicastService.isVpnDetected;
+
+  /// Get the connection manager for managing P2P connections
+  ConnectionManager? get connectionManager => _isInitialized ? _connectionManager : null;
 
   /// Initialize and start all services
   Future<void> initialize() async {
@@ -96,6 +121,20 @@ class DiscoveryService {
       );
       await _httpServer.start();
 
+      // Initialize ConnectionManager for handling P2P connections
+      print('[DiscoveryService] Initializing ConnectionManager');
+      _connectionManager = ConnectionManager();
+      _connectionManager.initialize(alias);
+
+      // Initialize and start P2P incoming connection listener
+      print('[DiscoveryService] Starting P2P connection listener on port $p2pPort');
+      _incomingConnectionService = IncomingConnectionService(
+        port: p2pPort,
+        deviceName: alias,
+      );
+      _incomingConnectionService.addConnectionListener(_onIncomingConnection);
+      await _incomingConnectionService.startListening();
+
       // Initialize and start multicast listener
       _multicastService = MulticastService(
         alias: alias,
@@ -136,6 +175,45 @@ class DiscoveryService {
     } catch (e) {
       print('[DiscoveryService] Initialization failed: $e');
       rethrow;
+    }
+  }
+
+  /// Handle incoming P2P connection
+  void _onIncomingConnection(Socket socket, Stream<List<int>> broadcastStream, String remoteName) async {
+    final ip = socket.remoteAddress.address;
+    final port = socket.remotePort;
+    print('[DiscoveryService] 📞 Incoming P2P connection from $remoteName');
+    print('[DiscoveryService] Remote address: $ip:$port');
+
+    // Determine display name (try match discovered devices by IP)
+    String displayName = remoteName;
+    try {
+      for (final entry in _discoveredDevices.entries) {
+        if (entry.value.ip == ip) {
+          displayName = entry.value.name;
+          break;
+        }
+      }
+    } catch (_) {}
+
+    // Build accept/decline closures
+    Future<void> accept() async {
+      print('[DiscoveryService] ✅ Accepting incoming connection from $displayName');
+      await _connectionManager.handleIncomingConnectionWithStream(socket, broadcastStream, displayName);
+    }
+
+    Future<void> decline() async {
+      print('[DiscoveryService] ❌ Declining incoming connection from $displayName');
+      try { await socket.close(); } catch (_) {}
+    }
+
+    // Notify UI listeners to prompt user
+    for (final listener in _incomingRequestListeners) {
+      try {
+        listener(displayName, ip, p2pPort, accept, decline);
+      } catch (e) {
+        print('[DiscoveryService] Error notifying incoming request listener: $e');
+      }
     }
   }
 
@@ -244,6 +322,7 @@ class DiscoveryService {
     _multicastService.dispose();
     _bonjourService?.dispose();
     _httpServer.dispose();
+    _incomingConnectionService.dispose();
     _discoveryListeners.clear();
     _discoveredDevices.clear();
     _isInitialized = false;
