@@ -10,6 +10,7 @@ import 'multicast_platform_helper.dart';
 import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import 'connection_manager.dart';
+import 'background_service.dart';
 
 /// Unified discovery service combining UDP multicast and HTTP
 /// This matches LocalSend's architecture
@@ -172,6 +173,22 @@ class DiscoveryService {
       _isInitialized = true;
       print('[DiscoveryService] Initialization complete!');
       print('[DiscoveryService] Listening for devices...');
+      
+      // Start foreground service on Android to keep app alive
+      if (Platform.isAndroid) {
+        print('[DiscoveryService] Starting Android foreground service...');
+        try {
+          await BackgroundService.initialize();
+          final started = await BackgroundService.start();
+          if (started) {
+            print('[DiscoveryService] ✅ Foreground service started successfully');
+          } else {
+            print('[DiscoveryService] ⚠️  Failed to start foreground service');
+          }
+        } catch (e) {
+          print('[DiscoveryService] ❌ Error starting foreground service: $e');
+        }
+      }
     } catch (e) {
       print('[DiscoveryService] Initialization failed: $e');
       rethrow;
@@ -327,8 +344,14 @@ class DiscoveryService {
     _discoveredDevices.clear();
     _isInitialized = false;
     
-    // Release multicast lock on Android
+    // Stop foreground service on Android
     if (Platform.isAndroid) {
+      BackgroundService.stop().then((stopped) {
+        if (stopped) {
+          print('[DiscoveryService] ✅ Foreground service stopped');
+        }
+      });
+      // Release multicast lock on Android
       MulticastPlatformHelper.releaseMulticastLock();
     }
   }
