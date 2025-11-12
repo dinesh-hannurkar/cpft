@@ -174,19 +174,15 @@ class DiscoveryService {
       print('[DiscoveryService] Initialization complete!');
       print('[DiscoveryService] Listening for devices...');
       
-      // Start foreground service on Android to keep app alive
+      // Initialize foreground service on Android (but don't start yet)
+      // Service will start only when a connection is established
       if (Platform.isAndroid) {
-        print('[DiscoveryService] Starting Android foreground service...');
+        print('[DiscoveryService] Initializing Android foreground service...');
         try {
           await BackgroundService.initialize();
-          final started = await BackgroundService.start();
-          if (started) {
-            print('[DiscoveryService] ✅ Foreground service started successfully');
-          } else {
-            print('[DiscoveryService] ⚠️  Failed to start foreground service');
-          }
+          print('[DiscoveryService] ✅ Foreground service initialized (will start on connection)');
         } catch (e) {
-          print('[DiscoveryService] ❌ Error starting foreground service: $e');
+          print('[DiscoveryService] ❌ Error initializing foreground service: $e');
         }
       }
     } catch (e) {

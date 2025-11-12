@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'connection_service.dart';
+import 'background_service.dart';
+import '../models/connection_state.dart';
 
 /// Manages all active P2P connections (both incoming and outgoing)
 class ConnectionManager {
@@ -27,6 +29,24 @@ class ConnectionManager {
     print('[ConnectionManager] Creating new connection service for $deviceName');
     final service = ConnectionService(deviceName: this.deviceName);
     _activeConnections[deviceName] = service;
+    
+    // Listen for connection status changes to manage foreground service
+    service.addStatusListener((info) {
+      if (info.status == ConnectionStatus.connected) {
+        print('[ConnectionManager] Connection to ${info.deviceName} is now connected');
+        _startForegroundServiceIfNeeded();
+      } else if (info.status == ConnectionStatus.disconnected || info.status == ConnectionStatus.failed) {
+        print('[ConnectionManager] Connection to ${info.deviceName} disconnected/failed');
+        // Remove from active connections and stop service if needed
+        _activeConnections.remove(deviceName);
+        _stopForegroundServiceIfNeeded();
+      }
+      // Update notification whenever status changes
+      if (info.status == ConnectionStatus.connected) {
+        _updateForegroundServiceNotification();
+      }
+    });
+    
     return service;
   }
 
@@ -74,7 +94,10 @@ class ConnectionManager {
 
       if (success) {
         print('[ConnectionManager] ✅ Incoming connection from $remoteName accepted');
-  _notifyConnectionListeners(remoteName, service, isIncoming: true);
+        _notifyConnectionListeners(remoteName, service, isIncoming: true);
+        
+        // Start foreground service on Android when first connection established
+        await _startForegroundServiceIfNeeded();
       } else {
         print('[ConnectionManager] ❌ Failed to accept connection from $remoteName');
         _activeConnections.remove(remoteName);
@@ -89,6 +112,64 @@ class ConnectionManager {
         socket.close();
       } catch (_) {}
     }
+  }
+
+  /// Start foreground service if this is the first connection
+  Future<void> _startForegroundServiceIfNeeded() async {
+    if (!Platform.isAndroid) return;
+    
+    if (_activeConnections.length == 1 && !BackgroundService.isRunning) {
+      print('[ConnectionManager] Starting foreground service (first connection)');
+      try {
+        final started = await BackgroundService.start();
+        if (started) {
+          print('[ConnectionManager] ✅ Foreground service started');
+          _updateForegroundServiceNotification();
+        }
+      } catch (e) {
+        print('[ConnectionManager] ❌ Failed to start foreground service: $e');
+      }
+    } else if (_activeConnections.isNotEmpty) {
+      // Update notification with current connections
+      _updateForegroundServiceNotification();
+    }
+  }
+
+  /// Stop foreground service if no connections remain
+  Future<void> _stopForegroundServiceIfNeeded() async {
+    if (!Platform.isAndroid) return;
+    
+    if (_activeConnections.isEmpty && BackgroundService.isRunning) {
+      print('[ConnectionManager] Stopping foreground service (no connections)');
+      try {
+        await BackgroundService.stop();
+        print('[ConnectionManager] ✅ Foreground service stopped');
+      } catch (e) {
+        print('[ConnectionManager] ❌ Failed to stop foreground service: $e');
+      }
+    }
+  }
+
+  /// Update foreground service notification with connection info
+  void _updateForegroundServiceNotification() {
+    if (!Platform.isAndroid || !BackgroundService.isRunning) return;
+    
+    final count = _activeConnections.length;
+    final deviceNames = _activeConnections.keys.take(3).join(', ');
+    
+    String notificationText;
+    if (count == 1) {
+      notificationText = 'Connected to $deviceNames';
+    } else if (count <= 3) {
+      notificationText = 'Connected to $deviceNames';
+    } else {
+      notificationText = 'Connected to $count devices';
+    }
+    
+    BackgroundService.updateNotification(
+      title: 'CPFT Active',
+      text: notificationText,
+    );
   }
 
   /// Add listener for new connections
@@ -123,6 +204,9 @@ class ConnectionManager {
     if (service != null) {
       print('[ConnectionManager] Removed connection to $deviceName');
       service.dispose();
+      
+      // Stop foreground service if no connections remain
+      _stopForegroundServiceIfNeeded();
     }
   }
 
@@ -137,5 +221,8 @@ class ConnectionManager {
       service.dispose();
     }
     _activeConnections.clear();
+    
+    // Stop foreground service when all connections closed
+    await _stopForegroundServiceIfNeeded();
   }
 }
