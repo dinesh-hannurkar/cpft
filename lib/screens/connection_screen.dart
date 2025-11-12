@@ -318,7 +318,9 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   }
 
   void _scrollToBottom() {
+    if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
