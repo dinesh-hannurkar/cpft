@@ -44,9 +44,17 @@ class WebServer {
     _port = port;
     
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
-      print('[WebServer] ✅ Started on port $_port');
-      
+      // Prefer dual-stack (IPv6 with IPv4-mapped) when available
+      try {
+        _server = await HttpServer.bind(InternetAddress.anyIPv6, _port, v6Only: false);
+        print('[WebServer] ✅ Started (dual-stack) on port $_port');
+      } catch (e) {
+        // Fallback to IPv4 only
+        print('[WebServer] Dual-stack bind failed: $e. Falling back to IPv4...');
+        _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
+        print('[WebServer] ✅ Started (IPv4) on port $_port');
+      }
+
       _server!.listen(_handleRequest);
       return true;
     } catch (e) {
@@ -80,9 +88,10 @@ class WebServer {
     request.response.headers.add('Access-Control-Allow-Origin', '*');
     request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     request.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
-    
+
+    // Handle CORS preflight
     if (request.method == 'OPTIONS') {
-      request.response.statusCode = HttpStatus.ok;
+      request.response.statusCode = HttpStatus.noContent;
       await request.response.close();
       return;
     }
@@ -91,13 +100,18 @@ class WebServer {
       if (uri.path == '/' || uri.path == '/index.html') {
         _serveWebPage(request);
       } else if (uri.path == '/ws') {
-        _handleWebSocket(request);
+        await _handleWebSocket(request);
       } else if (uri.path == '/upload') {
         await _handleFileUpload(request);
       } else if (uri.path == '/files') {
         _serveFileList(request);
       } else if (uri.path.startsWith('/download/')) {
         await _handleFileDownload(request);
+      } else if (uri.path == '/health') {
+        request.response.statusCode = HttpStatus.ok;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(json.encode({'status': 'ok'}));
+        await request.response.close();
       } else {
         request.response.statusCode = HttpStatus.notFound;
         request.response.write('Not Found');
@@ -105,9 +119,11 @@ class WebServer {
       }
     } catch (e) {
       print('[WebServer] Error handling request: $e');
-      request.response.statusCode = HttpStatus.internalServerError;
-      request.response.write('Internal Server Error');
-      await request.response.close();
+      try {
+        request.response.statusCode = HttpStatus.internalServerError;
+        request.response.write('Internal Server Error');
+        await request.response.close();
+      } catch (_) {}
     }
   }
 
@@ -119,7 +135,7 @@ class WebServer {
   }
 
   /// Handle WebSocket connections for real-time updates
-  void _handleWebSocket(HttpRequest request) async {
+  Future<void> _handleWebSocket(HttpRequest request) async {
     try {
       final socket = await WebSocketTransformer.upgrade(request);
       _connectedClients.add(socket);
@@ -173,60 +189,94 @@ class WebServer {
 
     try {
       final contentType = request.headers.contentType;
-      if (contentType?.mimeType != 'multipart/form-data') {
+      if (contentType == null || contentType.mimeType != 'multipart/form-data') {
         request.response.statusCode = HttpStatus.badRequest;
-        request.response.write(json.encode({'error': 'Expected multipart/form-data'}));
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(json.encode({'error': 'Expected multipart/form-data', 'got': contentType?.toString()}));
         await request.response.close();
         return;
       }
 
-      final boundary = contentType!.parameters['boundary']!;
-      final transformer = MimeMultipartTransformer(boundary);
-      final parts = await transformer.bind(request).toList();
+      final boundary = contentType.parameters['boundary'];
+      if (boundary == null || boundary.isEmpty) {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(json.encode({'error': 'Missing multipart boundary'}));
+        await request.response.close();
+        return;
+      }
 
-      for (var part in parts) {
+      final transformer = MimeMultipartTransformer(boundary);
+      final downloadsDir = await _getPreferredSaveDirectory();
+      try {
+        // Ensure directory exists
+        await downloadsDir.create(recursive: true);
+      } catch (_) {}
+      int processedFiles = 0;
+
+      await for (final part in transformer.bind(request)) {
         final contentDisposition = part.headers['content-disposition'];
-        if (contentDisposition == null) continue;
+        if (contentDisposition == null) {
+          continue;
+        }
 
         final filename = _extractFilename(contentDisposition);
-        if (filename == null) continue;
-
-        // Read file data with progress tracking
-        final fileData = await part.toList();
-        final bytes = Uint8List.fromList(fileData.expand((x) => x).toList());
-        final totalSize = bytes.length;
-
-        // Notify upload progress
-        if (onFileUploadProgress != null) {
-          onFileUploadProgress!(filename, totalSize, totalSize);
+        if (filename == null || filename.isEmpty) {
+          continue;
         }
 
-        // Save to downloads directory
-        final downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-        final filePath = '${downloadsDir.path}/$filename';
-        final file = File(filePath);
-        await file.writeAsBytes(bytes);
+        processedFiles += 1;
+  final savePath = await _uniqueFilePath(downloadsDir.path, filename);
+        final sink = File(savePath).openWrite();
+        int received = 0;
 
-        print('[WebServer] ✅ Received file: $filename (${bytes.length} bytes) -> $filePath');
+        final completer = Completer<void>();
+        part.listen(
+          (chunk) {
+            received += chunk.length;
+            sink.add(chunk);
+            if (onFileUploadProgress != null) {
+              // Total unknown in multipart; report received as both for now
+              onFileUploadProgress!(filename, received, received);
+            }
+          },
+          onError: (e) async {
+            await sink.close();
+            if (!completer.isCompleted) completer.completeError(e);
+          },
+          onDone: () async {
+            await sink.close();
+            if (!completer.isCompleted) completer.complete();
+          },
+          cancelOnError: true,
+        );
 
-        // Notify upload complete
+        await completer.future;
+
+        print('[WebServer] ✅ Received file: $filename ($received bytes) -> $savePath');
+
         if (onFileUploadComplete != null) {
-          onFileUploadComplete!(filename, filePath);
+          onFileUploadComplete!(filename, savePath);
         }
-
-        // Notify via WebSocket
         _broadcastToClients({
           'type': 'file_received',
           'filename': filename,
-          'size': bytes.length,
-          'path': filePath,
+          'size': received,
+          'path': savePath,
           'timestamp': DateTime.now().toIso8601String(),
         });
-
-        // Call callback if set
         if (onFileReceived != null) {
-          onFileReceived!(filename, bytes);
+          // No need to send bytes payload; large. We skip for streaming path.
+          // onFileReceived!(filename, await File(savePath).readAsBytes());
         }
+      }
+
+      if (processedFiles == 0) {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(json.encode({'error': 'No file parts found'}));
+        await request.response.close();
+        return;
       }
 
       request.response.statusCode = HttpStatus.ok;
@@ -236,6 +286,7 @@ class WebServer {
     } catch (e) {
       print('[WebServer] Error handling file upload: $e');
       request.response.statusCode = HttpStatus.internalServerError;
+      request.response.headers.contentType = ContentType.json;
       request.response.write(json.encode({'error': e.toString()}));
       await request.response.close();
     }
@@ -248,6 +299,35 @@ class WebServer {
     final regex = RegExp(r'filename="?([^";\r\n]+)"?', caseSensitive: false);
     final match = regex.firstMatch(contentDisposition);
     return match?.group(1);
+  }
+
+  /// Generate a unique file path by appending (1), (2), ... if needed
+  Future<String> _uniqueFilePath(String dir, String filename) async {
+    final base = filename;
+    final dot = base.lastIndexOf('.');
+    final name = dot > 0 ? base.substring(0, dot) : base;
+    final ext = dot > 0 ? base.substring(dot) : '';
+
+    var attempt = 0;
+    while (true) {
+      final suffix = attempt == 0 ? '' : ' ($attempt)';
+      final path = '$dir/$name$suffix$ext';
+      final f = File(path);
+      if (!await f.exists()) return path;
+      attempt++;
+    }
+  }
+
+  /// Choose a writable directory for saving uploaded files across platforms
+  Future<Directory> _getPreferredSaveDirectory() async {
+    // On Apple platforms, prefer Documents inside sandbox (safe without extra entitlements)
+    if (Platform.isIOS || Platform.isMacOS) {
+      return await getApplicationDocumentsDirectory();
+    }
+    // Else, try Downloads, then fallback to Documents
+    final d = await getDownloadsDirectory();
+    if (d != null) return d;
+    return await getApplicationDocumentsDirectory();
   }
 
   /// Broadcast message to all connected WebSocket clients
@@ -379,6 +459,10 @@ class WebServer {
 
   /// Get the shareable web link
   String getWebLink(String ipAddress) {
+    // Wrap IPv6 addresses in brackets per URL spec
+    if (ipAddress.contains(':')) {
+      return 'http://[' + ipAddress + ']:$_port';
+    }
     return 'http://$ipAddress:$_port';
   }
 
