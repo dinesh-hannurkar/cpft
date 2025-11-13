@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../services/discovery_service.dart';
 import '../utils/permissions.dart';
 import 'connection_screen.dart';
+import 'web_file_manager_screen.dart';
+import 'package:file_picker/file_picker.dart';
 
 class DeviceDiscoveryScreen extends StatefulWidget {
   final String deviceName;
@@ -27,6 +30,8 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   Map<String, String> _discoveredDevices = {};
   // Track pending incoming prompts to avoid duplicates
   final Set<String> _pendingIncoming = {};
+  // Track web uploads in progress
+  final Map<String, _WebUpload> _activeWebUploads = {};
 
   @override
   void initState() {
@@ -62,6 +67,9 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       _discoveryService.addDiscoveryListener(_onDeviceDiscovered);
   // Listen for incoming connection requests (pre-accept)
   _discoveryService.addIncomingRequestListener(_onIncomingRequest);
+      // Listen for web file uploads
+      _discoveryService.addWebFileListener(_onWebFileReceived);
+      _discoveryService.addWebProgressListener(_onWebUploadProgress);
 
       if (mounted) {
         setState(() {
@@ -97,6 +105,61 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     } else {
       print('[UI] ⚠️  Widget not mounted - cannot update UI');
     }
+  }
+
+  void _onWebFileReceived(String filename, String path) {
+    print('[UI] 📥 Web file received: $filename -> $path');
+    if (!mounted) return;
+    
+    // Remove from active uploads
+    setState(() {
+      _activeWebUploads.remove(filename);
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.download_done, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('File received from web', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(filename, style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: Colors.white,
+          onPressed: () {
+            // TODO: Open file location or file viewer
+            print('Open file: $path');
+          },
+        ),
+      ),
+    );
+  }
+
+  void _onWebUploadProgress(String filename, int received, int total) {
+    print('[UI] 📊 Upload progress: $filename - $received/$total bytes (${(received / total * 100).toStringAsFixed(1)}%)');
+    if (!mounted) return;
+    
+    setState(() {
+      _activeWebUploads[filename] = _WebUpload(
+        filename: filename,
+        bytesReceived: received,
+        totalBytes: total,
+        startTime: _activeWebUploads[filename]?.startTime ?? DateTime.now(),
+      );
+    });
   }
 
   void _onIncomingRequest(
@@ -214,6 +277,222 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     }
   }
 
+  void _openWebFileManager() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WebFileManagerScreen(
+          discoveryService: _discoveryService,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showWebLinkDialog() async {
+    try {
+      // Start web server if not running
+      if (!_discoveryService.isWebServerRunning) {
+        final success = await _discoveryService.startWebServer(port: 8080);
+        if (!success) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to start web server'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+
+      // Get web link
+      final webLink = await _discoveryService.getWebLink();
+      if (webLink == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to generate web link. Check network connection.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Show dialog with web link
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.web, color: Colors.blue),
+              SizedBox(width: 12),
+              Text('Web Browser Access'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Anyone on the same network can access this device via web browser:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        webLink,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 20),
+                      tooltip: 'Copy link',
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: webLink));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Link copied to clipboard!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '📱 Share this link via email, chat, or QR code to let others send you files from their browser.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _discoveryService.stopWebServer();
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('Stop & Close'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                // TODO: Add QR code generation
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('QR code feature coming soon!')),
+                );
+              },
+              icon: const Icon(Icons.qr_code),
+              label: const Text('Show QR'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _shareFileToWeb();
+              },
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Share File'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.green),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('[UI] Error showing web link: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareFileToWeb() async {
+    try {
+      // Ensure web server is running
+      if (!_discoveryService.isWebServerRunning) {
+        final success = await _discoveryService.startWebServer();
+        if (!success) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please start web server first'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
+        }
+      }
+
+      // Pick file
+      final result = await FilePicker.platform.pickFiles();
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.path == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not access file')),
+        );
+        return;
+      }
+
+      // Add file to web server
+      final fileId = _discoveryService.shareFileViaWeb(file.path!, file.name);
+      
+      if (fileId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to share file. Is web server running?'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ ${file.name} is now available for download via web!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'View Link',
+            textColor: Colors.white,
+            onPressed: _showWebLinkDialog,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('[UI] Error sharing file to web: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     // Disable wakelock when leaving the screen
@@ -221,6 +500,8 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     
     _discoveryService.removeDiscoveryListener(_onDeviceDiscovered);
   _discoveryService.removeIncomingRequestListener(_onIncomingRequest);
+    _discoveryService.removeWebFileListener(_onWebFileReceived);
+    _discoveryService.removeWebProgressListener(_onWebUploadProgress);
     _discoveryService.dispose();
     super.dispose();
   }
@@ -232,14 +513,21 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         title: const Text('Nearby Devices'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.folder_open),
+            onPressed: _openWebFileManager,
+            tooltip: 'Web File Manager',
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _isRefreshing ? null : _refreshDiscovery,
             tooltip: 'Refresh device search',
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
+          Column(
+            children: [
           // VPN Warning Banner (iOS only)
           if (_isInitialized && _discoveryService.isVpnDetected && Platform.isIOS)
             Container(
@@ -383,6 +671,107 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                 : _buildDeviceList(),
           ),
         ],
+      ),
+          
+          // Web upload progress overlay
+          if (_activeWebUploads.isNotEmpty)
+            Positioned(
+              bottom: 80,
+              left: 16,
+              right: 16,
+              child: _buildUploadProgressCard(),
+            ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showWebLinkDialog,
+        icon: const Icon(Icons.web),
+        label: const Text('Web Link'),
+        tooltip: 'Share web link for browser access',
+      ),
+    );
+  }
+
+  Widget _buildUploadProgressCard() {
+    return Card(
+      elevation: 8,
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.cloud_upload, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Receiving from Web',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${_activeWebUploads.length} file(s)',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ..._activeWebUploads.values.map((upload) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            upload.filename,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${(upload.progress * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(
+                      value: upload.progress,
+                      backgroundColor: Colors.grey[200],
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      upload.formattedProgress,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+        ),
       ),
     );
   }
@@ -706,5 +1095,28 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Model class for tracking active web uploads
+class _WebUpload {
+  final String filename;
+  final int bytesReceived;
+  final int totalBytes;
+  final DateTime startTime;
+
+  _WebUpload({
+    required this.filename,
+    required this.bytesReceived,
+    required this.totalBytes,
+    required this.startTime,
+  });
+
+  double get progress => totalBytes > 0 ? bytesReceived / totalBytes : 0.0;
+  
+  String get formattedProgress {
+    final mb = (bytesReceived / 1024 / 1024).toStringAsFixed(1);
+    final totalMb = (totalBytes / 1024 / 1024).toStringAsFixed(1);
+    return '$mb MB / $totalMb MB';
   }
 }

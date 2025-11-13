@@ -11,6 +11,7 @@ import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import 'connection_manager.dart';
 import 'background_service.dart';
+import 'web_server.dart';
 
 /// Unified discovery service combining UDP multicast and HTTP
 /// This matches LocalSend's architecture
@@ -21,6 +22,7 @@ class DiscoveryService {
   late final IncomingConnectionService _incomingConnectionService;
   late final ConnectionManager _connectionManager;
   BonjourService? _bonjourService;  // For iOS real devices
+  WebServer? _webServer;  // For browser-based file transfers
 
   final String alias;
   final int port;
@@ -350,6 +352,155 @@ class DiscoveryService {
       // Release multicast lock on Android
       MulticastPlatformHelper.releaseMulticastLock();
     }
+  }
+
+  /// Start web server for browser-based file transfers
+  Future<bool> startWebServer({int port = 8080}) async {
+    if (_webServer != null && _webServer!.isRunning) {
+      print('[DiscoveryService] Web server already running');
+      return true;
+    }
+
+    _webServer = WebServer(
+      deviceName: alias,
+      onFileUploadProgress: (filename, received, total) {
+        print('[DiscoveryService] Upload progress: $filename - $received/$total bytes');
+        _notifyUploadProgress(filename, received, total);
+      },
+      onFileUploadComplete: (filename, savedPath) {
+        print('[DiscoveryService] ✅ File upload complete: $filename -> $savedPath');
+        _notifyFileReceived(filename, savedPath);
+      },
+    );
+    
+    final success = await _webServer!.start(port: port);
+    
+    if (success) {
+      print('[DiscoveryService] ✅ Web server started on port $port');
+    } else {
+      print('[DiscoveryService] ❌ Failed to start web server');
+    }
+    
+    return success;
+  }
+
+  // Listeners for web file transfers
+  final List<Function(String filename, String path)> _webFileListeners = [];
+  final List<Function(String filename, int received, int total)> _webProgressListeners = [];
+
+  void addWebFileListener(Function(String filename, String path) listener) {
+    _webFileListeners.add(listener);
+  }
+
+  void removeWebFileListener(Function(String filename, String path) listener) {
+    _webFileListeners.remove(listener);
+  }
+
+  void addWebProgressListener(Function(String filename, int received, int total) listener) {
+    _webProgressListeners.add(listener);
+  }
+
+  void removeWebProgressListener(Function(String filename, int received, int total) listener) {
+    _webProgressListeners.remove(listener);
+  }
+
+  void _notifyFileReceived(String filename, String path) {
+    for (var listener in _webFileListeners) {
+      try {
+        listener(filename, path);
+      } catch (e) {
+        print('[DiscoveryService] Error in web file listener: $e');
+      }
+    }
+  }
+
+  void _notifyUploadProgress(String filename, int received, int total) {
+    for (var listener in _webProgressListeners) {
+      try {
+        listener(filename, received, total);
+      } catch (e) {
+        print('[DiscoveryService] Error in web progress listener: $e');
+      }
+    }
+  }
+
+  /// Stop web server
+  Future<void> stopWebServer() async {
+    if (_webServer != null) {
+      await _webServer!.stop();
+      _webServer = null;
+      print('[DiscoveryService] Web server stopped');
+    }
+  }
+
+  /// Get shareable web link
+  Future<String?> getWebLink() async {
+    if (_webServer == null || !_webServer!.isRunning) {
+      return null;
+    }
+
+    // Get local IP address
+    final ipAddress = await _getLocalIpAddress();
+    if (ipAddress == null) return null;
+
+    return _webServer!.getWebLink(ipAddress);
+  }
+
+  /// Get local IP address
+  Future<String?> _getLocalIpAddress() async {
+    try {
+      final interfaces = await NetworkInterface.list(includeLoopback: false, type: InternetAddressType.IPv4);
+      for (var interface in interfaces) {
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+            // Prefer local network addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+            final ip = addr.address;
+            if (ip.startsWith('192.168.') || 
+                ip.startsWith('10.') || 
+                (ip.startsWith('172.') && _isPrivateClassB(ip))) {
+              return ip;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('[DiscoveryService] Error getting local IP: $e');
+    }
+    return null;
+  }
+
+  bool _isPrivateClassB(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) return false;
+    final second = int.tryParse(parts[1]);
+    return second != null && second >= 16 && second <= 31;
+  }
+
+  /// Check if web server is running
+  bool get isWebServerRunning => _webServer?.isRunning ?? false;
+
+  /// Share a file via web server
+  String? shareFileViaWeb(String filePath, String filename) {
+    if (_webServer == null || !_webServer!.isRunning) {
+      print('[DiscoveryService] Web server not running, cannot share file');
+      return null;
+    }
+    return _webServer!.addFileForDownload(filePath, filename);
+  }
+
+  /// Remove file from web share
+  void removeFileFromWeb(String fileId) {
+    if (_webServer != null && _webServer!.isRunning) {
+      _webServer!.removeFileFromDownload(fileId);
+    }
+  }
+
+  /// Get list of files currently shared via web
+  List<Map<String, dynamic>> getSharedFiles() {
+    if (_webServer != null && _webServer!.isRunning) {
+      return _webServer!.getSharedFiles();
+    }
+    return [];
   }
 }
 
