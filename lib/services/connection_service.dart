@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -56,11 +57,11 @@ class ConnectionService {
 
   /// Connect to a device
   Future<bool> connect(String deviceName, String ipAddress, int port) async {
-    print('[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port');
+    debugPrint('[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port');
 
     // If already connected, disconnect first
     if (_socket != null) {
-      print('[ConnectionService] Disconnecting from previous connection');
+      debugPrint('[ConnectionService] Disconnecting from previous connection');
       await disconnect();
     }
 
@@ -79,7 +80,7 @@ class ConnectionService {
         timeout: const Duration(seconds: 10),
       );
 
-      print('[ConnectionService] ✅ Socket connected successfully');
+      debugPrint('[ConnectionService] ✅ Socket connected successfully');
 
       // Configure socket options to keep connection alive
       _socket!.setOption(SocketOption.tcpNoDelay, true);
@@ -88,18 +89,18 @@ class ConnectionService {
       _socketSubscription = _socket!.listen(
         _handleIncomingData,
         onError: (error) {
-          print('[ConnectionService] ❌ Socket error: $error');
+          debugPrint('[ConnectionService] ❌ Socket error: $error');
           _handleConnectionError(error.toString());
         },
         onDone: () {
-          print('[ConnectionService] 🔌 Socket closed by remote');
+          debugPrint('[ConnectionService] 🔌 Socket closed by remote');
           disconnect();
         },
         cancelOnError: false,
       );
 
   // Do NOT send anything yet. Wait for remote acceptance handshake.
-  print('[ConnectionService] ⏳ Waiting for acceptance from $deviceName');
+  debugPrint('[ConnectionService] ⏳ Waiting for acceptance from $deviceName');
   return true; // TCP is up; logical connection will switch to connected on handshake
     } on SocketException catch (e) {
       String userFriendlyError;
@@ -118,8 +119,8 @@ class ConnectionService {
         userFriendlyError = 'Network error: ${e.message}';
       }
       
-      print('[ConnectionService] ❌ Connection failed: $e');
-      print('[ConnectionService] 💡 User message: $userFriendlyError');
+      debugPrint('[ConnectionService] ❌ Connection failed: $e');
+      debugPrint('[ConnectionService] 💡 User message: $userFriendlyError');
       
       _updateStatus(ConnectionInfo(
         deviceName: deviceName,
@@ -130,7 +131,7 @@ class ConnectionService {
       ));
       return false;
     } catch (e) {
-      print('[ConnectionService] ❌ Connection failed: $e');
+      debugPrint('[ConnectionService] ❌ Connection failed: $e');
       _updateStatus(ConnectionInfo(
         deviceName: deviceName,
         ipAddress: ipAddress,
@@ -144,16 +145,16 @@ class ConnectionService {
 
   /// Accept an incoming connection (for server-side connections)
   Future<bool> acceptConnection(Socket socket, String deviceName) async {
-    print('[ConnectionService] 📞 Accepting incoming connection from $deviceName');
-    print('[ConnectionService] 🔍 Socket info: ${socket.remoteAddress.address}:${socket.remotePort}');
+    debugPrint('[ConnectionService] 📞 Accepting incoming connection from $deviceName');
+    debugPrint('[ConnectionService] 🔍 Socket info: ${socket.remoteAddress.address}:${socket.remotePort}');
 
     // If already connected, disconnect first and wait for stream to be released
     if (_socket != null) {
-      print('[ConnectionService] ⚠️  Already have a socket, disconnecting...');
+      debugPrint('[ConnectionService] ⚠️  Already have a socket, disconnecting...');
       await disconnect();
       // Wait a bit for the stream to be fully released
       await Future.delayed(const Duration(milliseconds: 100));
-      print('[ConnectionService] ✅ Previous connection cleaned up');
+      debugPrint('[ConnectionService] ✅ Previous connection cleaned up');
     }
 
     try {
@@ -171,34 +172,34 @@ class ConnectionService {
       // Configure socket options
       try {
         _socket!.setOption(SocketOption.tcpNoDelay, true);
-        print('[ConnectionService] ✅ Socket options configured');
+        debugPrint('[ConnectionService] ✅ Socket options configured');
       } catch (e) {
-        print('[ConnectionService] ⚠️  Failed to set socket options: $e');
+        debugPrint('[ConnectionService] ⚠️  Failed to set socket options: $e');
       }
 
       // Set up socket listener directly (no broadcast stream)
-      print('[ConnectionService] 🎧 Setting up socket listener...');
+      debugPrint('[ConnectionService] 🎧 Setting up socket listener...');
       try {
         _socketSubscription = _socket!.listen(
           _handleIncomingData,
           onError: (error) {
-            print('[ConnectionService] ❌ Socket error: $error');
+            debugPrint('[ConnectionService] ❌ Socket error: $error');
             _handleConnectionError(error.toString());
           },
           onDone: () {
-            print('[ConnectionService] 🔌 Socket closed by remote');
+            debugPrint('[ConnectionService] 🔌 Socket closed by remote');
             disconnect();
           },
           cancelOnError: false,
         );
-        print('[ConnectionService] ✅ Socket listener attached successfully');
+        debugPrint('[ConnectionService] ✅ Socket listener attached successfully');
       } catch (e) {
-        print('[ConnectionService] ❌ Failed to attach socket listener: $e');
+        debugPrint('[ConnectionService] ❌ Failed to attach socket listener: $e');
         throw Exception('Failed to listen to socket: $e');
       }
 
       // Send handshake response
-      print('[ConnectionService] 📤 Sending handshake response...');
+      debugPrint('[ConnectionService] 📤 Sending handshake response...');
       await _sendHandshake();
 
       // Start keep-alive timer
@@ -213,10 +214,10 @@ class ConnectionService {
         connectedAt: DateTime.now(),
       ));
 
-      print('[ConnectionService] ✅ Accepted connection from $deviceName');
+      debugPrint('[ConnectionService] ✅ Accepted connection from $deviceName');
       return true;
     } catch (e) {
-      print('[ConnectionService] ❌ Failed to accept connection: $e');
+      debugPrint('[ConnectionService] ❌ Failed to accept connection: $e');
       _updateStatus(ConnectionInfo(
         deviceName: deviceName,
         ipAddress: socket.remoteAddress.address,
@@ -241,7 +242,7 @@ class ConnectionService {
   /// Send a message to connected device
   Future<bool> sendMessage(DeviceMessage message) async {
     if (_socket == null) {
-      print('[ConnectionService] ❌ No active connection');
+      debugPrint('[ConnectionService] ❌ No active connection');
       return false;
     }
 
@@ -251,10 +252,10 @@ class ConnectionService {
       final bytes = utf8.encode(data);
       _socket!.add(bytes);
       await _socket!.flush();
-      print('[ConnectionService] 📤 Sent message: ${message.type}');
+      debugPrint('[ConnectionService] 📤 Sent message: ${message.type}');
       return true;
     } catch (e) {
-      print('[ConnectionService] ❌ Failed to send message: $e');
+      debugPrint('[ConnectionService] ❌ Failed to send message: $e');
       return false;
     }
   }
@@ -293,14 +294,14 @@ class ConnectionService {
         try {
           final json = jsonDecode(messageText) as Map<String, dynamic>;
           final message = DeviceMessage.fromJson(json);
-          print('[ConnectionService] 📥 Received message: ${message.type} from ${message.senderName}');
+          debugPrint('[ConnectionService] 📥 Received message: ${message.type} from ${message.senderName}');
           
           // Handle handshake messages
           if (message.type == 'handshake') {
             final wasConnected = isConnected;
             if (!wasConnected && _currentConnection != null && _currentConnection!.status == ConnectionStatus.connecting) {
               // Transition to connected upon first handshake from peer
-              print('[ConnectionService] 🤝 Acceptance received from ${message.senderName}. Marking as connected.');
+              debugPrint('[ConnectionService] 🤝 Acceptance received from ${message.senderName}. Marking as connected.');
               _updateStatus(_currentConnection!.copyWith(
                 status: ConnectionStatus.connected,
                 connectedAt: DateTime.now(),
@@ -310,7 +311,7 @@ class ConnectionService {
               // Send our handshake response (now that we know the peer accepted)
               await _sendHandshake();
             } else {
-              print('[ConnectionService] 🤝 Received handshake (already connected), ignoring');
+              debugPrint('[ConnectionService] 🤝 Received handshake (already connected), ignoring');
             }
             continue;
           }
@@ -361,7 +362,7 @@ class ConnectionService {
                 }
               }
             } catch (e) {
-              print('[ConnectionService] ⚠️ Failed to parse file_ack: $e');
+              debugPrint('[ConnectionService] ⚠️ Failed to parse file_ack: $e');
             }
             continue;
           }
@@ -384,7 +385,7 @@ class ConnectionService {
                 },
               ));
             } catch (e) {
-              print('[ConnectionService] ⚠️ Failed to parse file_offer: $e');
+              debugPrint('[ConnectionService] ⚠️ Failed to parse file_offer: $e');
             }
             continue;
           }
@@ -394,10 +395,10 @@ class ConnectionService {
         final chunk = FileChunk.fromJson((message.metadata?['payload'] as Map?)?.cast<String, dynamic>() ?? {});
               final incoming = _incomingFiles[chunk.transferId];
               if (incoming == null) {
-                print('[ConnectionService] ⚠️ No state for transfer ${chunk.transferId}');
+                debugPrint('[ConnectionService] ⚠️ No state for transfer ${chunk.transferId}');
               } else {
                 if (chunk.index != incoming.nextIndex) {
-                  print('[ConnectionService] ⚠️ Unexpected chunk index ${chunk.index} expected ${incoming.nextIndex}');
+                  debugPrint('[ConnectionService] ⚠️ Unexpected chunk index ${chunk.index} expected ${incoming.nextIndex}');
                 }
                 final bytes = base64Decode(chunk.dataBase64);
                 await incoming.sink.writeFrom(bytes);
@@ -424,7 +425,7 @@ class ConnectionService {
                     final fb = await File(incoming.path).readAsBytes();
                     final calc = sha256.convert(fb).toString();
                     if (calc != incoming.offer.sha256) {
-                      print('[ConnectionService] ❌ Hash mismatch for ${incoming.offer.fileName}');
+                      debugPrint('[ConnectionService] ❌ Hash mismatch for ${incoming.offer.fileName}');
                       _notifyMessageListeners(DeviceMessage(
                         type: 'text',
                         content: 'Integrity failed: ${incoming.offer.fileName}',
@@ -432,7 +433,7 @@ class ConnectionService {
                         timestamp: DateTime.now(),
                       ));
                     } else {
-                      print('[ConnectionService] ✅ Hash verified for ${incoming.offer.fileName}');
+                      debugPrint('[ConnectionService] ✅ Hash verified for ${incoming.offer.fileName}');
                       _notifyMessageListeners(DeviceMessage(
                         type: 'text',
                         content: 'File verified: ${incoming.offer.fileName}',
@@ -459,7 +460,7 @@ class ConnectionService {
               final ack = FileAck(transferId: chunk.transferId, nextExpectedIndex: chunk.index + 1, completed: chunk.isLast);
               await sendMessage(DeviceMessage(type: 'file_ack', content: jsonEncode(ack.toJson()), senderName: deviceName));
             } catch (e) {
-              print('[ConnectionService] ⚠️ Failed to parse file_chunk: $e');
+              debugPrint('[ConnectionService] ⚠️ Failed to parse file_chunk: $e');
             }
             continue;
           }
@@ -481,14 +482,14 @@ class ConnectionService {
                 timestamp: DateTime.now(),
               ));
             } catch (e) {
-              print('[ConnectionService] ⚠️ Failed to parse file_cancel: $e');
+              debugPrint('[ConnectionService] ⚠️ Failed to parse file_cancel: $e');
             }
             continue;
           }
           
           // Handle ping/pong messages for keep-alive (don't notify listeners)
           if (message.type == 'ping') {
-            print('[ConnectionService] 🏓 Received ping, sending pong');
+            debugPrint('[ConnectionService] 🏓 Received ping, sending pong');
             final pong = DeviceMessage(
               type: 'pong',
               content: 'keep-alive',
@@ -496,24 +497,24 @@ class ConnectionService {
             );
             sendMessage(pong);
           } else if (message.type == 'pong') {
-            print('[ConnectionService] 🏓 Received pong (connection alive)');
+            debugPrint('[ConnectionService] 🏓 Received pong (connection alive)');
           } else {
             // Normal message - notify listeners
             _notifyMessageListeners(message);
           }
         } catch (e) {
-          print('[ConnectionService] ⚠️  Failed to parse message: $e');
+          debugPrint('[ConnectionService] ⚠️  Failed to parse message: $e');
         }
       }
     } catch (e) {
-      print('[ConnectionService] ❌ Error handling incoming data: $e');
+      debugPrint('[ConnectionService] ❌ Error handling incoming data: $e');
     }
   }
 
   /// Public API: Pick and send a file (basic MVP)
   Future<void> pickAndSendFile() async {
     if (!isConnected || _socket == null) {
-      print('[ConnectionService] ⚠️ Not connected; cannot send file');
+      debugPrint('[ConnectionService] ⚠️ Not connected; cannot send file');
       return;
     }
     final result = await FilePicker.platform.pickFiles(withReadStream: true);
@@ -630,7 +631,7 @@ class ConnectionService {
   Future<void> acceptFileOffer(String transferId, {String? saveDir}) async {
     final offer = _pendingOffers.remove(transferId);
     if (offer == null) {
-      print('[ConnectionService] No pending offer for $transferId');
+      debugPrint('[ConnectionService] No pending offer for $transferId');
       return;
     }
     // Choose directory: Downloads on desktop, Documents on mobile
@@ -731,7 +732,7 @@ class ConnectionService {
       try {
         listener(message);
       } catch (e) {
-        print('[ConnectionService] ❌ Error notifying message listener: $e');
+        debugPrint('[ConnectionService] ❌ Error notifying message listener: $e');
       }
     }
   }
@@ -742,14 +743,14 @@ class ConnectionService {
       try {
         listener(info);
       } catch (e) {
-        print('[ConnectionService] ❌ Error notifying status listener: $e');
+        debugPrint('[ConnectionService] ❌ Error notifying status listener: $e');
       }
     }
   }
 
   /// Disconnect from current device
   Future<void> disconnect() async {
-    print('[ConnectionService] 🔌 Disconnecting...');
+    debugPrint('[ConnectionService] 🔌 Disconnecting...');
 
     // Send goodbye message if connected
     if (_socket != null && _currentConnection?.status == ConnectionStatus.connected) {
@@ -761,7 +762,7 @@ class ConnectionService {
         );
         await sendMessage(goodbye);
       } catch (e) {
-        print('[ConnectionService] ⚠️  Could not send goodbye message: $e');
+        debugPrint('[ConnectionService] ⚠️  Could not send goodbye message: $e');
       }
     }
 
@@ -777,7 +778,7 @@ class ConnectionService {
     try {
       await _socket?.close();
     } catch (e) {
-      print('[ConnectionService] ⚠️  Error closing socket: $e');
+      debugPrint('[ConnectionService] ⚠️  Error closing socket: $e');
     }
     _socket = null;
 
@@ -791,7 +792,7 @@ class ConnectionService {
       ));
     }
 
-    print('[ConnectionService] ✅ Disconnected');
+    debugPrint('[ConnectionService] ✅ Disconnected');
   }
 
   /// Start keep-alive timer to prevent connection timeout
@@ -806,7 +807,7 @@ class ConnectionService {
         );
         sendMessage(ping).then((success) {
           if (!success) {
-            print('[ConnectionService] ⚠️  Keep-alive ping failed');
+            debugPrint('[ConnectionService] ⚠️  Keep-alive ping failed');
           }
         });
       }

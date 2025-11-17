@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'connection_service.dart';
@@ -16,27 +17,28 @@ class ConnectionManager {
   /// Initialize with device name
   void initialize(String deviceName) {
     this.deviceName = deviceName;
-    print('[ConnectionManager] Initialized with device name: $deviceName');
+    debugPrint('[ConnectionManager] Initialized with device name: $deviceName');
   }
 
   /// Get or create a connection service for a device
   ConnectionService getOrCreateConnection(String deviceName) {
     if (_activeConnections.containsKey(deviceName)) {
-      print('[ConnectionManager] Returning existing connection to $deviceName');
+      debugPrint('[ConnectionManager] Returning existing connection to $deviceName');
       return _activeConnections[deviceName]!;
     }
 
-    print('[ConnectionManager] Creating new connection service for $deviceName');
-    final service = ConnectionService(deviceName: this.deviceName);
+  debugPrint('[ConnectionManager] Creating new connection service for $deviceName');
+  // FIX: Use the remote device's name, not local deviceName, for proper identity in handshake
+  final service = ConnectionService(deviceName: deviceName);
     _activeConnections[deviceName] = service;
     
     // Listen for connection status changes to manage foreground service
     service.addStatusListener((info) {
       if (info.status == ConnectionStatus.connected) {
-        print('[ConnectionManager] Connection to ${info.deviceName} is now connected');
+        debugPrint('[ConnectionManager] Connection to ${info.deviceName} is now connected');
         _startForegroundServiceIfNeeded();
       } else if (info.status == ConnectionStatus.disconnected || info.status == ConnectionStatus.failed) {
-        print('[ConnectionManager] Connection to ${info.deviceName} disconnected/failed');
+        debugPrint('[ConnectionManager] Connection to ${info.deviceName} disconnected/failed');
         // Remove from active connections and stop service if needed
         _activeConnections.remove(deviceName);
         _stopForegroundServiceIfNeeded();
@@ -50,18 +52,30 @@ class ConnectionManager {
     return service;
   }
 
+  /// Dispose all active connections (called when tearing down discovery)
+  Future<void> dispose() async {
+    for (final entry in _activeConnections.entries) {
+      try {
+        await entry.value.disconnect();
+        await entry.value.dispose();
+      } catch (_) {}
+    }
+    _activeConnections.clear();
+    _connectionListeners.clear();
+  }
+
   /// Handle incoming connection (socket-only, legacy path)
   Future<void> handleIncomingConnection(Socket socket, String remoteName) async {
     try {
-      print('[ConnectionManager] 📞 Handling incoming connection from $remoteName');
-      print('[ConnectionManager] 🔍 Socket details - Address: ${socket.remoteAddress.address}, Port: ${socket.remotePort}');
+      debugPrint('[ConnectionManager] 📞 Handling incoming connection from $remoteName');
+      debugPrint('[ConnectionManager] 🔍 Socket details - Address: ${socket.remoteAddress.address}, Port: ${socket.remotePort}');
 
       // Check if we already have a connection to this device
       final existingService = _activeConnections[remoteName];
       if (existingService != null) {
         // Check if existing connection is active/connected
         if (existingService.isConnected) {
-          print('[ConnectionManager] ⚠️  Already connected to $remoteName, rejecting duplicate incoming connection');
+          debugPrint('[ConnectionManager] ⚠️  Already connected to $remoteName, rejecting duplicate incoming connection');
           // Close the duplicate incoming socket
           try {
             socket.close();
@@ -69,42 +83,45 @@ class ConnectionManager {
           return;
         } else {
           // Existing connection is not active, remove it
-          print('[ConnectionManager] 🗑️  Removing stale (not connected) existing connection to $remoteName');
+          debugPrint('[ConnectionManager] 🗑️  Removing stale (not connected) existing connection to $remoteName');
           _activeConnections.remove(remoteName);
           try {
             // Ensure we fully clean up the old service to release any socket/subscriptions
             await existingService.disconnect();
             await existingService.dispose();
-            print('[ConnectionManager] ✅ Stale connection to $remoteName fully disposed');
+            debugPrint('[ConnectionManager] ✅ Stale connection to $remoteName fully disposed');
           } catch (e) {
-            print('[ConnectionManager] ⚠️  Error disposing stale connection to $remoteName: $e');
+            debugPrint('[ConnectionManager] ⚠️  Error disposing stale connection to $remoteName: $e');
           }
         }
       }
 
-      // Create new connection service for this device
-      print('[ConnectionManager] Creating new connection service for $remoteName');
-      final service = ConnectionService(deviceName: this.deviceName);
+  // Create new connection service for the REMOTE device.
+  // BUG FIX: Previously passed `this.deviceName` (local device name), causing
+  // the ConnectionService to think it was connected to itself. This broke
+  // handshakes and led to premature socket closes after declines.
+  debugPrint('[ConnectionManager] Creating new connection service for remote device $remoteName');
+  final service = ConnectionService(deviceName: remoteName);
       _activeConnections[remoteName] = service;
-      print('[ConnectionManager] 🔍 Got ConnectionService for $remoteName');
+      debugPrint('[ConnectionManager] 🔍 Got ConnectionService for $remoteName');
 
       // Accept the connection using the provided socket
-      print('[ConnectionManager] 🔄 Calling acceptConnection...');
+      debugPrint('[ConnectionManager] 🔄 Calling acceptConnection...');
       final success = await service.acceptConnection(socket, remoteName);
 
       if (success) {
-        print('[ConnectionManager] ✅ Incoming connection from $remoteName accepted');
+        debugPrint('[ConnectionManager] ✅ Incoming connection from $remoteName accepted');
         _notifyConnectionListeners(remoteName, service, isIncoming: true);
         
         // Start foreground service on Android when first connection established
         await _startForegroundServiceIfNeeded();
       } else {
-        print('[ConnectionManager] ❌ Failed to accept connection from $remoteName');
+        debugPrint('[ConnectionManager] ❌ Failed to accept connection from $remoteName');
         _activeConnections.remove(remoteName);
       }
     } catch (e, stackTrace) {
-      print('[ConnectionManager] ❌ Exception handling incoming connection: $e');
-      print('[ConnectionManager] Stack trace: $stackTrace');
+      debugPrint('[ConnectionManager] ❌ Exception handling incoming connection: $e');
+      debugPrint('[ConnectionManager] Stack trace: $stackTrace');
       _activeConnections.remove(remoteName);
       
       // Don't let the exception propagate - just close the socket
@@ -119,15 +136,15 @@ class ConnectionManager {
     if (!Platform.isAndroid) return;
     
     if (_activeConnections.length == 1 && !BackgroundService.isRunning) {
-      print('[ConnectionManager] Starting foreground service (first connection)');
+      debugPrint('[ConnectionManager] Starting foreground service (first connection)');
       try {
         final started = await BackgroundService.start();
         if (started) {
-          print('[ConnectionManager] ✅ Foreground service started');
+          debugPrint('[ConnectionManager] ✅ Foreground service started');
           _updateForegroundServiceNotification();
         }
       } catch (e) {
-        print('[ConnectionManager] ❌ Failed to start foreground service: $e');
+        debugPrint('[ConnectionManager] ❌ Failed to start foreground service: $e');
       }
     } else if (_activeConnections.isNotEmpty) {
       // Update notification with current connections
@@ -140,12 +157,12 @@ class ConnectionManager {
     if (!Platform.isAndroid) return;
     
     if (_activeConnections.isEmpty && BackgroundService.isRunning) {
-      print('[ConnectionManager] Stopping foreground service (no connections)');
+      debugPrint('[ConnectionManager] Stopping foreground service (no connections)');
       try {
         await BackgroundService.stop();
-        print('[ConnectionManager] ✅ Foreground service stopped');
+        debugPrint('[ConnectionManager] ✅ Foreground service stopped');
       } catch (e) {
-        print('[ConnectionManager] ❌ Failed to stop foreground service: $e');
+        debugPrint('[ConnectionManager] ❌ Failed to stop foreground service: $e');
       }
     }
   }
@@ -188,7 +205,7 @@ class ConnectionManager {
       try {
         listener(deviceName, service, isIncoming);
       } catch (e) {
-        print('[ConnectionManager] Error notifying listener: $e');
+        debugPrint('[ConnectionManager] Error notifying listener: $e');
       }
     }
   }
@@ -202,7 +219,7 @@ class ConnectionManager {
   void removeConnection(String deviceName) {
     final service = _activeConnections.remove(deviceName);
     if (service != null) {
-      print('[ConnectionManager] Removed connection to $deviceName');
+      debugPrint('[ConnectionManager] Removed connection to $deviceName');
       service.dispose();
       
       // Stop foreground service if no connections remain
@@ -215,7 +232,7 @@ class ConnectionManager {
 
   /// Close all connections
   Future<void> closeAll() async {
-    print('[ConnectionManager] Closing all connections');
+    debugPrint('[ConnectionManager] Closing all connections');
     for (final service in _activeConnections.values) {
       await service.disconnect();
       service.dispose();

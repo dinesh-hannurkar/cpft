@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -37,7 +38,7 @@ class WebServer {
   /// Start the web server
   Future<bool> start({int port = 8080}) async {
     if (_server != null) {
-      print('[WebServer] Already running');
+      debugPrint('[WebServer] Already running');
       return true;
     }
 
@@ -47,18 +48,18 @@ class WebServer {
       // Prefer dual-stack (IPv6 with IPv4-mapped) when available
       try {
         _server = await HttpServer.bind(InternetAddress.anyIPv6, _port, v6Only: false);
-        print('[WebServer] ✅ Started (dual-stack) on port $_port');
+        debugPrint('[WebServer] ✅ Started (dual-stack) on port $_port');
       } catch (e) {
         // Fallback to IPv4 only
-        print('[WebServer] Dual-stack bind failed: $e. Falling back to IPv4...');
+        debugPrint('[WebServer] Dual-stack bind failed: $e. Falling back to IPv4...');
         _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
-        print('[WebServer] ✅ Started (IPv4) on port $_port');
+        debugPrint('[WebServer] ✅ Started (IPv4) on port $_port');
       }
 
       _server!.listen(_handleRequest);
       return true;
     } catch (e) {
-      print('[WebServer] ❌ Failed to start: $e');
+      debugPrint('[WebServer] ❌ Failed to start: $e');
       return false;
     }
   }
@@ -77,7 +78,7 @@ class WebServer {
     
     await _server?.close();
     _server = null;
-    print('[WebServer] Stopped');
+    debugPrint('[WebServer] Stopped');
   }
 
   /// Handle HTTP requests
@@ -118,7 +119,7 @@ class WebServer {
         await request.response.close();
       }
     } catch (e) {
-      print('[WebServer] Error handling request: $e');
+      debugPrint('[WebServer] Error handling request: $e');
       try {
         request.response.statusCode = HttpStatus.internalServerError;
         request.response.write('Internal Server Error');
@@ -139,7 +140,7 @@ class WebServer {
     try {
       final socket = await WebSocketTransformer.upgrade(request);
       _connectedClients.add(socket);
-      print('[WebServer] WebSocket client connected (${_connectedClients.length} total)');
+      debugPrint('[WebServer] WebSocket client connected (${_connectedClients.length} total)');
       
       // Send welcome message
       socket.add(json.encode({
@@ -152,15 +153,15 @@ class WebServer {
         (data) => _handleWebSocketMessage(socket, data),
         onDone: () {
           _connectedClients.remove(socket);
-          print('[WebServer] WebSocket client disconnected');
+          debugPrint('[WebServer] WebSocket client disconnected');
         },
         onError: (error) {
-          print('[WebServer] WebSocket error: $error');
+          debugPrint('[WebServer] WebSocket error: $error');
           _connectedClients.remove(socket);
         },
       );
     } catch (e) {
-      print('[WebServer] Failed to upgrade to WebSocket: $e');
+      debugPrint('[WebServer] Failed to upgrade to WebSocket: $e');
     }
   }
 
@@ -168,14 +169,14 @@ class WebServer {
   void _handleWebSocketMessage(WebSocket socket, dynamic data) {
     try {
       final message = json.decode(data as String);
-      print('[WebServer] Received WebSocket message: ${message['type']}');
+      debugPrint('[WebServer] Received WebSocket message: ${message['type']}');
       
       // Handle different message types
       if (message['type'] == 'ping') {
         socket.add(json.encode({'type': 'pong'}));
       }
     } catch (e) {
-      print('[WebServer] Error handling WebSocket message: $e');
+      debugPrint('[WebServer] Error handling WebSocket message: $e');
     }
   }
 
@@ -253,7 +254,7 @@ class WebServer {
 
         await completer.future;
 
-        print('[WebServer] ✅ Received file: $filename ($received bytes) -> $savePath');
+        debugPrint('[WebServer] ✅ Received file: $filename ($received bytes) -> $savePath');
 
         if (onFileUploadComplete != null) {
           onFileUploadComplete!(filename, savePath);
@@ -284,7 +285,7 @@ class WebServer {
       request.response.write(json.encode({'success': true, 'message': 'File uploaded successfully'}));
       await request.response.close();
     } catch (e) {
-      print('[WebServer] Error handling file upload: $e');
+      debugPrint('[WebServer] Error handling file upload: $e');
       request.response.statusCode = HttpStatus.internalServerError;
       request.response.headers.contentType = ContentType.json;
       request.response.write(json.encode({'error': e.toString()}));
@@ -337,7 +338,7 @@ class WebServer {
       try {
         client.add(data);
       } catch (e) {
-        print('[WebServer] Failed to send to client: $e');
+        debugPrint('[WebServer] Failed to send to client: $e');
         _connectedClients.remove(client);
       }
     }
@@ -361,7 +362,7 @@ class WebServer {
       'size': File(filePath).lengthSync(),
     });
 
-    print('[WebServer] File available for download: $filename (ID: $fileId)');
+    debugPrint('[WebServer] File available for download: $filename (ID: $fileId)');
     return fileId;
   }
 
@@ -387,7 +388,7 @@ class WebServer {
           'sharedAt': file.addedAt.toIso8601String(),
         };
       } catch (e) {
-        print('[WebServer] Error getting file info for ${file.filename}: $e');
+        debugPrint('[WebServer] Error getting file info for ${file.filename}: $e');
         return null;
       }
     }).whereType<Map<String, dynamic>>().toList();
@@ -441,7 +442,7 @@ class WebServer {
       request.response.add(bytes);
       await request.response.close();
 
-      print('[WebServer] ✅ File downloaded: ${file.filename}');
+      debugPrint('[WebServer] ✅ File downloaded: ${file.filename}');
 
       // Notify clients
       _broadcastToClients({
@@ -450,7 +451,7 @@ class WebServer {
         'filename': file.filename,
       });
     } catch (e) {
-      print('[WebServer] Error serving file: $e');
+      debugPrint('[WebServer] Error serving file: $e');
       request.response.statusCode = HttpStatus.internalServerError;
       request.response.write(json.encode({'error': e.toString()}));
       await request.response.close();

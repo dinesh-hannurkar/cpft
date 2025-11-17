@@ -48,14 +48,14 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Network permissions are required for device discovery'),
+              content: Text('Network permissions are required for device discovery', style: TextStyle(color: Colors.white)),
             ),
           );
         }
         return;
       }
 
-      print('Initializing LocalSend-style discovery...');
+      debugPrint('Initializing LocalSend-style discovery...');
       await _discoveryService.initialize();
       _discoveryService.addDiscoveryListener(_onDeviceDiscovered);
 
@@ -65,13 +65,13 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         });
       }
 
-      print('Discovery initialized successfully!');
+      debugPrint('Discovery initialized successfully!');
     } catch (e) {
-      print('Failed to initialize discovery: $e');
+      debugPrint('Failed to initialize discovery: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to initialize device discovery: $e'),
+            content: Text('Failed to initialize device discovery: $e', style: const TextStyle(color: Colors.white)),
           ),
         );
       }
@@ -83,7 +83,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       setState(() {
         _discoveredDevices[deviceName] = ipAddress;
       });
-      print('UI updated: Device discovered - $deviceName at $ipAddress:$port');
+      debugPrint('UI updated: Device discovered - $deviceName at $ipAddress:$port');
     }
   }
 
@@ -272,7 +272,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                             // Handle device selection
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Selected $deviceName'),
+                                content: Text('Selected $deviceName', style: const TextStyle(color: Colors.white)),
                               ),
                             );
                           },

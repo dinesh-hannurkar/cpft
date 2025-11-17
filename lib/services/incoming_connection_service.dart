@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 /// Service for accepting incoming connections from other devices
@@ -31,7 +32,7 @@ class IncomingConnectionService {
   /// Start listening for incoming connections
   Future<void> startListening() async {
     if (_isListening) {
-      print('[IncomingConnection] Already listening');
+      debugPrint('[IncomingConnection] Already listening');
       return;
     }
 
@@ -43,20 +44,20 @@ class IncomingConnectionService {
       );
 
       _isListening = true;
-      print('[IncomingConnection] ✅ Listening for incoming connections on port $port');
+      debugPrint('[IncomingConnection] ✅ Listening for incoming connections on port $port');
 
       _serverSocket!.listen(
         _handleIncomingConnection,
         onError: (error) {
-          print('[IncomingConnection] ❌ Server error: $error');
+          debugPrint('[IncomingConnection] ❌ Server error: $error');
         },
         onDone: () {
-          print('[IncomingConnection] Server socket closed');
+          debugPrint('[IncomingConnection] Server socket closed');
           _isListening = false;
         },
       );
     } catch (e) {
-      print('[IncomingConnection] ❌ Failed to start listening: $e');
+      debugPrint('[IncomingConnection] ❌ Failed to start listening: $e');
       rethrow;
     }
   }
@@ -64,11 +65,11 @@ class IncomingConnectionService {
   /// Handle incoming connection (no initial data required)
   void _handleIncomingConnection(Socket socket) {
     final remoteAddress = socket.remoteAddress.address;
-    print('[IncomingConnection] 📞 Incoming connection from $remoteAddress');
+    debugPrint('[IncomingConnection] 📞 Incoming connection from $remoteAddress');
 
     // Don't convert to broadcast - just pass the socket directly
     // The ConnectionService will attach its own listener
-    print('[IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)');
+    debugPrint('[IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)');
     _notifyListeners(socket, remoteAddress);
   }
 
@@ -78,7 +79,7 @@ class IncomingConnectionService {
       try {
         listener(socket, remoteName);
       } catch (e) {
-        print('[IncomingConnection] ❌ Error notifying listener: $e');
+        debugPrint('[IncomingConnection] ❌ Error notifying listener: $e');
       }
     }
   }
@@ -86,7 +87,7 @@ class IncomingConnectionService {
   /// Stop listening for connections
   Future<void> stopListening() async {
     if (!_isListening) {
-      print('[IncomingConnection] Not listening');
+      debugPrint('[IncomingConnection] Not listening');
       return;
     }
 
@@ -94,9 +95,9 @@ class IncomingConnectionService {
       await _serverSocket?.close();
       _serverSocket = null;
       _isListening = false;
-      print('[IncomingConnection] ✅ Stopped listening');
+      debugPrint('[IncomingConnection] ✅ Stopped listening');
     } catch (e) {
-      print('[IncomingConnection] ⚠️  Error stopping: $e');
+      debugPrint('[IncomingConnection] ⚠️  Error stopping: $e');
     }
   }
 

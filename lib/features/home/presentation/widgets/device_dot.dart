@@ -6,12 +6,14 @@ class DeviceDot extends StatefulWidget {
   final String label;
   final double angle;
   final double distanceFactor; // 0..1 relative to radius
+  final VoidCallback? onTap; // New: tap handler
 
   const DeviceDot({
     super.key,
     required this.label,
     required this.angle,
     required this.distanceFactor,
+    this.onTap,
   });
 
   @override
@@ -121,12 +123,15 @@ class _DeviceDotState extends State<DeviceDot> with TickerProviderStateMixin {
 
   return Stack(
           children: [
-            Positioned(
-              left: leftDot,
-              top: topDot,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: Container(
+              Positioned(
+                left: leftDot,
+                top: topDot,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onTap,
+                    child: Container(
                 width: dotSize,
                 height: dotSize,
                 decoration: BoxDecoration(
@@ -154,22 +159,25 @@ class _DeviceDotState extends State<DeviceDot> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-            ),
-            ),
+                  ),
+                ),
+              ),
             Positioned(
-      left: clampedLabelLeft,
-      top: clampedLabelTop,
+              left: clampedLabelLeft,
+              top: clampedLabelTop,
               width: labelWidth,
-              child: Text(
-                widget.label,
-                textAlign: align,
-                maxLines: 2,
-                softWrap: true,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  height: 1.2,
-                  color: AppColors.greyDark,
+              child: IgnorePointer(
+                child: Text(
+                  widget.label,
+                  textAlign: align,
+                  maxLines: 2,
+                  softWrap: true,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    height: 1.2,
+                    color: AppColors.greyDark,
+                  ),
                 ),
               ),
             ),

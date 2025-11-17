@@ -33,10 +33,15 @@ class DiscoveryService {
   final Map<String, DeviceInfo> _discoveredDevices = {};
   // Incoming connection request listeners (before acceptance)
   final List<Function(String deviceName, String ipAddress, int port, Future<void> Function() accept, Future<void> Function() decline)> _incomingRequestListeners = [];
+  // Queue to buffer incoming requests until UI listeners are attached
+  final List<_QueuedIncoming> _queuedIncoming = [];
   
   bool _isInitialized = false;
   Timer? _cleanupTimer;
   Timer? _networkScanTimer;
+  Timer? _healthCheckTimer;
+  // Signals when initialize() completes so UI can await readiness
+  Completer<void>? _readyCompleter;
   
   // P2P connection port (different from discovery port)
   static const int p2pPort = 53318;
@@ -70,6 +75,8 @@ class DiscoveryService {
     Function(String deviceName, String ipAddress, int port, Future<void> Function() accept, Future<void> Function() decline) listener,
   ) {
     _incomingRequestListeners.add(listener);
+  // Drain any queued incoming requests now that a listener exists
+  _drainQueuedIncoming();
   }
 
   void removeIncomingRequestListener(
@@ -147,7 +154,6 @@ class DiscoveryService {
         port: port,
         deviceModel: deviceModel,
       );
-      _multicastService.addDiscoveryListener(_onMulticastDiscovery);
       await _multicastService.startListening();
 
       // iOS real devices: Use Bonjour/mDNS instead of multicast
@@ -177,6 +183,11 @@ class DiscoveryService {
       _isInitialized = true;
       print('[DiscoveryService] Initialization complete!');
       print('[DiscoveryService] Listening for devices...');
+      // Signal readiness to any awaiters
+      _readyCompleter ??= Completer<void>();
+      if (!(_readyCompleter!.isCompleted)) {
+        _readyCompleter!.complete();
+      }
       
       // Start cleanup timer to remove unavailable devices
       _startCleanupTimer();
@@ -222,6 +233,18 @@ class DiscoveryService {
       }
     } catch (_) {}
 
+    // If no listeners yet, queue the request to avoid losing the prompt
+    if (_incomingRequestListeners.isEmpty) {
+      print('[DiscoveryService] ⚠️  No UI listeners for incoming requests yet. Queuing request from $displayName');
+      _queuedIncoming.add(_QueuedIncoming(displayName: displayName, ip: ip, socket: socket, receivedAt: DateTime.now()));
+      return;
+    }
+
+    _dispatchIncomingToUi(displayName: displayName, ip: ip, socket: socket);
+  }
+
+  /// Dispatch an incoming request to all UI listeners with accept/decline actions
+  void _dispatchIncomingToUi({required String displayName, required String ip, required Socket socket}) {
     // Build accept/decline closures
     Future<void> accept() async {
       print('[DiscoveryService] ✅ Accepting incoming connection from $displayName');
@@ -240,6 +263,27 @@ class DiscoveryService {
       } catch (e) {
         print('[DiscoveryService] Error notifying incoming request listener: $e');
       }
+    }
+  }
+
+  /// Drain any queued incoming requests to current listeners
+  void _drainQueuedIncoming() {
+    if (_queuedIncoming.isEmpty) return;
+    if (_incomingRequestListeners.isEmpty) return;
+
+    // Drop any entries older than 15 seconds to avoid stale prompts
+    final cutoff = DateTime.now().subtract(const Duration(seconds: 15));
+    final draining = List<_QueuedIncoming>.from(_queuedIncoming);
+    _queuedIncoming.clear();
+
+    for (final q in draining) {
+      if (q.receivedAt.isBefore(cutoff)) {
+        print('[DiscoveryService] 🗑️  Dropping stale queued incoming from ${q.displayName}');
+        try { q.socket.close(); } catch (_) {}
+        continue;
+      }
+      print('[DiscoveryService] 📬 Dispatching queued incoming from ${q.displayName}');
+      _dispatchIncomingToUi(displayName: q.displayName, ip: q.ip, socket: q.socket);
     }
   }
 
@@ -352,6 +396,7 @@ class DiscoveryService {
     _httpServer.dispose();
     _incomingConnectionService.dispose();
     _discoveryListeners.clear();
+  _queuedIncoming.clear();
     _discoveredDevices.clear();
     _isInitialized = false;
     
@@ -370,7 +415,8 @@ class DiscoveryService {
   /// Start periodic cleanup timer for unavailable devices
   void _startCleanupTimer() {
     print('[DiscoveryService] Starting cleanup timer (runs every 30 seconds)');
-    _cleanupTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+  _cleanupTimer?.cancel();
+  _cleanupTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _cleanupUnavailableDevices();
     });
   }
@@ -389,6 +435,9 @@ class DiscoveryService {
       
       // Stop existing services
       await _stopDiscoveryServices();
+      
+      // Allow time for ports to be released
+      await Future.delayed(const Duration(seconds: 1));
       
       // Clear discovered devices
       _discoveredDevices.clear();
@@ -419,6 +468,7 @@ class DiscoveryService {
     // Stop timers
     _cleanupTimer?.cancel();
     _networkScanTimer?.cancel();
+  _healthCheckTimer?.cancel();
     
     // Stop multicast service
     try {
@@ -464,13 +514,26 @@ class DiscoveryService {
     print('[DiscoveryService] Starting discovery services...');
     
     // Start HTTP server
-    await _httpServer.start();
+    try {
+      await _httpServer.start();
+    } catch (e) {
+      print('[DiscoveryService] Error starting HTTP server: $e');
+    }
     
     // Start incoming connection service
-    await _incomingConnectionService.startListening();
+    try {
+      await _incomingConnectionService.startListening();
+    } catch (e) {
+      print('[DiscoveryService] Error starting incoming connection service: $e');
+    }
     
     // Start multicast service
-    await _multicastService.startListening();
+    try {
+      await _multicastService.startListening();
+      _multicastService.addDiscoveryListener(_onMulticastDiscovery);
+    } catch (e) {
+      print('[DiscoveryService] Error starting multicast service: $e');
+    }
     
     // Start Bonjour on iOS
     if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -496,8 +559,10 @@ class DiscoveryService {
 
   /// Start periodic health check timer
   void _startHealthCheckTimer() {
-    print('[DiscoveryService] Starting health check timer (runs every 2 minutes)');
-    Timer.periodic(const Duration(minutes: 2), (timer) {
+    print('[DiscoveryService] Starting health check timer (runs every 30 seconds)');
+    // Avoid duplicate timers across restarts
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       checkDiscoveryHealth();
     });
   }
@@ -543,7 +608,8 @@ class DiscoveryService {
   /// Start periodic network scanning timer for fallback discovery
   void _startNetworkScanTimer() {
     print('[DiscoveryService] Starting network scan timer (runs every 15 seconds)');
-    _networkScanTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+  _networkScanTimer?.cancel();
+  _networkScanTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       _scanLocalNetwork();
     });
   }
@@ -614,7 +680,7 @@ class DiscoveryService {
   void _cleanupUnavailableDevices() {
     final now = DateTime.now();
     // Increased from 30 seconds to 3 minutes to prevent removing active devices
-    final cutoffTime = now.subtract(const Duration(minutes: 3));
+    final cutoffTime = now.subtract(const Duration(seconds: 30));
     
     final devicesToRemove = <String>[];
     
@@ -806,4 +872,28 @@ class DeviceInfo {
     required this.port,
     required this.lastSeen,
   });
+}
+
+/// Internal model for queued incoming connection prompts
+class _QueuedIncoming {
+  final String displayName;
+  final String ip;
+  final Socket socket;
+  final DateTime receivedAt;
+
+  _QueuedIncoming({
+    required this.displayName,
+    required this.ip,
+    required this.socket,
+    required this.receivedAt,
+  });
+}
+
+extension DiscoveryServiceReadiness on DiscoveryService {
+  /// Await this to ensure initialize() has completed.
+  Future<void> get ready async {
+    if (_isInitialized) return;
+    _readyCompleter ??= Completer<void>();
+    return _readyCompleter!.future;
+  }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -28,7 +29,7 @@ class HttpServerService {
   /// Start the HTTP server
   Future<void> start() async {
     if (_isRunning) {
-      print('[HttpServer] Server already running');
+      debugPrint('[HttpServer] Server already running');
       return;
     }
 
@@ -48,15 +49,15 @@ class HttpServerService {
         );
 
         _isRunning = true;
-        print('[HttpServer] Server started on port $currentPort');
+        debugPrint('[HttpServer] Server started on port $currentPort');
         return;
       } catch (e) {
-        print('[HttpServer] Error starting server on port $currentPort: $e');
+        debugPrint('[HttpServer] Error starting server on port $currentPort: $e');
         
         if (e is SocketException && attempt < maxPortAttempts - 1) {
           // Try next port
           currentPort++;
-          print('[HttpServer] Trying port $currentPort...');
+          debugPrint('[HttpServer] Trying port $currentPort...');
           continue;
         }
         
@@ -69,7 +70,7 @@ class HttpServerService {
   /// Handle incoming HTTP requests
   Future<Response> _handleRequest(Request request) async {
     final path = request.url.path;
-    print('[HttpServer] ${request.method} /$path from ${request.requestedUri.host}');
+    debugPrint('[HttpServer] ${request.method} /$path from ${request.requestedUri.host}');
 
     try {
       if (path == 'info' && request.method == 'GET') {
@@ -80,7 +81,7 @@ class HttpServerService {
         return Response.notFound('Not found');
       }
     } catch (e) {
-      print('[HttpServer] Error handling request: $e');
+      debugPrint('[HttpServer] Error handling request: $e');
       return Response.internalServerError(body: 'Internal server error');
     }
   }
@@ -100,7 +101,7 @@ class HttpServerService {
       deviceModel: deviceModel,
     );
 
-    print('[HttpServer] Responding to /info request');
+    debugPrint('[HttpServer] Responding to /info request');
     return Response.ok(
       dto.toJsonString(),
       headers: {'Content-Type': 'application/json'},
@@ -121,7 +122,7 @@ class HttpServerService {
       // Extract IP from request
       final clientIp = _extractClientIp(request);
       
-      print('[HttpServer] Registered device: ${dto.alias} ($clientIp:${dto.port})');
+      debugPrint('[HttpServer] Registered device: ${dto.alias} ($clientIp:${dto.port})');
 
       // Notify discovery listeners
       onDeviceRegistered(dto.alias, clientIp, dto.port);
@@ -139,7 +140,7 @@ class HttpServerService {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {
-      print('[HttpServer] Error in /register: $e');
+      debugPrint('[HttpServer] Error in /register: $e');
       return Response.badRequest(body: jsonEncode({'message': 'Bad request'}));
     }
   }
@@ -165,7 +166,7 @@ class HttpServerService {
 
   /// Stop the server
   Future<void> dispose() async {
-    print('[HttpServer] Stopping server...');
+    debugPrint('[HttpServer] Stopping server...');
     await _server?.close(force: true);
     _isRunning = false;
   }

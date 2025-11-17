@@ -1,22 +1,23 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../shared/widgets/dialog_helpers.dart' as app_dialog;
+import '../shared/widgets/app_confirm_dialog.dart';
 import '../services/discovery_service.dart';
 
 /// Screen for managing files shared via web transfer
 class WebFileManagerScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
 
-  const WebFileManagerScreen({
-    Key? key,
-    required this.discoveryService,
-  }) : super(key: key);
+  const WebFileManagerScreen({Key? key, required this.discoveryService})
+    : super(key: key);
 
   @override
   State<WebFileManagerScreen> createState() => _WebFileManagerScreenState();
 }
 
-class _WebFileManagerScreenState extends State<WebFileManagerScreen> with SingleTickerProviderStateMixin {
+class _WebFileManagerScreenState extends State<WebFileManagerScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final List<ReceivedFileInfo> _receivedFiles = [];
 
@@ -37,11 +38,14 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
 
   void _onFileReceived(String filename, String path) {
     setState(() {
-      _receivedFiles.insert(0, ReceivedFileInfo(
-        filename: filename,
-        path: path,
-        receivedAt: DateTime.now(),
-      ));
+      _receivedFiles.insert(
+        0,
+        ReceivedFileInfo(
+          filename: filename,
+          path: path,
+          receivedAt: DateTime.now(),
+        ),
+      );
     });
   }
 
@@ -65,29 +69,31 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildSharedFilesTab(),
-          _buildReceivedFilesTab(),
-        ],
+        children: [_buildSharedFilesTab(), _buildReceivedFilesTab()],
       ),
     );
   }
 
   Widget _buildSharedFilesTab() {
     final sharedFilesData = widget.discoveryService.getSharedFiles();
-    final sharedFiles = sharedFilesData.map((data) => SharedFileInfo(
-      id: data['id'] as String,
-      filename: data['filename'] as String,
-      path: data['path'] as String,
-      size: data['size'] as int,
-      sharedAt: DateTime.parse(data['sharedAt'] as String),
-    )).toList();
+    final sharedFiles = sharedFilesData
+        .map(
+          (data) => SharedFileInfo(
+            id: data['id'] as String,
+            filename: data['filename'] as String,
+            path: data['path'] as String,
+            size: data['size'] as int,
+            sharedAt: DateTime.parse(data['sharedAt'] as String),
+          ),
+        )
+        .toList();
 
     if (sharedFiles.isEmpty) {
       return _buildEmptyState(
         icon: Icons.cloud_upload,
         title: 'No Files Shared',
-        message: 'Files you share to the web browser will appear here.\n\nUse the "Share to Web" option to make files available for download.',
+        message:
+            'Files you share to the web browser will appear here.\n\nUse the "Share to Web" option to make files available for download.',
       );
     }
 
@@ -106,7 +112,8 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
       return _buildEmptyState(
         icon: Icons.cloud_download,
         title: 'No Files Received',
-        message: 'Files uploaded from the web browser will appear here.\n\nShare the web link and upload files to see them listed.',
+        message:
+            'Files uploaded from the web browser will appear here.\n\nShare the web link and upload files to see them listed.',
       );
     }
 
@@ -119,19 +126,14 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
               Expanded(
                 child: Text(
                   '${_receivedFiles.length} file(s) received',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
               ),
               TextButton.icon(
                 onPressed: _clearReceivedFiles,
                 icon: const Icon(Icons.delete_sweep, size: 20),
                 label: const Text('Clear All'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.red,
-                ),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
               ),
             ],
           ),
@@ -156,10 +158,7 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.blue.shade100,
-          child: Icon(
-            _getFileIcon(file.filename),
-            color: Colors.blue.shade700,
-          ),
+          child: Icon(_getFileIcon(file.filename), color: Colors.blue.shade700),
         ),
         title: Text(
           file.filename,
@@ -222,7 +221,11 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
             if (!fileExists)
               Text(
                 'File deleted from device',
-                style: TextStyle(fontSize: 11, color: Colors.red[400], fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.red[400],
+                  fontStyle: FontStyle.italic,
+                ),
               ),
           ],
         ),
@@ -350,7 +353,8 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+    if (bytes < 1024 * 1024 * 1024)
+      return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
     return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB';
   }
 
@@ -362,37 +366,35 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
     if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
     if (difference.inHours < 24) return '${difference.inHours}h ago';
     if (difference.inDays < 7) return '${difference.inDays}d ago';
-    
+
     return DateFormat('MMM d, y').format(dateTime);
   }
 
   void _removeSharedFile(SharedFileInfo file) {
-    showDialog(
+    app_dialog.showAppDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove from Web?'),
-        content: Text('Stop sharing "${file.filename}" on the web?\n\nThe file will no longer be available for download.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              widget.discoveryService.removeFileFromWeb(file.id);
-              Navigator.pop(context);
-              setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Removed "${file.filename}" from web'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Remove'),
-          ),
-        ],
+      builder: (context) => AppConfirmDialog(
+        title: 'Remove from Web?',
+        content: Text(
+          'Stop sharing "${file.filename}" on the web?\n\nThe file will no longer be available for download.',
+        ),
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Remove',
+        destructive: true,
+        onConfirm: () {
+          widget.discoveryService.removeFileFromWeb(file.id);
+          Navigator.pop(context);
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Removed "${file.filename}" from web',
+                style: TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        },
       ),
     );
   }
@@ -402,85 +404,76 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
       _receivedFiles.removeAt(index);
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Removed from list')),
+      const SnackBar(
+        content: Text(
+          'Removed from list',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 
   void _deleteReceivedFile(ReceivedFileInfo file, int index) {
-    showDialog(
+    app_dialog.showAppDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete File?'),
-        content: Text('Permanently delete "${file.filename}" from device storage?\n\nThis cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                final fileToDelete = File(file.path);
-                if (fileToDelete.existsSync()) {
-                  await fileToDelete.delete();
-                }
-                setState(() {
-                  _receivedFiles.removeAt(index);
-                });
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Deleted "${file.filename}"'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to delete file: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (context) => AppConfirmDialog(
+        title: 'Delete File?',
+        content: Text(
+          'Permanently delete "${file.filename}" from device storage?\n\nThis cannot be undone.',
+        ),
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Delete',
+        destructive: true,
+        onConfirm: () async {
+          try {
+            final fileToDelete = File(file.path);
+            if (fileToDelete.existsSync()) {
+              await fileToDelete.delete();
+            }
+            setState(() {
+              _receivedFiles.removeAt(index);
+            });
+            if (mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Deleted "${file.filename}"',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Failed to delete file: $e',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
       ),
     );
   }
 
   void _clearReceivedFiles() {
-    showDialog(
+    app_dialog.showAppDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear All History?'),
-        content: const Text('Remove all received files from the list?\n\nThe actual files will not be deleted from storage.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _receivedFiles.clear();
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cleared received files history')),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Clear'),
-          ),
-        ],
+      builder: (context) => const AppConfirmDialog(
+        title: 'Clear All History?',
+        content: Text(
+          'Remove all received files from the list?\n\nThe actual files will not be deleted from storage.',
+        ),
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Clear',
       ),
     );
   }
@@ -488,7 +481,12 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen> with Single
   void _showFileOptions(String path) {
     // TODO: Implement file viewer or share options
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('File location: $path')),
+      SnackBar(
+        content: Text(
+          'File location: $path',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 }

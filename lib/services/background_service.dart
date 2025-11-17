@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:isolate';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -15,7 +16,7 @@ class BackgroundTaskHandler extends TaskHandler {
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    print('[BackgroundService] Foreground service started at $timestamp');
+    debugPrint('[BackgroundService] Foreground service started at $timestamp');
   }
 
   @override
@@ -39,28 +40,28 @@ class BackgroundTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp) async {
-    print('[BackgroundService] Foreground service destroyed at $timestamp');
+    debugPrint('[BackgroundService] Foreground service destroyed at $timestamp');
   }
 
   @override
   void onNotificationButtonPressed(String id) {
-    print('[BackgroundService] Notification button pressed: $id');
+    debugPrint('[BackgroundService] Notification button pressed: $id');
   }
 
   @override
   void onNotificationPressed() {
-    print('[BackgroundService] Notification pressed - bringing app to foreground');
+    debugPrint('[BackgroundService] Notification pressed - bringing app to foreground');
     FlutterForegroundTask.launchApp('/');
   }
 
   @override
   void onNotificationDismissed() {
-    print('[BackgroundService] Notification dismissed');
+    debugPrint('[BackgroundService] Notification dismissed');
   }
 
   @override
   void onReceiveData(Object data) {
-    print('[BackgroundService] Received data: $data');
+    debugPrint('[BackgroundService] Received data: $data');
     if (data is SendPort) {
       _sendPort = data;
     }
@@ -98,7 +99,7 @@ class BackgroundService {
     );
 
     _isInitialized = true;
-    print('[BackgroundService] Initialized');
+    debugPrint('[BackgroundService] Initialized');
   }
 
   /// Start the foreground service
@@ -108,7 +109,7 @@ class BackgroundService {
     }
 
     if (_isRunning) {
-      print('[BackgroundService] Service already running');
+      debugPrint('[BackgroundService] Service already running');
       return true;
     }
 
@@ -120,20 +121,20 @@ class BackgroundService {
     );
 
     _isRunning = true;
-    print('[BackgroundService] Start result: $_isRunning (status: $serviceStatus)');
+    debugPrint('[BackgroundService] Start result: $_isRunning (status: $serviceStatus)');
     return _isRunning;
   }
 
   /// Stop the foreground service
   static Future<bool> stop() async {
     if (!_isRunning) {
-      print('[BackgroundService] Service not running');
+      debugPrint('[BackgroundService] Service not running');
       return true;
     }
 
     final result = await FlutterForegroundTask.stopService();
     _isRunning = false;
-    print('[BackgroundService] Stopped (result: $result)');
+    debugPrint('[BackgroundService] Stopped (result: $result)');
     return true;
   }
 

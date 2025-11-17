@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../shared/widgets/dialog_helpers.dart' as app_dialog;
+import '../shared/widgets/app_confirm_dialog.dart';
+
 import '../services/discovery_service.dart';
-import '../utils/permissions.dart';
 import 'connection_screen.dart';
 import 'web_file_manager_screen.dart';
 import 'package:file_picker/file_picker.dart';
@@ -44,107 +46,6 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       alias: widget.deviceName,
       deviceModel: Platform.operatingSystem,
       port: 53317,
-    );
-    _initializeDiscovery();
-  }
-
-  Future<void> _initializeDiscovery() async {
-    try {
-      final hasPermission = await AppPermissions.requestNetworkPermissions();
-      if (!hasPermission) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Network permissions are required for device discovery'),
-            ),
-          );
-        }
-        return;
-      }
-
-      print('Initializing LocalSend-style discovery...');
-      await _discoveryService.initialize();
-      _discoveryService.addDiscoveryListener(_onDeviceDiscovered);
-  // Listen for incoming connection requests (pre-accept)
-  _discoveryService.addIncomingRequestListener(_onIncomingRequest);
-      // Listen for web file uploads
-      _discoveryService.addWebFileListener(_onWebFileReceived);
-      _discoveryService.addWebProgressListener(_onWebUploadProgress);
-
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-
-      print('Discovery initialized successfully!');
-    } catch (e) {
-      print('Failed to initialize discovery: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initialize device discovery: $e'),
-          ),
-        );
-      }
-    }
-  }
-
-  void _onDeviceDiscovered(String deviceName, String ipAddress, int port) {
-    print('[UI] 🟢 UI CALLBACK RECEIVED! Device: $deviceName at $ipAddress:$port');
-    print('[UI] Current widget mounted state: $mounted');
-    print('[UI] Current discovered devices count: ${_discoveredDevices.length}');
-    
-    if (mounted) {
-      setState(() {
-        _discoveredDevices[deviceName] = ipAddress;
-        print('[UI] ✅ setState called - device added to map');
-        print('[UI] New discovered devices count: ${_discoveredDevices.length}');
-      });
-      print('[UI] ✅ UI updated: Device discovered - $deviceName at $ipAddress:$port');
-    } else {
-      print('[UI] ⚠️  Widget not mounted - cannot update UI');
-    }
-  }
-
-  void _onWebFileReceived(String filename, String path) {
-    print('[UI] 📥 Web file received: $filename -> $path');
-    if (!mounted) return;
-    
-    // Remove from active uploads
-    setState(() {
-      _activeWebUploads.remove(filename);
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.download_done, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('File received from web', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(filename, style: const TextStyle(fontSize: 12)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'VIEW',
-          textColor: Colors.white,
-          onPressed: () {
-            // TODO: Open file location or file viewer
-            print('Open file: $path');
-          },
-        ),
-      ),
     );
   }
 
@@ -185,25 +86,14 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
 
     // If you prefer auto-open, you can short-circuit here by pushing without dialog.
     // For now, show a prompt so user can accept/decline.
-    final result = await showDialog<bool>(
+    final result = await app_dialog.showAppDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Incoming chat request'),
-          content: Text('$deviceName wants to chat.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Decline'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Accept'),
-            ),
-          ],
-        );
-      },
+      builder: (context) => AppConfirmDialog(
+        title: 'Incoming chat request',
+        content: Text('$deviceName wants to chat.'),
+        cancelLabel: 'Decline',
+        confirmLabel: 'Accept',
+      ),
     );
 
     _pendingIncoming.remove(deviceName);
@@ -265,7 +155,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       print('[UI] ❌ Refresh error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Refresh failed: $e')),
+          SnackBar(content: Text('Refresh failed: $e', style: const TextStyle(color: Colors.white))),
         );
       }
     } finally {
@@ -297,7 +187,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Failed to start web server'),
+              content: Text('Failed to start web server', style: TextStyle(color: Colors.white)),
               backgroundColor: Colors.red,
             ),
           );
@@ -311,7 +201,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Unable to generate web link. Check network connection.'),
+            content: Text('Unable to generate web link. Check network connection.', style: TextStyle(color: Colors.white)),
             backgroundColor: Colors.orange,
           ),
         );
@@ -320,96 +210,120 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
 
       if (!mounted) return;
 
-      // Show dialog with web link
-      showDialog(
+      // Show dialog with web link (consistent styling)
+      await app_dialog.showAppDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.web, color: Colors.blue),
-              SizedBox(width: 12),
-              Text('Web Browser Access'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Anyone on the same network can access this device via web browser:',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Row(
+        barrierDismissible: true,
+        builder: (ctx) => Dialog(
+          insetPadding: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
                   children: [
-                    Expanded(
-                      child: SelectableText(
-                        webLink,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.copy, size: 20),
-                      tooltip: 'Copy link',
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: webLink));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Link copied to clipboard!'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                    Icon(Icons.web, color: Colors.blue),
+                    SizedBox(width: 12),
+                    Text(
+                      'Web Browser Access',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '📱 Share this link via email, chat, or QR code to let others send you files from their browser.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Anyone on the same network can access this device via web browser:',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          webLink,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy, size: 20),
+                        tooltip: 'Copy link',
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: webLink));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Link copied to clipboard!', style: TextStyle(color: Colors.white)),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '📱 Share this link via email, chat, or QR code to let others send you files from their browser.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          await _discoveryService.stopWebServer();
+                          if (context.mounted) Navigator.of(ctx).pop();
+                        },
+                        child: const Text('Stop & Close'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          Navigator.of(ctx).pop();
+                          await _shareFileToWeb();
+                        },
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Share File'),
+                        style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      // TODO: Add QR code generation
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('QR code feature coming soon!', style: TextStyle(color: Colors.white))),
+                      );
+                    },
+                    icon: const Icon(Icons.qr_code),
+                    label: const Text('Show QR'),
+                  ),
+                ),
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await _discoveryService.stopWebServer();
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text('Stop & Close'),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                // TODO: Add QR code generation
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('QR code feature coming soon!')),
-                );
-              },
-              icon: const Icon(Icons.qr_code),
-              label: const Text('Show QR'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _shareFileToWeb();
-              },
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Share File'),
-              style: FilledButton.styleFrom(backgroundColor: Colors.green),
-            ),
-          ],
         ),
       );
     } catch (e) {
@@ -417,7 +331,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Error: $e', style: TextStyle(color: Colors.white)),
           backgroundColor: Colors.red,
         ),
       );
@@ -433,7 +347,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please start web server first'),
+              content: Text('Please start web server first', style: TextStyle(color: Colors.white)),
               backgroundColor: Colors.orange,
             ),
           );
@@ -449,7 +363,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       if (file.path == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not access file')),
+          const SnackBar(content: Text('Could not access file',)),
         );
         return;
       }
@@ -461,7 +375,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to share file. Is web server running?'),
+            content: Text('Failed to share file. Is web server running?', style: TextStyle(color: Colors.white)),
             backgroundColor: Colors.red,
           ),
         );
@@ -471,7 +385,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ ${file.name} is now available for download via web!'),
+          content: Text('✅ ${file.name} is now available for download via web!', style: TextStyle(color: Colors.white)),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 4),
           action: SnackBarAction(
@@ -486,7 +400,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Error: $e', style: TextStyle(color: Colors.white)),
           backgroundColor: Colors.red,
         ),
       );
@@ -498,9 +412,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     // Disable wakelock when leaving the screen
     WakelockPlus.disable();
     
-    _discoveryService.removeDiscoveryListener(_onDeviceDiscovered);
   _discoveryService.removeIncomingRequestListener(_onIncomingRequest);
-    _discoveryService.removeWebFileListener(_onWebFileReceived);
     _discoveryService.removeWebProgressListener(_onWebUploadProgress);
     _discoveryService.dispose();
     super.dispose();
@@ -1075,7 +987,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     if (connectionManager == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Connection service not ready. Please wait...'),
+          content: Text('Connection service not ready. Please wait...', style: TextStyle(color: Colors.white)),
           backgroundColor: Colors.orange,
         ),
       );

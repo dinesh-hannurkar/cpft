@@ -36,7 +36,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
       // Handle error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save device name')),
+          const SnackBar(content: Text('Failed to save device name', style: TextStyle(color: Colors.white))),
         );
       }
     } finally {
@@ -60,7 +60,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to generate device name')),
+          const SnackBar(content: Text('Failed to generate device name', style: TextStyle(color: Colors.white))),
         );
       }
     } finally {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Platform-specific helper for multicast operations
@@ -9,17 +10,17 @@ class MulticastPlatformHelper {
   /// This is required for multicast packets to be received on Android
   static Future<bool> acquireMulticastLock() async {
     if (!Platform.isAndroid) {
-      print('[MulticastPlatformHelper] Not on Android, skipping multicast lock');
+      debugPrint('[MulticastPlatformHelper] Not on Android, skipping multicast lock');
       return true;
     }
 
     try {
-      print('[MulticastPlatformHelper] Acquiring Android multicast lock...');
+      debugPrint('[MulticastPlatformHelper] Acquiring Android multicast lock...');
       final result = await _channel.invokeMethod('acquireMulticastLock');
-      print('[MulticastPlatformHelper] Multicast lock acquired: $result');
+      debugPrint('[MulticastPlatformHelper] Multicast lock acquired: $result');
       return result == true;
     } catch (e) {
-      print('[MulticastPlatformHelper] Error acquiring multicast lock: $e');
+      debugPrint('[MulticastPlatformHelper] Error acquiring multicast lock: $e');
       return false;
     }
   }
@@ -31,12 +32,12 @@ class MulticastPlatformHelper {
     }
 
     try {
-      print('[MulticastPlatformHelper] Releasing Android multicast lock...');
+      debugPrint('[MulticastPlatformHelper] Releasing Android multicast lock...');
       final result = await _channel.invokeMethod('releaseMulticastLock');
-      print('[MulticastPlatformHelper] Multicast lock released: $result');
+      debugPrint('[MulticastPlatformHelper] Multicast lock released: $result');
       return result == true;
     } catch (e) {
-      print('[MulticastPlatformHelper] Error releasing multicast lock: $e');
+      debugPrint('[MulticastPlatformHelper] Error releasing multicast lock: $e');
       return false;
     }
   }

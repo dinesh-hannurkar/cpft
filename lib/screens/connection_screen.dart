@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'package:cpft/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -6,6 +7,8 @@ import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart'; // For MissingPluginException
+import '../shared/widgets/dialog_helpers.dart' as app_dialog;
+import '../shared/widgets/app_confirm_dialog.dart';
 
 import '../models/connection_state.dart';
 import '../services/connection_service.dart';
@@ -214,27 +217,22 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     final name = message.content;
     // Show prompt
     if (!mounted) return;
-    final accept = await showDialog<bool>(
+    final accept = await app_dialog.showAppDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Incoming file'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name),
-              if (size != null) Text('Size: ${_fmtBytes(size)}'),
-              if (mime != null) Text('Type: $mime'),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Decline')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Accept')),
+      builder: (ctx) => AppConfirmDialog(
+        title: 'Incoming file',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name),
+            if (size != null) Text('Size: ${_fmtBytes(size)}'),
+            if (mime != null) Text('Type: $mime'),
           ],
-        );
-      },
+        ),
+        cancelLabel: 'Decline',
+        confirmLabel: 'Accept',
+      ),
     );
   if (accept == true) {
       // Start progress tracking
@@ -293,7 +291,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       if (info.status == ConnectionStatus.connected) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Connected to ${info.deviceName}'),
+            content: Text('Connected to ${info.deviceName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -301,7 +299,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       } else if (info.status == ConnectionStatus.disconnected) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Disconnected from ${info.deviceName}'),
+            content: Text('Disconnected from ${info.deviceName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 2),
           ),
@@ -309,7 +307,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       } else if (info.status == ConnectionStatus.failed) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Connection failed: ${info.error ?? "Unknown error"}'),
+            content: Text('Connection failed: ${info.error ?? "Unknown error"}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
             backgroundColor: Colors.red,
           ),
         );
@@ -351,7 +349,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to send message'),
+          content: Text('Failed to send message', style: TextStyle(color: AppColors.white)),
           backgroundColor: Colors.red,
         ),
       );
@@ -370,10 +368,10 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       await Share.shareXFiles([XFile(sourcePath)], text: originalName);
     } on MissingPluginException catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Share plugin not initialized. Rebuild app.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Share plugin not initialized. Rebuild app.', style: TextStyle(color: AppColors.white))));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Share failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Share failed: $e', style: TextStyle(color: AppColors.white))));
     }
   }
 
@@ -836,7 +834,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       final status = await Permission.storage.request();
       if (!status.isGranted) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage permission denied')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage permission denied', style: TextStyle(color: AppColors.white))));
         return;
       }
     }
@@ -883,10 +881,10 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     try {
       await io.File(sourcePath).copy(destPath);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to: $destPath')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to: $destPath', style: const TextStyle(color: AppColors.white))));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e', style: const TextStyle(color: AppColors.white))));
     }
   }
 }

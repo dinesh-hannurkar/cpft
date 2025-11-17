@@ -11,6 +11,10 @@ import 'widgets/device_dot.dart';
 import 'widgets/network_banner.dart';
 import 'widgets/link_share_button.dart';
 import 'widgets/settings_button.dart';
+import 'widgets/connection_flow_dialog.dart';
+import 'widgets/incoming_request_dialog.dart';
+import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
+import '../../../screens/connection_screen.dart';
 
 /// Simple data class to track device positions for collision detection
 class DevicePosition {
@@ -42,6 +46,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late HomeController controller;
   String? _networkName;
   bool _isRestartingDiscovery = false;
+  // Track in-flight incoming prompts to avoid duplicate dialogs
+  final Set<String> _pendingIncoming = {};
+  String? _localIp;
 
   @override
   void initState() {
@@ -52,13 +59,85 @@ class _HomeScreenState extends State<HomeScreen> {
       myDeviceName: widget.myDeviceName,
     );
     controller.init();
+    _initializeLocalIp();
+  // Listen for incoming connection requests to show confirmation popup
+  widget.discoveryService.addIncomingRequestListener(_onIncomingRequest);
     _initializeNetworkName();
   }
 
   @override
   void dispose() {
+    // Remove incoming listener
+    widget.discoveryService.removeIncomingRequestListener(_onIncomingRequest);
     controller.dispose();
     super.dispose();
+  }
+
+  // Incoming connection confirmation flow
+  Future<void> _onIncomingRequest(
+    String deviceName,
+    String ipAddress,
+    int port,
+    Future<void> Function() accept,
+    Future<void> Function() decline,
+  ) async {
+    if (!mounted) return;
+    if (_pendingIncoming.contains(deviceName)) return;
+    _pendingIncoming.add(deviceName);
+
+    bool? result;
+    // Ensure dialog runs after current frame and on the root navigator
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    result = await app_dialog.showAppDialog<bool>(
+      context: context,
+      builder: (_) => IncomingRequestDialog(deviceName: deviceName),
+    );
+
+    _pendingIncoming.remove(deviceName);
+
+  if (result == true) {
+      await accept();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connected with $deviceName', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white))),
+      );
+      // Navigate to chat on the receiver side as well
+      var cm = widget.discoveryService.connectionManager;
+      if (cm == null) {
+        try {
+          await widget.discoveryService.initialize();
+        } catch (_) {}
+        cm = widget.discoveryService.connectionManager;
+      }
+      if (!mounted) return;
+  if (cm != null) {
+    final nonNullCm = cm;
+    Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConnectionScreen(
+              deviceName: deviceName,
+              ipAddress: ipAddress,
+              port: DiscoveryService.p2pPort,
+              myDeviceName: widget.myDeviceName,
+      connectionManager: nonNullCm,
+            ),
+          ),
+        );
+      }
+    } else if (result == false) {
+      await decline();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You rejected the request from $deviceName',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _initializeNetworkName() async {
@@ -92,12 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _initializeLocalIp() async {
+    _localIp = await NetworkUtils.getLanIPv4();
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final devices = controller.devices.values.toList();
+        final devices = controller.devices.values.where((d) => d.ip != _localIp).toList();
         final dots = <Widget>[];
         // Track all used positions to prevent any overlaps
         final List<DevicePosition> usedPositions = [];
@@ -161,6 +247,65 @@ class _HomeScreenState extends State<HomeScreen> {
               label: d.name,
               angle: angle,
               distanceFactor: dist,
+              onTap: () async {
+                // Ensure connection manager is ready
+        var manager = widget.discoveryService.connectionManager;
+                if (manager == null) {
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Preparing discovery...', style: Theme.of(context).textTheme.bodyMedium),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                  try {
+                    await widget.discoveryService.initialize();
+          // Wait until DiscoveryService signals readiness
+          await widget.discoveryService.ready;
+                  } catch (_) {}
+                  manager = widget.discoveryService.connectionManager;
+                  if (manager == null) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Discovery not ready yet. Please try again.', style: TextStyle(color: Colors.white)),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+                }
+
+                if (!mounted) return;
+                // Re-read to a non-nullable local after initialization above
+                final cm = manager;
+                final result = await app_dialog.showAppDialog(
+                  context: context,
+                  builder: (_) => ConnectionFlowDialog(
+                    myDeviceName: widget.myDeviceName,
+                    peerDeviceName: d.name,
+                    peerIp: d.ip,
+                    p2pPort: DiscoveryService.p2pPort,
+                    connectionManager: cm,
+                    discoveryService: widget.discoveryService,
+                  ),
+                );
+                if (!mounted) return;
+                if (result == 'connected') {
+                  // Navigate to chat screen (ConnectionScreen)
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ConnectionScreen(
+                        deviceName: d.name,
+                        ipAddress: d.ip,
+                        port: DiscoveryService.p2pPort,
+                        myDeviceName: widget.myDeviceName,
+                        connectionManager: cm,
+                      ),
+                    ),
+                  );
+                }
+              },
             ),
           );
         }

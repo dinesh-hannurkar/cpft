@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import 'package:http/http.dart' as http;
 import '../models/multicast_dto.dart';
@@ -28,7 +29,7 @@ class HttpDiscoveryClient {
       );
 
       final url = Uri.parse('http://$ip:$port/register');
-      print('[HttpClient] Registering with $ip:$port...');
+      debugPrint('[HttpClient] Registering with $ip:$port...');
 
       final response = await http.post(
         url,
@@ -37,17 +38,17 @@ class HttpDiscoveryClient {
       ).timeout(const Duration(seconds: 3));
 
       if (response.statusCode == 200) {
-        print('[HttpClient] Successfully registered with $ip:$port');
+        debugPrint('[HttpClient] Successfully registered with $ip:$port');
         return true;
       } else if (response.statusCode == 412) {
-        print('[HttpClient] Self-discovery ignored');
+        debugPrint('[HttpClient] Self-discovery ignored');
         return false;
       } else {
-        print('[HttpClient] Registration failed: ${response.statusCode}');
+        debugPrint('[HttpClient] Registration failed: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('[HttpClient] Error registering with $ip:$port: $e');
+      debugPrint('[HttpClient] Error registering with $ip:$port: $e');
       return false;
     }
   }
@@ -56,20 +57,20 @@ class HttpDiscoveryClient {
   Future<InfoDto?> getDeviceInfo(String ip, int port) async {
     try {
       final url = Uri.parse('http://$ip:$port/info?fingerprint=$fingerprint');
-      print('[HttpClient] Fetching info from $ip:$port...');
+      debugPrint('[HttpClient] Fetching info from $ip:$port...');
 
       final response = await http.get(url).timeout(const Duration(seconds: 3));
 
       if (response.statusCode == 200) {
         final dto = InfoDto.fromJsonString(response.body);
-        print('[HttpClient] Got info from ${dto.alias}');
+        debugPrint('[HttpClient] Got info from ${dto.alias}');
         return dto;
       } else {
-        print('[HttpClient] Get info failed: ${response.statusCode}');
+        debugPrint('[HttpClient] Get info failed: ${response.statusCode}');
         return null;
       }
     } catch (e) {
-      print('[HttpClient] Error getting info from $ip:$port: $e');
+      debugPrint('[HttpClient] Error getting info from $ip:$port: $e');
       return null;
     }
   }
