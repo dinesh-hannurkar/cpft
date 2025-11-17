@@ -12,6 +12,19 @@ import 'widgets/network_banner.dart';
 import 'widgets/link_share_button.dart';
 import 'widgets/settings_button.dart';
 
+/// Simple data class to track device positions for collision detection
+class DevicePosition {
+  final double angle;
+  final double distance;
+  final double size;
+  
+  const DevicePosition({
+    required this.angle,
+    required this.distance,
+    required this.size,
+  });
+}
+
 class HomeScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
   final String myDeviceName;
@@ -86,45 +99,66 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, _) {
         final devices = controller.devices.values.toList();
         final dots = <Widget>[];
-        // Track used angles per distance bucket to keep dots separated
-        final Map<int, List<double>> usedAnglesByBucket = {};
+        // Track all used positions to prevent any overlaps
+        final List<DevicePosition> usedPositions = [];
+        
         for (int i = 0; i < devices.length && i < 8; i++) {
           final d = devices[i];
           final hash = d.name.hashCode;
           double angle = (hash % 360) * pi / 180.0;
           // Keep dots outside center circle: 0.60 .. 0.85 with a tiny radial jitter to reduce overlaps
           double dist = 0.60 + (hash % 50) / 200.0; // 0.60..0.85 base
-          final double jitter =
-              (((hash >> 8) % 7) - 3) / 100.0; // -0.03 .. +0.03
+          final double jitter = (((hash >> 8) % 7) - 3) / 100.0; // -0.03 .. +0.03
           dist = (dist + jitter).clamp(0.58, 0.88);
-          // Compute a bucket based on distance to reduce collisions on same ring
-          // Use broader buckets to prevent cross-distance overlaps
-          final int bucket = ((dist * 5)
-              .floor()); // 3..4 buckets instead of 6..8
-          usedAnglesByBucket.putIfAbsent(bucket, () => []);
-          // Minimum angular separation in degrees - increased to prevent overlaps
-          // Account for dot size (~40-50px) and label positioning
-          double minSepDeg = 35.0 - 10.0 * (dist - 0.60) / 0.25; // ~35 -> 25
-          if (minSepDeg < 20.0) minSepDeg = 20.0;
-          final double minSepRad = minSepDeg * pi / 180.0;
-          // Adjust angle if too close to existing ones in the same bucket
-          bool hasCollision() => usedAnglesByBucket[bucket]!.any((a) {
-            double diff = (angle - a).abs();
-            diff = diff > pi ? (2 * pi - diff) : diff; // shortest wrap-around
-            return diff < minSepRad;
-          });
-          int guard = 0;
-          while (hasCollision() && guard < 48) {
-            // Increased max tries
-            angle +=
-                minSepRad * 0.5; // Smaller increments for finer positioning
-            if (angle > 2 * pi) angle -= 2 * pi;
-            guard++;
+          
+          // Calculate actual pixel size for collision detection
+          final int hashFactor = (hash.abs() % 1000);
+          final double baseVar = 18.0 * hashFactor / 1000.0; // 0..18
+          final double proximityBoost = (1.0 - dist).clamp(0.0, 1.0) * 6.0; // 0..6
+          final double dotSize = 45.0 + baseVar + proximityBoost; // ~30..54
+          
+          // Minimum angular separation based on dot size and distance
+          // Use a more conservative approach
+          final double minAngularSeparation = (dotSize * 1.5) / (dist * 200); // Conservative multiplier
+          final double minSepRad = minAngularSeparation.clamp(pi / 6, pi / 3); // 30-60 degrees
+          
+          // Check collision against all existing positions
+          bool hasCollision() {
+            for (final pos in usedPositions) {
+              final angleDiff = (angle - pos.angle).abs();
+              final normalizedDiff = angleDiff > pi ? (2 * pi - angleDiff) : angleDiff;
+              
+              // Check if too close angularly or radially
+              final radialOverlap = (dist - pos.distance).abs() < 0.1; // Within 10% distance
+              final angularOverlap = normalizedDiff < minSepRad;
+              
+              if (radialOverlap && angularOverlap) {
+                return true;
+              }
+            }
+            return false;
           }
-          usedAnglesByBucket[bucket]!.add(angle);
+          
+          // Try to find a collision-free position
+          int attempts = 0;
+          const int maxAttempts = 72; // Full circle in 5-degree increments
+          while (hasCollision() && attempts < maxAttempts) {
+            angle += pi / 36; // 5 degrees
+            if (angle > 2 * pi) angle -= 2 * pi;
+            attempts++;
+          }
+          
+          // If still colliding after max attempts, place it anyway but log warning
+          if (hasCollision()) {
+            print('Warning: Could not find collision-free position for device ${d.name}');
+          }
+          
+          // Record this position
+          usedPositions.add(DevicePosition(angle: angle, distance: dist, size: dotSize));
+          
           dots.add(
             DeviceDot(
-              label: d.name, // full name for 2-line label
+              label: d.name,
               angle: angle,
               distanceFactor: dist,
             ),
