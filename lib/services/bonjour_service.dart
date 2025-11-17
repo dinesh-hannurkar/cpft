@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:convert';
-import 'dart:typed_data';
+// Removed unused: convert, typed_data
 import 'package:nsd/nsd.dart';
 
 /// Bonjour/mDNS service for iOS device discovery

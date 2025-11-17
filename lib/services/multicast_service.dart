@@ -6,7 +6,7 @@ import '../models/multicast_dto.dart';
 
 /// Helper class to store socket and interface pair (like LocalSend)
 class _SocketResult {
-  final NetworkInterface interface;
+  final NetworkInterface? interface;
   final RawDatagramSocket socket;
   
   _SocketResult(this.interface, this.socket);
@@ -82,15 +82,45 @@ class MulticastService {
         print('[MulticastService] iOS detected - raw multicast mode');
       }
 
-      // CRITICAL: LocalSend creates MULTIPLE sockets, one per interface
-      // This is the key difference - we need one socket per network interface
-      final interfaces = await NetworkInterface.list(
+      // CRITICAL: Get network interfaces
+      var interfaces = await NetworkInterface.list(
         includeLoopback: false,
         type: InternetAddressType.IPv4,
       );
 
+      print('[MulticastService] Raw interface list (${interfaces.length} found):');
+      for (var interface in interfaces) {
+        print('[MulticastService]   ${interface.name}: ${interface.addresses.map((a) => '${a.address}').join(', ')}');
+      }
+
       if (interfaces.isEmpty) {
-        throw Exception('No network interfaces found');
+        print('[MulticastService] ❌ No network interfaces found at all!');
+        print('[MulticastService] This could mean:');
+        print('[MulticastService]   - No network connection');
+        print('[MulticastService]   - Network permissions not granted');
+        print('[MulticastService]   - Device is in airplane mode');
+        
+        // Try with loopback included as last resort
+        print('[MulticastService] Trying with loopback interfaces included...');
+        final interfacesWithLoopback = await NetworkInterface.list(
+          includeLoopback: true,
+          type: InternetAddressType.IPv4,
+        );
+        
+        if (interfacesWithLoopback.isNotEmpty) {
+          print('[MulticastService] Found ${interfacesWithLoopback.length} interfaces with loopback:');
+          for (var interface in interfacesWithLoopback) {
+            print('[MulticastService]   ${interface.name}: ${interface.addresses.map((a) => '${a.address}').join(', ')}');
+          }
+          // Use loopback interfaces as fallback
+          interfaces = interfacesWithLoopback.where((i) => 
+            i.addresses.any((addr) => !addr.isLoopback || i.name == 'lo0')
+          ).toList();
+        }
+        
+        if (interfaces.isEmpty) {
+          throw Exception('No network interfaces found. Please check your network connection and app permissions.');
+        }
       }
 
       print('[MulticastService] Available interfaces:');
@@ -154,43 +184,88 @@ class MulticastService {
       _sockets.clear();  // Clear any existing sockets
       
       for (final interface in interfaces) {
-        // Skip VPN and virtual interfaces - comprehensive filtering
+        // Less aggressive filtering - only skip obvious VPN/virtual interfaces
         bool skipInterface = false;
         if (interface.name.contains('tun') || 
             interface.name.contains('ppp') ||
-            interface.name.contains('virtual') ||
             interface.name.startsWith('ipsec') ||
-            interface.name.startsWith('utun') ||
-            interface.name.startsWith('ppp') ||
-            interface.name.contains('vpn')) {
+            (interface.name.startsWith('utun') && interface.addresses.isEmpty)) {
           skipInterface = true;
-          print('[MulticastService] Skipping VPN/virtual interface: ${interface.name}');
-        }
-        
-        // On iOS, also skip cellular interfaces (pdp_ip0, etc.)
-        if (Platform.isIOS && interface.name.startsWith('pdp_ip')) {
-          skipInterface = true;
-          print('[MulticastService] Skipping cellular interface: ${interface.name}');
+          print('[MulticastService] Skipping likely VPN interface: ${interface.name}');
         }
         
         if (skipInterface) {
-          print('[MulticastService] Skipping interface: ${interface.name}');
           continue;
         }
         
         try {
           print('[MulticastService] Creating socket for interface: ${interface.name}');
           final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
-          socket.joinMulticast(InternetAddress(multicastGroup), interface);
+          
+          // Try to join multicast group
+          try {
+            socket.joinMulticast(InternetAddress(multicastGroup), interface);
+            print('[MulticastService] ✅ Socket created and joined multicast for ${interface.name}');
+          } catch (multicastError) {
+            print('[MulticastService] ⚠️  Multicast join failed for ${interface.name}: $multicastError');
+            print('[MulticastService] Socket created but multicast may not work');
+            // Still add the socket - it might work for sending at least
+          }
+          
           _sockets.add(_SocketResult(interface, socket));
-          print('[MulticastService] ✅ Socket created and joined multicast for ${interface.name}');
         } catch (e) {
           print('[MulticastService] ❌ Failed to create socket for ${interface.name}: $e');
         }
       }
 
       if (_sockets.isEmpty) {
-        throw Exception('No suitable network interfaces found. Please ensure WiFi is connected.');
+        print('[MulticastService] ❌ No sockets created. Available interfaces:');
+        for (var interface in interfaces) {
+          print('[MulticastService]   - ${interface.name}: ${interface.addresses.map((a) => a.address).join(", ")}');
+        }
+        print('[MulticastService] This usually means:');
+        print('[MulticastService]   1. No WiFi connection');
+        print('[MulticastService]   2. VPN is active (try disabling it)');
+        print('[MulticastService]   3. Cellular data only (multicast needs WiFi)');
+        print('[MulticastService]   4. Firewall/antivirus blocking multicast');
+        
+        // Try to create at least one socket with any available interface as fallback
+        if (interfaces.isNotEmpty) {
+          print('[MulticastService] Attempting fallback: trying first available interface...');
+          try {
+            final interface = interfaces.first;
+            print('[MulticastService] Creating fallback socket for interface: ${interface.name}');
+            final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
+            socket.joinMulticast(InternetAddress(multicastGroup), interface);
+            _sockets.add(_SocketResult(interface, socket));
+            print('[MulticastService] ✅ Fallback socket created for ${interface.name}');
+          } catch (e) {
+            print('[MulticastService] ❌ Fallback socket creation failed: $e');
+            // LAST RESORT: Try binding without specifying interface
+            print('[MulticastService] Attempting last resort: binding to any IPv4 address...');
+            try {
+              final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
+              socket.joinMulticast(InternetAddress(multicastGroup));
+              _sockets.add(_SocketResult(null, socket));  // null interface means any
+              print('[MulticastService] ✅ Last resort socket created (bound to any interface)');
+            } catch (lastResortError) {
+              print('[MulticastService] ❌ Last resort socket creation failed: $lastResortError');
+              throw Exception('Unable to create any multicast sockets. Network may be unavailable or permissions missing.');
+            }
+          }
+        } else {
+          // No interfaces found at all - try binding to any IPv4
+          print('[MulticastService] No interfaces found. Attempting direct IPv4 binding...');
+          try {
+            final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
+            socket.joinMulticast(InternetAddress(multicastGroup));
+            _sockets.add(_SocketResult(null, socket));  // null interface means any
+            print('[MulticastService] ✅ Socket created with direct IPv4 binding');
+          } catch (e) {
+            print('[MulticastService] ❌ Direct IPv4 binding failed: $e');
+            throw Exception('No network interfaces found and direct binding failed. Please check your network connection.');
+          }
+        }
       }
 
       print('[MulticastService] Created ${_sockets.length} multicast sockets');
@@ -199,21 +274,21 @@ class MulticastService {
 
       // Listen for incoming packets on ALL sockets
       for (final socketResult in _sockets) {
-        print('[MulticastService] 👂 Setting up listener for ${socketResult.interface.name}');
+        print('[MulticastService] 👂 Setting up listener for ${socketResult.interface?.name ?? 'any interface'}');
         socketResult.socket.listen((event) {
           if (event == RawSocketEvent.read) {
             final datagram = socketResult.socket.receive();
             if (datagram != null) {
-              print('[MulticastService] 📨 Received packet on ${socketResult.interface.name} from ${datagram.address.address}');
+              print('[MulticastService] 📨 Received packet on ${socketResult.interface?.name ?? 'any interface'} from ${datagram.address.address}');
               _handleIncomingPacket(datagram);
             }
           } else if (event == RawSocketEvent.write) {
             // Socket ready for writing
           } else if (event == RawSocketEvent.closed) {
-            print('[MulticastService] ⚠️  Socket closed for ${socketResult.interface.name}');
+            print('[MulticastService] ⚠️  Socket closed for ${socketResult.interface?.name ?? 'any interface'}');
           }
         }, onError: (error) {
-          print('[MulticastService] ❌ Socket error on ${socketResult.interface.name}: $error');
+          print('[MulticastService] ❌ Socket error on ${socketResult.interface?.name ?? 'any interface'}: $error');
         });
       }
 
@@ -308,12 +383,12 @@ class MulticastService {
           if (bytesSent > 0) {
             totalBytesSent += bytesSent;
             successfulSockets++;
-            print('[MulticastService] Sent announcement on ${socketResult.interface.name}: $bytesSent bytes');
+            print('[MulticastService] Sent announcement on ${socketResult.interface?.name ?? 'any interface'}: $bytesSent bytes');
           } else {
-            print('[MulticastService] Warning: Failed to send on ${socketResult.interface.name} (0 bytes sent)');
+            print('[MulticastService] Warning: Failed to send on ${socketResult.interface?.name ?? 'any interface'} (0 bytes sent)');
           }
         } catch (e) {
-          print('[MulticastService] Error sending on ${socketResult.interface.name}: $e');
+          print('[MulticastService] Error sending on ${socketResult.interface?.name ?? 'any interface'}: $e');
         }
       }
 
@@ -369,7 +444,7 @@ class MulticastService {
       // Send on first available socket (responses are unicast, not multicast)
       final socketResult = _sockets.first;
       socketResult.socket.send(data, address, targetPort);
-      print('[MulticastService] Sent response to $targetIp:$targetPort via ${socketResult.interface.name}');
+      print('[MulticastService] Sent response to $targetIp:$targetPort via ${socketResult.interface?.name ?? 'any interface'}');
     } catch (e) {
       print('[MulticastService] Error sending response: $e');
     }
@@ -384,9 +459,9 @@ class MulticastService {
     for (final socketResult in _sockets) {
       try {
         socketResult.socket.close();
-        print('[MulticastService] Closed socket for ${socketResult.interface.name}');
+        print('[MulticastService] Closed socket for ${socketResult.interface?.name ?? 'any interface'}');
       } catch (e) {
-        print('[MulticastService] Error closing socket for ${socketResult.interface.name}: $e');
+        print('[MulticastService] Error closing socket for ${socketResult.interface?.name ?? 'any interface'}: $e');
       }
     }
     _sockets.clear();

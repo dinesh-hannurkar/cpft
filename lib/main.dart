@@ -1,8 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'screens/device_discovery_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'utils/permissions.dart';
 import 'helpers/local_network_permission_helper.dart';
+import 'services/discovery_service.dart';
+import 'features/home/presentation/home_screen.dart';
+import 'common/theme/theme/app_theme.dart';
+import 'features/setup/presentation/device_name_setup_screen.dart';
 
 void main() {
   runApp(const MainApp());
@@ -14,12 +18,68 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'mDNS Discovery Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const PermissionWrapper(),
+      title: 'CPFT',
+      theme: AppTheme.lightTheme,
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const PermissionWrapper(),
+        '/setup': (context) => const DeviceNameSetupScreen(),
+        '/home': (context) => const HomeWrapper(),
+      },
+    );
+  }
+}
+
+class HomeWrapper extends StatefulWidget {
+  const HomeWrapper({super.key});
+
+  @override
+  State<HomeWrapper> createState() => _HomeWrapperState();
+}
+
+class _HomeWrapperState extends State<HomeWrapper> {
+  String? _deviceName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceName();
+  }
+
+  Future<void> _loadDeviceName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('device_name');
+    if (name != null && name.isNotEmpty) {
+      setState(() {
+        _deviceName = name;
+      });
+    } else {
+      // This should not happen since PermissionWrapper already checked
+      // But as a safety net, redirect to setup
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/setup');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_deviceName == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    final discovery = DiscoveryService(
+      alias: _deviceName!,
+      deviceModel: Platform.operatingSystem,
+      port: 53317,
+    );
+    return HomeScreen(
+      discoveryService: discovery,
+      myDeviceName: _deviceName!,
     );
   }
 }
@@ -34,11 +94,31 @@ class PermissionWrapper extends StatefulWidget {
 class _PermissionWrapperState extends State<PermissionWrapper> {
   bool _permissionsGranted = false;
   bool _isCheckingPermissions = true;
+  String? _deviceName;
 
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
+    _initialize();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _initialize() async {
+    await _checkPermissions();
+    _deviceName = await _getDeviceName();
+    
+    // Navigate based on device name after initialization is complete
+    if (_deviceName == null) {
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/setup');
+      }
+    }
+    
+    setState(() {});
   }
 
   Future<void> _checkPermissions() async {
@@ -57,6 +137,15 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
       _permissionsGranted = granted;
       _isCheckingPermissions = false;
     });
+  }
+
+  Future<String?> _getDeviceName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('device_name');
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+    return null;
   }
 
   @override
@@ -78,6 +167,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
 
     if (!_permissionsGranted) {
       return Scaffold(
+        resizeToAvoidBottomInset: false,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32.0),
@@ -113,66 +203,24 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
       );
     }
 
-    return DeviceDiscoveryScreen(
-      deviceName: _getUniqueDeviceName(),
+    // If device name is set, show home screen
+    if (_deviceName != null) {
+      final discovery = DiscoveryService(
+        alias: _deviceName!,
+        deviceModel: Platform.operatingSystem,
+        port: 53317,
+      );
+      return HomeScreen(
+        discoveryService: discovery,
+        myDeviceName: _deviceName!,
+      );
+    }
+
+    // If we're still initializing (device name check in progress), show loading
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
     );
-  }
-  
-  /// Generate a unique and identifiable device name
-  String _getUniqueDeviceName() {
-    final hostname = Platform.localHostname;
-    
-    // Extract a cleaner hostname
-    String cleanHostname = hostname;
-    
-    // Remove .local suffix if present
-    if (cleanHostname.endsWith('.local')) {
-      cleanHostname = cleanHostname.substring(0, cleanHostname.length - 6);
-    }
-    
-    // Remove common suffixes and clean up
-    cleanHostname = cleanHostname
-        .replaceAll('.', '-')
-        .replaceAll('_', '-')
-        .replaceAll(' ', '-');
-    
-    // Generate a unique 4-character ID based on hostname hash
-    // Ensure it's always exactly 4 digits by padding with zeros if needed
-    final hashValue = hostname.hashCode.abs() % 10000; // Ensure max 4 digits
-    final uniqueId = hashValue.toString().padLeft(4, '0');
-    
-    print('[Main] 🏷️  Generated device name components:');
-    print('[Main]   - Original hostname: $hostname');
-    print('[Main]   - Cleaned hostname: $cleanHostname');
-    print('[Main]   - Unique ID: $uniqueId');
-    
-    // For iOS devices, use a more descriptive name
-    if (Platform.isIOS) {
-      // iOS devices often have generic hostnames, so add a platform identifier
-      final deviceName = 'iPhone-$cleanHostname-$uniqueId';
-      print('[Main] ✅ Final device name: $deviceName');
-      return deviceName;
-    } else if (Platform.isAndroid) {
-      final deviceName = 'Android-$cleanHostname-$uniqueId';
-      print('[Main] ✅ Final device name: $deviceName');
-      return deviceName;
-    } else if (Platform.isMacOS) {
-      final deviceName = 'Mac-$cleanHostname-$uniqueId';
-      print('[Main] ✅ Final device name: $deviceName');
-      return deviceName;
-    } else if (Platform.isWindows) {
-      final deviceName = 'Windows-$cleanHostname-$uniqueId';
-      print('[Main] ✅ Final device name: $deviceName');
-      return deviceName;
-    } else if (Platform.isLinux) {
-      final deviceName = 'Linux-$cleanHostname-$uniqueId';
-      print('[Main] ✅ Final device name: $deviceName');
-      return deviceName;
-    }
-    
-    // Fallback
-    final deviceName = 'Device-$cleanHostname-$uniqueId';
-    print('[Main] ✅ Final device name: $deviceName');
-    return deviceName;
   }
 }

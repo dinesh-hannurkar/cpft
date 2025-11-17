@@ -32,22 +32,37 @@ class HttpServerService {
       return;
     }
 
-    try {
-      final handler = const Pipeline()
-          .addMiddleware(logRequests())
-          .addHandler(_handleRequest);
+    int currentPort = port;
+    const int maxPortAttempts = 10;
 
-      _server = await shelf_io.serve(
-        handler,
-        InternetAddress.anyIPv4,
-        port,
-      );
+    for (int attempt = 0; attempt < maxPortAttempts; attempt++) {
+      try {
+        final handler = const Pipeline()
+            .addMiddleware(logRequests())
+            .addHandler(_handleRequest);
 
-      _isRunning = true;
-      print('[HttpServer] Server started on port $port');
-    } catch (e) {
-      print('[HttpServer] Error starting server: $e');
-      rethrow;
+        _server = await shelf_io.serve(
+          handler,
+          InternetAddress.anyIPv4,
+          currentPort,
+        );
+
+        _isRunning = true;
+        print('[HttpServer] Server started on port $currentPort');
+        return;
+      } catch (e) {
+        print('[HttpServer] Error starting server on port $currentPort: $e');
+        
+        if (e is SocketException && attempt < maxPortAttempts - 1) {
+          // Try next port
+          currentPort++;
+          print('[HttpServer] Trying port $currentPort...');
+          continue;
+        }
+        
+        // Re-throw if we've exhausted all attempts or it's not a socket error
+        rethrow;
+      }
     }
   }
 
@@ -141,6 +156,12 @@ class HttpServerService {
     final connectionInfo = request.context['shelf.io.connection_info'] as HttpConnectionInfo?;
     return connectionInfo?.remoteAddress.address ?? 'unknown';
   }
+
+  /// Get the actual port the server is running on
+  int get actualPort => _server?.port ?? port;
+
+  /// Check if server is running
+  bool get isRunning => _isRunning;
 
   /// Stop the server
   Future<void> dispose() async {

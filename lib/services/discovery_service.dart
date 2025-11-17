@@ -35,6 +35,7 @@ class DiscoveryService {
   final List<Function(String deviceName, String ipAddress, int port, Future<void> Function() accept, Future<void> Function() decline)> _incomingRequestListeners = [];
   
   bool _isInitialized = false;
+  Timer? _cleanupTimer;
   
   // P2P connection port (different from discovery port)
   static const int p2pPort = 53318;
@@ -175,6 +176,9 @@ class DiscoveryService {
       _isInitialized = true;
       print('[DiscoveryService] Initialization complete!');
       print('[DiscoveryService] Listening for devices...');
+      
+      // Start cleanup timer to remove unavailable devices
+      _startCleanupTimer();
       
       // Initialize foreground service on Android (but don't start yet)
       // Service will start only when a connection is established
@@ -334,6 +338,7 @@ class DiscoveryService {
   /// Dispose all services
   void dispose() {
     print('[DiscoveryService] Disposing...');
+    _cleanupTimer?.cancel();
     _multicastService.dispose();
     _bonjourService?.dispose();
     _httpServer.dispose();
@@ -351,6 +356,47 @@ class DiscoveryService {
       });
       // Release multicast lock on Android
       MulticastPlatformHelper.releaseMulticastLock();
+    }
+  }
+
+  /// Start periodic cleanup timer for unavailable devices
+  void _startCleanupTimer() {
+    print('[DiscoveryService] Starting cleanup timer (runs every 30 seconds)');
+    _cleanupTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _cleanupUnavailableDevices();
+    });
+  }
+
+  /// Remove devices that haven't been seen for more than 3 minutes
+  void _cleanupUnavailableDevices() {
+    final now = DateTime.now();
+    // Increased from 30 seconds to 3 minutes to prevent removing active devices
+    final cutoffTime = now.subtract(const Duration(minutes: 3));
+    
+    final devicesToRemove = <String>[];
+    
+    _discoveredDevices.forEach((key, device) {
+      if (device.lastSeen.isBefore(cutoffTime)) {
+        devicesToRemove.add(key);
+        print('[DiscoveryService] 🗑️  Removing unavailable device: ${device.name} (${device.ip}:${device.port}) - last seen ${now.difference(device.lastSeen).inSeconds}s ago');
+      }
+    });
+    
+    if (devicesToRemove.isNotEmpty) {
+      for (final key in devicesToRemove) {
+        _discoveredDevices.remove(key);
+      }
+      print('[DiscoveryService] ✅ Cleaned up ${devicesToRemove.length} unavailable devices');
+      
+      // Notify listeners that devices were removed
+      for (var listener in _discoveryListeners) {
+        try {
+          // Call with empty parameters to indicate cleanup occurred
+          listener('', '', 0);
+        } catch (e) {
+          print('[DiscoveryService] ❌ Error notifying cleanup listener: $e');
+        }
+      }
     }
   }
 
