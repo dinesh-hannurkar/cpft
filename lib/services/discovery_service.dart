@@ -36,6 +36,7 @@ class DiscoveryService {
   
   bool _isInitialized = false;
   Timer? _cleanupTimer;
+  Timer? _networkScanTimer;
   
   // P2P connection port (different from discovery port)
   static const int p2pPort = 53318;
@@ -179,6 +180,12 @@ class DiscoveryService {
       
       // Start cleanup timer to remove unavailable devices
       _startCleanupTimer();
+      
+      // Start network scanning as fallback discovery mechanism
+      _startNetworkScanTimer();
+      
+      // Start health check timer
+      _startHealthCheckTimer();
       
       // Initialize foreground service on Android (but don't start yet)
       // Service will start only when a connection is established
@@ -339,6 +346,7 @@ class DiscoveryService {
   void dispose() {
     print('[DiscoveryService] Disposing...');
     _cleanupTimer?.cancel();
+    _networkScanTimer?.cancel();
     _multicastService.dispose();
     _bonjourService?.dispose();
     _httpServer.dispose();
@@ -365,6 +373,241 @@ class DiscoveryService {
     _cleanupTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _cleanupUnavailableDevices();
     });
+  }
+
+  /// Force restart all discovery services (useful when discovery stops working)
+  Future<void> restartDiscovery() async {
+    print('[DiscoveryService] 🔄 Restarting discovery services...');
+    
+    try {
+      // Check if we're initialized
+      if (!_isInitialized) {
+        print('[DiscoveryService] Not initialized yet, initializing first...');
+        await initialize();
+        return;
+      }
+      
+      // Stop existing services
+      await _stopDiscoveryServices();
+      
+      // Clear discovered devices
+      _discoveredDevices.clear();
+      
+      // Reinitialize services
+      await _startDiscoveryServices();
+      
+      print('[DiscoveryService] ✅ Discovery services restarted successfully');
+      
+      // Notify listeners that devices were cleared (restart)
+      for (var listener in _discoveryListeners) {
+        try {
+          listener('', '', 0);
+        } catch (e) {
+          print('[DiscoveryService] ❌ Error notifying restart listener: $e');
+        }
+      }
+    } catch (e) {
+      print('[DiscoveryService] ❌ Failed to restart discovery services: $e');
+      rethrow;
+    }
+  }
+
+  /// Stop all discovery services
+  Future<void> _stopDiscoveryServices() async {
+    print('[DiscoveryService] Stopping discovery services...');
+    
+    // Stop timers
+    _cleanupTimer?.cancel();
+    _networkScanTimer?.cancel();
+    
+    // Stop multicast service
+    try {
+      _multicastService.dispose();
+    } catch (e) {
+      print('[DiscoveryService] Error stopping multicast service: $e');
+    }
+    
+    // Stop Bonjour service
+    try {
+      _bonjourService?.dispose();
+    } catch (e) {
+      print('[DiscoveryService] Error stopping Bonjour service: $e');
+    }
+    
+    // Stop HTTP server (check if initialized)
+    try {
+      // Use a more defensive approach for late fields
+      await _httpServer.dispose();
+    } catch (e) {
+      print('[DiscoveryService] Error stopping HTTP server: $e');
+      // If it's a late initialization error, the service wasn't initialized
+      if (e.toString().contains('LateInitializationError') || 
+          e.toString().contains('has not been initialized')) {
+        print('[DiscoveryService] HTTP server was not initialized, skipping...');
+      }
+    }
+    
+    // Stop incoming connection service (check if initialized)
+    try {
+      await _incomingConnectionService.dispose();
+    } catch (e) {
+      print('[DiscoveryService] Error stopping incoming connection service: $e');
+      if (e.toString().contains('LateInitializationError') || 
+          e.toString().contains('has not been initialized')) {
+        print('[DiscoveryService] Incoming connection service was not initialized, skipping...');
+      }
+    }
+  }
+
+  /// Start all discovery services
+  Future<void> _startDiscoveryServices() async {
+    print('[DiscoveryService] Starting discovery services...');
+    
+    // Start HTTP server
+    await _httpServer.start();
+    
+    // Start incoming connection service
+    await _incomingConnectionService.startListening();
+    
+    // Start multicast service
+    await _multicastService.startListening();
+    
+    // Start Bonjour on iOS
+    if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        _bonjourService = BonjourService(
+          alias: alias,
+          fingerprint: fingerprint,
+          port: port,
+          deviceModel: deviceModel,
+        );
+        _bonjourService!.addDiscoveryListener(_onBonjourDiscovery);
+        await _bonjourService!.start();
+      } catch (e) {
+        print('[DiscoveryService] ⚠️  Bonjour failed to start: $e');
+      }
+    }
+    
+    // Restart timers
+    _startCleanupTimer();
+    _startNetworkScanTimer();
+    _startHealthCheckTimer();
+  }
+
+  /// Start periodic health check timer
+  void _startHealthCheckTimer() {
+    print('[DiscoveryService] Starting health check timer (runs every 2 minutes)');
+    Timer.periodic(const Duration(minutes: 2), (timer) {
+      checkDiscoveryHealth();
+    });
+  }
+
+  /// Check if discovery services are healthy and restart if needed
+  Future<void> checkDiscoveryHealth() async {
+    if (!_isInitialized) {
+      print('[DiscoveryService] Not initialized, skipping health check');
+      return;
+    }
+
+    try {
+      // Check if HTTP server is running
+      final serverHealthy = _httpServer.isRunning;
+      
+      // Check if multicast service is listening
+      // (We can't easily check this, so we'll assume it's working if no errors)
+      
+      // Check if we've discovered any devices recently
+      final now = DateTime.now();
+      final recentDevices = _discoveredDevices.values.where(
+        (device) => now.difference(device.lastSeen) < const Duration(minutes: 1)
+      ).length;
+      
+      print('[DiscoveryService] Health check: Server=$serverHealthy, RecentDevices=$recentDevices');
+      
+      // If server is not running or no recent discoveries, restart
+      if (!serverHealthy) {
+        print('[DiscoveryService] 🔄 Health check failed - restarting discovery services');
+        await restartDiscovery();
+      }
+    } catch (e) {
+      print('[DiscoveryService] Error during health check: $e');
+      // Try to restart on error
+      try {
+        await restartDiscovery();
+      } catch (restartError) {
+        print('[DiscoveryService] Failed to restart after health check error: $restartError');
+      }
+    }
+  }
+
+  /// Start periodic network scanning timer for fallback discovery
+  void _startNetworkScanTimer() {
+    print('[DiscoveryService] Starting network scan timer (runs every 15 seconds)');
+    _networkScanTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      _scanLocalNetwork();
+    });
+  }
+
+  /// Scan local network for devices (LocalSend-style fallback discovery)
+  Future<void> _scanLocalNetwork() async {
+    try {
+      // Get local IP address
+      final localIp = await _getLocalIpAddress();
+      if (localIp == null) {
+        print('[DiscoveryService] Could not determine local IP for network scanning');
+        return;
+      }
+
+      // Extract subnet (e.g., 192.168.1.0/24)
+      final subnet = _getSubnet(localIp);
+      print('[DiscoveryService] Scanning subnet: $subnet');
+
+      // Scan common ports in the subnet
+      final scanFutures = <Future>[];
+      for (int i = 1; i <= 254; i++) {
+        final ip = '$subnet$i';
+        if (ip != localIp) { // Don't scan ourselves
+          scanFutures.add(_checkDeviceAt(ip, port));
+        }
+      }
+
+      // Limit concurrent scans to avoid overwhelming the network
+      const int maxConcurrent = 20;
+      for (int i = 0; i < scanFutures.length; i += maxConcurrent) {
+        final batch = scanFutures.sublist(
+          i,
+          i + maxConcurrent > scanFutures.length ? scanFutures.length : i + maxConcurrent,
+        );
+        await Future.wait(batch);
+        // Small delay between batches
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+    } catch (e) {
+      print('[DiscoveryService] Error during network scan: $e');
+    }
+  }
+
+  /// Check if a device is running at the given IP and port
+  Future<void> _checkDeviceAt(String ip, int port) async {
+    try {
+      final info = await _httpClient.getDeviceInfo(ip, port);
+      if (info != null && info.fingerprint != fingerprint) {
+        print('[DiscoveryService] 📡 Network scan found device: ${info.alias} at $ip:$port');
+        _onDeviceDiscovered(info.alias, ip, port);
+      }
+    } catch (e) {
+      // Ignore connection errors - device not available
+    }
+  }
+
+  /// Extract subnet from IP address (assumes /24 subnet)
+  String _getSubnet(String ip) {
+    final parts = ip.split('.');
+    if (parts.length == 4) {
+      return '${parts[0]}.${parts[1]}.${parts[2]}.';
+    }
+    return '';
   }
 
   /// Remove devices that haven't been seen for more than 3 minutes

@@ -28,6 +28,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late HomeController controller;
   String? _networkName;
+  bool _isRestartingDiscovery = false;
 
   @override
   void initState() {
@@ -97,11 +98,14 @@ class _HomeScreenState extends State<HomeScreen> {
               (((hash >> 8) % 7) - 3) / 100.0; // -0.03 .. +0.03
           dist = (dist + jitter).clamp(0.58, 0.88);
           // Compute a bucket based on distance to reduce collisions on same ring
-          final int bucket = (dist * 10).floor(); // 6..8 typical
+          // Use broader buckets to prevent cross-distance overlaps
+          final int bucket = ((dist * 5)
+              .floor()); // 3..4 buckets instead of 6..8
           usedAnglesByBucket.putIfAbsent(bucket, () => []);
-          // Minimum angular separation in degrees (slightly smaller for outer rings)
-          double minSepDeg = 22.0 - 8.0 * (dist - 0.60) / 0.25; // ~22 -> 14
-          if (minSepDeg < 10.0) minSepDeg = 10.0;
+          // Minimum angular separation in degrees - increased to prevent overlaps
+          // Account for dot size (~40-50px) and label positioning
+          double minSepDeg = 35.0 - 10.0 * (dist - 0.60) / 0.25; // ~35 -> 25
+          if (minSepDeg < 20.0) minSepDeg = 20.0;
           final double minSepRad = minSepDeg * pi / 180.0;
           // Adjust angle if too close to existing ones in the same bucket
           bool hasCollision() => usedAnglesByBucket[bucket]!.any((a) {
@@ -110,8 +114,10 @@ class _HomeScreenState extends State<HomeScreen> {
             return diff < minSepRad;
           });
           int guard = 0;
-          while (hasCollision() && guard < 24) {
-            angle += minSepRad;
+          while (hasCollision() && guard < 48) {
+            // Increased max tries
+            angle +=
+                minSepRad * 0.5; // Smaller increments for finer positioning
             if (angle > 2 * pi) angle -= 2 * pi;
             guard++;
           }
@@ -154,10 +160,84 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     Positioned(
                       right: 16,
-                      child: SettingsButton(
-                        onPressed: () {
-                          /* TODO: navigate to settings */
-                        },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: _isRestartingDiscovery
+                                ? SizedBox(
+                                    width: AppSizes.iconMd,
+                                    height: AppSizes.iconMd,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        AppColors.primary,
+                                      ),
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.refresh,
+                                    color: AppColors.primary,
+                                    size: AppSizes.iconMd,
+                                  ),
+                            onPressed: _isRestartingDiscovery
+                                ? null
+                                : () async {
+                                    setState(() {
+                                      _isRestartingDiscovery = true;
+                                    });
+
+                                    // Show loading indicator
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    messenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Restarting device discovery...',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+
+                                    try {
+                                      await widget.discoveryService
+                                          .restartDiscovery();
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Discovery restarted successfully',
+                                            style: TextStyle(color: Colors.white),
+                                          ),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Failed to restart discovery: $e',
+                                            style: const TextStyle(color: Colors.white),
+                                          ),
+                                          duration: const Duration(seconds: 3),
+                                        ),
+                                      );
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() {
+                                          _isRestartingDiscovery = false;
+                                        });
+                                      }
+                                    }
+                                  },
+                            tooltip: 'Restart Discovery',
+                          ),
+                          const SizedBox(width: AppSizes.sm),
+                          SettingsButton(
+                            onPressed: () {
+                              /* TODO: navigate to settings */
+                            },
+                          ),
+                        ],
                       ),
                     ),
                   ],
