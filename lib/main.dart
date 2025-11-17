@@ -108,11 +108,14 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
   }
 
   Future<void> _initialize() async {
+    print("=== PermissionWrapper _initialize called ===");
     await _checkPermissions();
     _deviceName = await _getDeviceName();
+    print("=== Device name loaded: $_deviceName ===");
     
     // Navigate based on device name after initialization is complete
     if (_deviceName == null) {
+      print("=== Navigating to setup screen ===");
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/setup');
       }
@@ -127,6 +130,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
     });
 
     final granted = await AppPermissions.requestNetworkPermissions();
+    print("=== Permissions granted: $granted ===");
     
     // For iOS, also show Local Network permission instructions
     if (Platform.isIOS) {
@@ -165,7 +169,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
       );
     }
 
-    if (!_permissionsGranted) {
+  if (!_permissionsGranted) {
       return Scaffold(
         resizeToAvoidBottomInset: false,
         body: Center(
@@ -192,10 +196,10 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
                   child: const Text('Grant Permissions'),
                 ),
                 const SizedBox(height: 16),
-                TextButton(
-                  onPressed: AppPermissions.openSettingsIfNeeded,
-                  child: const Text('Open Settings'),
-                ),
+                      TextButton(
+                        onPressed: AppPermissions.openLocationSettings,
+                        child: const Text('Open Settings'),
+                      ),
               ],
             ),
           ),
@@ -205,6 +209,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
 
     // If device name is set, show home screen
     if (_deviceName != null) {
+      print("=== Creating HomeScreen with device name: $_deviceName ===");
       final discovery = DiscoveryService(
         alias: _deviceName!,
         deviceModel: Platform.operatingSystem,

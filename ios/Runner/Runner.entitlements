@@ -4,5 +4,7 @@
 <dict>
 	<!-- Entitlements for iOS -->
 	<!-- Note: com.apple.developer.networking.multicast is macOS-only -->
+	<key>com.apple.developer.networking.wifi-info</key>
+	<true/>
 </dict>
 </plist>

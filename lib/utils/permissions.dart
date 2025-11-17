@@ -12,38 +12,64 @@ class AppPermissions {
   }
 
   static Future<bool> _requestAndroidPermissions() async {
-    // On Android, we need location permission for WiFi operations
-    final locationStatus = await Permission.location.request();
-    if (locationStatus.isDenied || locationStatus.isPermanentlyDenied) {
-      print('Location permission denied. This is required for device discovery on Android.');
-      return false;
+    // Android WiFi SSID access requires location (fine or coarse depending on API level)
+    final fine = await Permission.location.status;
+    if (!fine.isGranted) {
+      final req = await Permission.location.request();
+      if (!req.isGranted) {
+        print('Android fine location denied; SSID and discovery may be limited.');
+        return false;
+      }
     }
 
-    // Also request WiFi state permission if available
-    final wifiStatus = await Permission.locationWhenInUse.request();
-    if (wifiStatus.isDenied || wifiStatus.isPermanentlyDenied) {
-      print('Location permission (when in use) denied. Device discovery may not work properly.');
-      return false;
+    // Coarse (for older patterns) - permission_handler maps both
+    final coarse = await Permission.locationWhenInUse.status; // may mirror fine
+    if (!coarse.isGranted) {
+      final req2 = await Permission.locationWhenInUse.request();
+      if (!req2.isGranted) {
+        print('Android coarse/when-in-use location denied; continuing with fine only.');
+      }
     }
-
     return true;
   }
 
   static Future<bool> _requestIOSPermissions() async {
-    // On iOS 14+, local network permission is handled automatically by the system
-    // when NSLocalNetworkUsageDescription is present in Info.plist
-    // We don't need to explicitly request it via permission_handler
-    return true;
+    // On iOS, we need location permission for WiFi information access
+    final locationStatus = await Permission.locationWhenInUse.status;
+    print('iOS Location permission current status: $locationStatus');
+
+    if (locationStatus.isGranted) {
+      print('Location permission already granted');
+      return true;
+    }
+
+    if (locationStatus.isPermanentlyDenied) {
+      print('Location permission permanently denied. User must enable in Settings.');
+      print('Please go to: Settings > Privacy & Security > Location Services > [App Name] > Allow');
+      // Don't try to request again, just inform user
+      return false;
+    }
+
+    // Try to request permission
+    final requestResult = await Permission.locationWhenInUse.request();
+    print('iOS Location permission request result: $requestResult');
+
+    if (requestResult.isGranted) {
+      print('Location permission granted successfully');
+      return true;
+    } else {
+      print('Location permission denied or restricted');
+      return false;
+    }
   }
 
-  static Future<void> openSettingsIfNeeded() async {
-    if (Platform.isAndroid) {
-      final locationStatus = await Permission.location.status;
-      final locationWhenInUseStatus = await Permission.locationWhenInUse.status;
+  static Future<void> openLocationSettings() async {
+    print('Opening app settings for location permission...');
+    await openAppSettings();
+  }
 
-      if (locationStatus.isPermanentlyDenied || locationWhenInUseStatus.isPermanentlyDenied) {
-        await openAppSettings();
-      }
-    }
+  static Future<bool> checkLocationPermission() async {
+    final status = await Permission.locationWhenInUse.status;
+    return status.isGranted;
   }
 }

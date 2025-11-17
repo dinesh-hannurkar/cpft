@@ -15,7 +15,7 @@ class NetworkBanner extends StatelessWidget {
           Icon(Icons.wifi, color: green, size: 22),
           const SizedBox(width: 8),
           Text(
-            networkName != null ? 'Connected to $networkName network' : 'Not connected',
+            networkName != null ? 'Connected to $networkName' : 'Not connected',
             style: TextStyle(color: green, fontWeight: FontWeight.w500, fontSize: 14),
           ),
         ],

@@ -4,6 +4,7 @@ import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:flutter/material.dart';
 import '../../../services/discovery_service.dart';
 import '../../../utils/network_utils.dart';
+import '../../../utils/permissions.dart';
 import '../controllers/home_controller.dart';
 import 'widgets/radar_view.dart';
 import 'widgets/device_dot.dart';
@@ -31,23 +32,50 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    print("=== HomeScreen initState called ===");
     controller = HomeController(
       discoveryService: widget.discoveryService,
       myDeviceName: widget.myDeviceName,
     );
     controller.init();
-    NetworkUtils.getLanIPv4().then((ip) {
-      if (!mounted) return;
-      setState(() {
-        _networkName = ip != null ? 'Local ($ip)' : null;
-      });
-    });
+    _initializeNetworkName();
   }
 
   @override
   void dispose() {
     controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _initializeNetworkName() async {
+    print("=== _initializeNetworkName called ===");
+    // Request permissions first
+    final permissionsGranted = await AppPermissions.requestNetworkPermissions();
+
+    if (!permissionsGranted) {
+      print('Permissions not granted - WiFi name may not be available');
+      // Check if location permission is permanently denied
+      final locationGranted = await AppPermissions.checkLocationPermission();
+      if (!locationGranted) {
+        print(
+          'Location permission required for WiFi name. Please enable in Settings.',
+        );
+        // Could show a dialog here to guide user to settings
+      }
+    }
+
+    // Get network name (WiFi name or IP-based fallback)
+    final networkName = await NetworkUtils.getWifiName();
+    print(
+      networkName != null
+          ? 'Network name obtained: $networkName'
+          : 'No network name obtained',
+    );
+    if (mounted) {
+      setState(() {
+        _networkName = networkName;
+      });
+    }
   }
 
   @override
@@ -65,7 +93,8 @@ class _HomeScreenState extends State<HomeScreen> {
           double angle = (hash % 360) * pi / 180.0;
           // Keep dots outside center circle: 0.60 .. 0.85 with a tiny radial jitter to reduce overlaps
           double dist = 0.60 + (hash % 50) / 200.0; // 0.60..0.85 base
-          final double jitter = (((hash >> 8) % 7) - 3) / 100.0; // -0.03 .. +0.03
+          final double jitter =
+              (((hash >> 8) % 7) - 3) / 100.0; // -0.03 .. +0.03
           dist = (dist + jitter).clamp(0.58, 0.88);
           // Compute a bucket based on distance to reduce collisions on same ring
           final int bucket = (dist * 10).floor(); // 6..8 typical
@@ -76,10 +105,10 @@ class _HomeScreenState extends State<HomeScreen> {
           final double minSepRad = minSepDeg * pi / 180.0;
           // Adjust angle if too close to existing ones in the same bucket
           bool hasCollision() => usedAnglesByBucket[bucket]!.any((a) {
-                double diff = (angle - a).abs();
-                diff = diff > pi ? (2 * pi - diff) : diff; // shortest wrap-around
-                return diff < minSepRad;
-              });
+            double diff = (angle - a).abs();
+            diff = diff > pi ? (2 * pi - diff) : diff; // shortest wrap-around
+            return diff < minSepRad;
+          });
           int guard = 0;
           while (hasCollision() && guard < 24) {
             angle += minSepRad;
@@ -119,9 +148,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     Center(
                       child: Text(
                         'CPFT',
-                        style: Theme.of(context).textTheme.headlineMedium?.apply(
-                          color: AppColors.primary,
-                        ),
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.apply(color: AppColors.primary),
                       ),
                     ),
                     Positioned(
@@ -153,9 +181,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     'Finding nearby devices....',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w400,
-                        ),
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                   const SizedBox(height: AppSizes.spaceBtwSections),
                   // Radar centered with less side padding
@@ -164,7 +192,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: AspectRatio(
                         aspectRatio: 1,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSizes.sm,
+                          ),
                           child: RadarView(
                             sweepAngle: controller.sweepAngle,
                             deviceDots: dots,
@@ -176,11 +206,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                 // vertical: AppSizes.xs,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.white.withValues(alpha: 0.9),
+                                color: AppColors.secondary.withValues(
+                                  alpha: 0.9,
+                                ),
                                 shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Color(
+                                    0xFFB8D9ED,
+                                  ).withValues(alpha: 0.2),
+                                  width: 1.5,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.skyBlue.withValues(alpha: 0.1),
+                                    color: AppColors.skyBlue.withValues(
+                                      alpha: 0.1,
+                                    ),
                                     blurRadius: 30,
                                     spreadRadius: 5,
                                     offset: const Offset(0, 8),
@@ -202,9 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     softWrap: true,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
+                                    style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w500,
@@ -243,16 +281,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                         ),
-                        const SizedBox(height: AppSizes.sm),
+                        const SizedBox(height: AppSizes.md),
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: AppSizes.xl),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSizes.xl,
+                          ),
                           child: Text(
                             'App not installed on other device? use link share',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.greyLight,
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.greyLight),
                           ),
                         ),
                       ],

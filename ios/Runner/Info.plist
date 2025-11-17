@@ -47,6 +47,8 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app needs access to discover and connect to nearby devices on your local network.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs location access to identify your WiFi network name.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_cpft._tcp</string>

@@ -39,5 +39,24 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # Enable specific permission_handler permissions via preprocessor macros
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)'
+      ]
+      # Allow location (When In Use). Do NOT enable ALWAYS unless you request it.
+      defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']
+      unless defs.include? 'PERMISSION_LOCATION=1'
+        defs << 'PERMISSION_LOCATION=1'
+      end
+      # Example toggles (kept off):
+      # defs << 'PERMISSION_LOCATION_ALWAYS=0'
+      # defs << 'PERMISSION_BLUETOOTH=0'
+      # defs << 'PERMISSION_NOTIFICATIONS=0'
+      
+      # Allow entitlements modification during build (required for permission_handler)
+      config.build_settings['CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION'] = 'YES'
+    end
   end
 end
