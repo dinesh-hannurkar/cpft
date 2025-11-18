@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:cpft/shared/widgets/app_action_button.dart';
 
 class IncomingRequestDialog extends StatefulWidget {
   final String deviceName;
@@ -12,30 +13,7 @@ class IncomingRequestDialog extends StatefulWidget {
   State<IncomingRequestDialog> createState() => _IncomingRequestDialogState();
 }
 
-class _IncomingRequestDialogState extends State<IncomingRequestDialog>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(
-      begin: 0.9,
-      end: 1.1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
+class _IncomingRequestDialogState extends State<IncomingRequestDialog> {
   @override
   Widget build(BuildContext context) {
     final initial = widget.deviceName.isNotEmpty
@@ -70,37 +48,26 @@ class _IncomingRequestDialogState extends State<IncomingRequestDialog>
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: AppActionButton(
+                    text: 'Reject',
                     onPressed: () => Navigator.of(context).pop(false),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.red),
-                      foregroundColor: AppColors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: Text(
-                      'Reject',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.red,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    backgroundColor: AppColors.red.withValues(alpha: 0.1),
+                    textColor: AppColors.red,
+                    borderColor: AppColors.white,
+                    shadowColor: AppColors.red.withValues(alpha: 0.1),
+                    icon: Icons.close,
                   ),
                 ),
                 const SizedBox(width: AppSizes.md),
                 Expanded(
-                  child: FilledButton(
+                  child: AppActionButton(
+                    icon: Icons.check,
+                    text: 'Accept',
                     onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: Text(
-                      'Accept',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    backgroundColor: AppColors.green.withValues(alpha: 0.1),
+                    textColor: AppColors.green,
+                    borderColor: AppColors.white,
+                    shadowColor: AppColors.primary.withValues(alpha: 0.1),
                   ),
                 ),
               ],
@@ -122,7 +89,9 @@ class _IncomingRequestDialogState extends State<IncomingRequestDialog>
           decoration: BoxDecoration(
             color: AppColors.secondary.withValues(alpha: 0.15),
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.15),
+            ),
           ),
           alignment: Alignment.center,
           child: Text(

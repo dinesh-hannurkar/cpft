@@ -7,7 +7,7 @@ import 'dart:typed_data';
 import '../models/connection_state.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
-import '../models/file_transfer.dart';
+import 'package:cpft/models/file_transfer.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Service for managing device-to-device connections
@@ -295,6 +295,20 @@ class ConnectionService {
           final json = jsonDecode(messageText) as Map<String, dynamic>;
           final message = DeviceMessage.fromJson(json);
           debugPrint('[ConnectionService] 📥 Received message: ${message.type} from ${message.senderName}');
+
+          // Handle explicit reject messages (new): remote declined connection before handshake
+          if (message.type == 'reject') {
+            debugPrint('[ConnectionService] ❌ Connection explicitly rejected by ${message.senderName}');
+            if (_currentConnection != null && _currentConnection!.status == ConnectionStatus.connecting) {
+              _updateStatus(_currentConnection!.copyWith(
+                status: ConnectionStatus.failed,
+                error: 'Connection rejected by remote device',
+              ));
+            }
+            // Close socket proactively
+            await disconnect();
+            continue;
+          }
           
           // Handle handshake messages
           if (message.type == 'handshake') {

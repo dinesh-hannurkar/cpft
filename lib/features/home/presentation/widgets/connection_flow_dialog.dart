@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
-import '../../../../services/connection_manager.dart';
+import '../../../../features/chat/services/connection_manager.dart';
 import '../../../../services/discovery_service.dart';
-import '../../../../models/connection_state.dart';
+import '../../../../features/chat/models/connection_state.dart';
 
 class ConnectionFlowDialog extends StatefulWidget {
   final String myDeviceName;
@@ -76,19 +76,33 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     } else if ((info.status == ConnectionStatus.failed || info.status == ConnectionStatus.disconnected) && !_completed) {
       // Provide quick feedback to the initiator if rejected/disconnected
       final messenger = ScaffoldMessenger.maybeOf(context);
+      final isRejected = (info.error ?? '').toLowerCase().contains('rejected');
       messenger?.showSnackBar(
         SnackBar(
           content: Text(
-            info.status == ConnectionStatus.failed
+            isRejected
                 ? 'Request rejected by ${widget.peerDeviceName}'
-                : 'Disconnected from ${widget.peerDeviceName}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
+                : (info.status == ConnectionStatus.failed
+                    ? 'Failed to connect to ${widget.peerDeviceName}'
+                    : 'Disconnected from ${widget.peerDeviceName}'),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
           ),
           duration: const Duration(seconds: 2),
         ),
       );
-      // Restart discovery to ensure devices are rediscovered after disconnect or rejection
-      widget.discoveryService.restartDiscovery();
+      // If explicitly rejected, avoid full discovery restart (too noisy); just send a fresh announcement
+      if (isRejected) {
+        widget.discoveryService.announce();
+      } else {
+        // For genuine failures/disconnects, perform a lighter refresh first
+        widget.discoveryService.announce();
+        // Fallback: schedule full restart if device list stays stale
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            widget.discoveryService.checkDiscoveryHealth();
+          }
+        });
+      }
     }
   }
 

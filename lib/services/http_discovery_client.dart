@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:http/http.dart' as http;
@@ -48,7 +49,29 @@ class HttpDiscoveryClient {
         return false;
       }
     } catch (e) {
-      debugPrint('[HttpClient] Error registering with $ip:$port: $e');
+      // Provide more detailed error diagnostics for registration
+      if (e is SocketException) {
+        final errorCode = e.osError?.errorCode ?? 'unknown';
+        final errorMessage = e.osError?.message ?? e.message;
+        
+        switch (errorCode) {
+          case 113: // EHOSTUNREACH - No route to host
+            debugPrint('[HttpClient] ❌ Cannot register - no route to host $ip:$port');
+            break;
+          case 111: // ECONNREFUSED - Connection refused
+            debugPrint('[HttpClient] ❌ Registration refused by $ip:$port - device may not be running CPFT');
+            break;
+          case 110: // ETIMEDOUT - Connection timed out
+            debugPrint('[HttpClient] ❌ Registration timeout to $ip:$port');
+            break;
+          default:
+            debugPrint('[HttpClient] ❌ Socket error ($errorCode) during registration with $ip:$port: $errorMessage');
+        }
+      } else if (e is TimeoutException) {
+        debugPrint('[HttpClient] ❌ Registration timeout with $ip:$port');
+      } else {
+        debugPrint('[HttpClient] ❌ Error registering with $ip:$port: $e');
+      }
       return false;
     }
   }
@@ -70,7 +93,35 @@ class HttpDiscoveryClient {
         return null;
       }
     } catch (e) {
-      debugPrint('[HttpClient] Error getting info from $ip:$port: $e');
+      // Provide more detailed error diagnostics
+      if (e is SocketException) {
+        final errorCode = e.osError?.errorCode ?? 'unknown';
+        final errorMessage = e.osError?.message ?? e.message;
+        
+        switch (errorCode) {
+          case 113: // EHOSTUNREACH - No route to host
+            debugPrint('[HttpClient] ❌ No route to host $ip:$port - device may be offline or unreachable');
+            debugPrint('[HttpClient] 💡 Check: Is the device on the same network? Is firewall blocking?');
+            break;
+          case 111: // ECONNREFUSED - Connection refused
+            debugPrint('[HttpClient] ❌ Connection refused by $ip:$port - device may not be running CPFT');
+            debugPrint('[HttpClient] 💡 Check: Is CPFT running on the target device?');
+            break;
+          case 110: // ETIMEDOUT - Connection timed out
+            debugPrint('[HttpClient] ❌ Connection timeout to $ip:$port - network may be slow or device unreachable');
+            break;
+          case 101: // ENETUNREACH - Network unreachable
+            debugPrint('[HttpClient] ❌ Network unreachable for $ip:$port - check network connectivity');
+            break;
+          default:
+            debugPrint('[HttpClient] ❌ Socket error ($errorCode) connecting to $ip:$port: $errorMessage');
+        }
+      } else if (e is TimeoutException) {
+        debugPrint('[HttpClient] ❌ Timeout connecting to $ip:$port - device may be slow to respond');
+      } else {
+        debugPrint('[HttpClient] ❌ Error getting info from $ip:$port: $e');
+      }
+      
       return null;
     }
   }

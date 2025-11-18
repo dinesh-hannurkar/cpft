@@ -9,7 +9,7 @@ import '../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../shared/widgets/app_confirm_dialog.dart';
 
 import '../services/discovery_service.dart';
-import 'connection_screen.dart';
+import '../features/chat/presentation/connection_screen.dart';
 import 'web_file_manager_screen.dart';
 import 'package:file_picker/file_picker.dart';
 

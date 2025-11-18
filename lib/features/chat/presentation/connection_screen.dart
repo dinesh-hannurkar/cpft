@@ -7,8 +7,8 @@ import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart'; // For MissingPluginException
-import '../shared/widgets/dialog_helpers.dart' as app_dialog;
-import '../shared/widgets/app_confirm_dialog.dart';
+import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
+import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
 
 import '../models/connection_state.dart';
 import '../services/connection_service.dart';

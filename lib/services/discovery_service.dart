@@ -9,7 +9,7 @@ import 'http_discovery_client.dart';
 import 'multicast_platform_helper.dart';
 import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
-import 'connection_manager.dart';
+import '../../features/chat/services/connection_manager.dart';
 import 'background_service.dart';
 import 'web_server.dart';
 
@@ -253,7 +253,34 @@ class DiscoveryService {
 
     Future<void> decline() async {
       print('[DiscoveryService] ❌ Declining incoming connection from $displayName');
-      try { await socket.close(); } catch (_) {}
+      try {
+        // Send explicit rejection message so remote can fail fast instead of waiting for handshake timeout
+        final rejectPayload = {
+          'type': 'reject',
+          'content': 'Connection declined',
+          'senderName': alias,
+          'timestamp': DateTime.now().toIso8601String(),
+          'metadata': null,
+        };
+        try {
+          socket.add(utf8.encode(jsonEncode(rejectPayload) + '\n'));
+          await socket.flush();
+        } catch (_) {}
+        // Close socket afterwards
+        await socket.close();
+      } catch (_) {}
+
+      // Safety: ensure our incoming listener remains active after a decline
+      try {
+        if (!_incomingConnectionService.isListening) {
+          print('[DiscoveryService] 🔁 Incoming service not listening after decline. Restarting listener...');
+          await _incomingConnectionService.startListening();
+        }
+      } catch (e) {
+        print('[DiscoveryService] ⚠️ Failed to ensure incoming listening after decline: $e');
+        // As a last resort, restart discovery services to recover the stack
+        try { await restartDiscovery(); } catch (_) {}
+      }
     }
 
     // Notify UI listeners to prompt user
@@ -433,6 +460,14 @@ class DiscoveryService {
         return;
       }
       
+      // Proactively close any active P2P connections to avoid stale handshake state
+      try {
+        print('[DiscoveryService] Closing all active P2P connections before restart');
+        await _connectionManager.closeAll();
+      } catch (e) {
+        print('[DiscoveryService] ⚠️  Error closing active connections: $e');
+      }
+
       // Stop existing services
       await _stopDiscoveryServices();
       
@@ -507,6 +542,13 @@ class DiscoveryService {
         print('[DiscoveryService] Incoming connection service was not initialized, skipping...');
       }
     }
+
+    // Ensure all P2P connections are closed (defensive second pass)
+    try {
+      await _connectionManager.closeAll();
+    } catch (e) {
+      print('[DiscoveryService] Error closing connections during stop: $e');
+    }
   }
 
   /// Start all discovery services
@@ -577,6 +619,8 @@ class DiscoveryService {
     try {
       // Check if HTTP server is running
       final serverHealthy = _httpServer.isRunning;
+      // Check if incoming P2P listener is running
+      final incomingHealthy = _incomingConnectionService.isListening;
       
       // Check if multicast service is listening
       // (We can't easily check this, so we'll assume it's working if no errors)
@@ -587,12 +631,27 @@ class DiscoveryService {
         (device) => now.difference(device.lastSeen) < const Duration(minutes: 1)
       ).length;
       
-      print('[DiscoveryService] Health check: Server=$serverHealthy, RecentDevices=$recentDevices');
+      print('[DiscoveryService] Health check: HttpServer=$serverHealthy, IncomingListener=$incomingHealthy, RecentDevices=$recentDevices');
       
-      // If server is not running or no recent discoveries, restart
+      // If HTTP server failed, perform full restart
       if (!serverHealthy) {
-        print('[DiscoveryService] 🔄 Health check failed - restarting discovery services');
+        print('[DiscoveryService] 🔄 HTTP server unhealthy - restarting discovery services');
         await restartDiscovery();
+        return; // Skip further checks this cycle
+      }
+
+      // If incoming listener stopped unexpectedly, attempt to restart it in isolation
+      if (!incomingHealthy) {
+        print('[DiscoveryService] 🔁 Incoming listener not active - restarting listener');
+        try {
+          await _incomingConnectionService.startListening();
+          print('[DiscoveryService] ✅ Incoming listener restarted successfully');
+        } catch (e) {
+          print('[DiscoveryService] ❌ Failed to restart incoming listener: $e');
+          print('[DiscoveryService] 🔄 Falling back to full discovery restart');
+          await restartDiscovery();
+          return;
+        }
       }
     } catch (e) {
       print('[DiscoveryService] Error during health check: $e');

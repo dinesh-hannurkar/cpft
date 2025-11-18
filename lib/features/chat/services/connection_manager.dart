@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 import 'connection_service.dart';
-import 'background_service.dart';
+import 'package:cpft/services/background_service.dart';
 import '../models/connection_state.dart';
 
 /// Manages all active P2P connections (both incoming and outgoing)

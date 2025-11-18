@@ -14,7 +14,7 @@ import 'widgets/settings_button.dart';
 import 'widgets/connection_flow_dialog.dart';
 import 'widgets/incoming_request_dialog.dart';
 import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
-import '../../../screens/connection_screen.dart';
+import '../../../features/chat/presentation/connection_screen.dart';
 
 /// Simple data class to track device positions for collision detection
 class DevicePosition {
@@ -191,11 +191,16 @@ class _HomeScreenState extends State<HomeScreen> {
         for (int i = 0; i < devices.length && i < 8; i++) {
           final d = devices[i];
           final hash = d.name.hashCode;
-          double angle = (hash % 360) * pi / 180.0;
-          // Keep dots outside center circle: 0.60 .. 0.85 with a tiny radial jitter to reduce overlaps
+          
+          // Better initial distribution: divide circle evenly, then add hash-based variation
+          double baseAngle = (i * 2 * pi) / devices.length.clamp(1, 8); // Evenly space initially
+          double angleVariation = ((hash % 60) - 30) * pi / 180.0; // ±30 degrees variation
+          double angle = baseAngle + angleVariation;
+          
+          // Keep dots outside center circle: 0.60 .. 0.85 with increased radial jitter
           double dist = 0.60 + (hash % 50) / 200.0; // 0.60..0.85 base
-          final double jitter = (((hash >> 8) % 7) - 3) / 100.0; // -0.03 .. +0.03
-          dist = (dist + jitter).clamp(0.58, 0.88);
+          final double radialJitter = (((hash >> 8) % 21) - 10) / 100.0; // -0.10 .. +0.10
+          dist = (dist + radialJitter).clamp(0.55, 0.90);
           
           // Calculate actual pixel size for collision detection
           final int hashFactor = (hash.abs() % 1000);
@@ -204,9 +209,9 @@ class _HomeScreenState extends State<HomeScreen> {
           final double dotSize = 45.0 + baseVar + proximityBoost; // ~30..54
           
           // Minimum angular separation based on dot size and distance
-          // Use a more conservative approach
-          final double minAngularSeparation = (dotSize * 1.5) / (dist * 200); // Conservative multiplier
-          final double minSepRad = minAngularSeparation.clamp(pi / 6, pi / 3); // 30-60 degrees
+          // More aggressive separation to prevent overlaps
+          final double minAngularSeparation = (dotSize * 2.0) / (dist * 180); // More conservative
+          final double minSepRad = minAngularSeparation.clamp(pi / 4, pi / 2); // 45-90 degrees
           
           // Check collision against all existing positions
           bool hasCollision() {
@@ -215,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final normalizedDiff = angleDiff > pi ? (2 * pi - angleDiff) : angleDiff;
               
               // Check if too close angularly or radially
-              final radialOverlap = (dist - pos.distance).abs() < 0.1; // Within 10% distance
+              final radialOverlap = (dist - pos.distance).abs() < 0.12; // Within 12% distance
               final angularOverlap = normalizedDiff < minSepRad;
               
               if (radialOverlap && angularOverlap) {
@@ -225,18 +230,30 @@ class _HomeScreenState extends State<HomeScreen> {
             return false;
           }
           
-          // Try to find a collision-free position
+          // Try to find a collision-free position with smaller angle increments
           int attempts = 0;
-          const int maxAttempts = 72; // Full circle in 5-degree increments
+          const int maxAttempts = 120; // More attempts for finer resolution
           while (hasCollision() && attempts < maxAttempts) {
-            angle += pi / 36; // 5 degrees
+            angle += pi / 60; // 3 degrees - finer resolution
             if (angle > 2 * pi) angle -= 2 * pi;
             attempts++;
           }
           
-          // If still colliding after max attempts, place it anyway but log warning
+          // If still colliding after max attempts, try radial adjustment
           if (hasCollision()) {
-            print('Warning: Could not find collision-free position for device ${d.name}');
+            // Try moving radially outward
+            dist = (dist + 0.05).clamp(0.55, 0.95);
+            if (!hasCollision()) {
+              print('Resolved collision for ${d.name} by moving radially to $dist');
+            } else {
+              // Try moving radially inward
+              dist = (dist - 0.10).clamp(0.55, 0.95);
+              if (!hasCollision()) {
+                print('Resolved collision for ${d.name} by moving radially inward to $dist');
+              } else {
+                print('Warning: Could not find collision-free position for device ${d.name}');
+              }
+            }
           }
           
           // Record this position
