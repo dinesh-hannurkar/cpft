@@ -21,6 +21,7 @@ class DiscoveryService {
   late final HttpDiscoveryClient _httpClient;
   late final IncomingConnectionService _incomingConnectionService;
   late final ConnectionManager _connectionManager;
+  bool _httpClientInitialized = false; // guard against LateInitializationError on restart
   BonjourService? _bonjourService;  // For iOS real devices
   WebServer? _webServer;  // For browser-based file transfers
 
@@ -116,12 +117,17 @@ class DiscoveryService {
       }
 
       // Initialize HTTP client
-      _httpClient = HttpDiscoveryClient(
-        fingerprint: fingerprint,
-        alias: alias,
-        port: port,
-        deviceModel: deviceModel,
-      );
+      if (!_httpClientInitialized) {
+        _httpClient = HttpDiscoveryClient(
+          fingerprint: fingerprint,
+          alias: alias,
+          port: port,
+          deviceModel: deviceModel,
+        );
+        _httpClientInitialized = true;
+      } else {
+        print('[DiscoveryService] Reusing existing HttpDiscoveryClient instance');
+      }
 
       // Initialize and start HTTP server
       _httpServer = HttpServerService(
