@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
+import 'app_action_button.dart';
 
 /// A reusable, consistent confirm dialog used across the app.
 class AppConfirmDialog extends StatelessWidget {
@@ -26,7 +27,6 @@ class AppConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final confirmColor = destructive ? AppColors.red : AppColors.green;
     return Dialog(
       insetPadding: const EdgeInsets.all(AppSizes.md),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -38,13 +38,16 @@ class AppConfirmDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSizes.spaceBtwInputFields),
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
             if (content != null) ...[
               const SizedBox(height: AppSizes.md),
@@ -54,25 +57,24 @@ class AppConfirmDialog extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-          child: OutlinedButton(
+                  child: AppActionButton(
+                    text: cancelLabel,
                     onPressed: onCancel ?? () => Navigator.of(context).pop(false),
-                    style: OutlinedButton.styleFrom(
-            side: BorderSide(color: AppColors.greyDark.withValues(alpha: 0.5)),
-                      foregroundColor: AppColors.greyDark,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: Text(cancelLabel),
+                    backgroundColor: AppColors.red.withValues(alpha: 0.1),
+                    textColor: AppColors.red,
+                    borderColor: AppColors.white,
+                    shadowColor: AppColors.red.withValues(alpha: 0.2),
                   ),
                 ),
                 const SizedBox(width: AppSizes.md),
                 Expanded(
-                  child: FilledButton(
+                  child: AppActionButton(
+                    text: confirmLabel,
                     onPressed: onConfirm ?? () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: confirmColor,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: Text(confirmLabel),
+                    backgroundColor: AppColors.green.withValues(alpha: 0.09),
+                    textColor: AppColors.green,
+                    borderColor: AppColors.white,
+                    shadowColor: AppColors.green.withValues(alpha: 0.3),
                   ),
                 ),
               ],

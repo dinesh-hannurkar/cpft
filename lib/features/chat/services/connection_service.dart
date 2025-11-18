@@ -368,6 +368,9 @@ class ConnectionService {
                     metadata: {
                       'transferId': ack.transferId,
                       'outgoing': true,
+                      'size': outgoing.totalSize,
+                      if (outgoing.mime != null) 'mime': outgoing.mime,
+                      if (outgoing.path != null) 'path': outgoing.path,
                     },
                   ));
                 } else {
@@ -400,6 +403,32 @@ class ConnectionService {
               ));
             } catch (e) {
               debugPrint('[ConnectionService] ⚠️ Failed to parse file_offer: $e');
+            }
+            continue;
+          }
+
+          // Handle resume request: receiver should resend last ACK
+          if (message.type == 'file_resume_request') {
+            try {
+              final transferId = message.content;
+              final inc = _incomingFiles[transferId];
+              if (inc != null) {
+                final ack = FileAck(
+                  transferId: transferId,
+                  nextExpectedIndex: inc.nextIndex,
+                  completed: false,
+                );
+                await sendMessage(DeviceMessage(
+                  type: 'file_ack',
+                  content: jsonEncode(ack.toJson()),
+                  senderName: deviceName,
+                ));
+                debugPrint('[ConnectionService] 🔁 Resume-request: resent ACK for $transferId at ${inc.nextIndex}');
+              } else {
+                debugPrint('[ConnectionService] ⚠️ Resume-request: no incoming state for $transferId');
+              }
+            } catch (e) {
+              debugPrint('[ConnectionService] ⚠️ Failed to handle resume request: $e');
             }
             continue;
           }
@@ -465,6 +494,7 @@ class ConnectionService {
           'transferId': chunk.transferId,
                       'path': incoming.path,
                       'size': incoming.offer.fileSize,
+                      'mime': incoming.offer.mimeType,
                       'received': incoming.receivedBytes,
                     },
                   ));
@@ -531,113 +561,125 @@ class ConnectionService {
       debugPrint('[ConnectionService] ⚠️ Not connected; cannot send file');
       return;
     }
-    final result = await FilePicker.platform.pickFiles(withReadStream: true);
+    final result = await FilePicker.platform.pickFiles(withReadStream: true, allowMultiple: true);
     if (result == null || result.files.isEmpty) return;
-    final file = result.files.single;
-    final name = file.name;
-    final size = file.size;
-    final mime = file.extension != null ? 'application/${file.extension}' : 'application/octet-stream';
-    final transferId = generateTransferId();
+    for (final file in result.files) {
+      final name = file.name;
+      final size = file.size;
+      final mime = file.extension != null ? 'application/${file.extension}' : 'application/octet-stream';
+      final transferId = generateTransferId();
 
-    // Optional: compute sha256 in isolate for integrity
-    String? sha;
-    try {
-      if (file.bytes != null) {
-        sha = sha256.convert(file.bytes!).toString();
-      }
-    } catch (_) {}
-
-    final offer = FileOffer(
-      transferId: transferId,
-      fileName: name,
-      fileSize: size,
-      mimeType: mime,
-      sha256: sha,
-    );
-  await sendMessage(DeviceMessage(type: 'file_offer', content: '', senderName: deviceName, metadata: {'payload': offer.toJson()}));
-
-    // Stream chunks
-    const chunkSize = 64 * 1024; // 64KB per chunk
-    int index = 0;
-    final stream = file.readStream;
-    if (stream == null) return;
-
-    // Register outgoing transfer
-    _outgoingTransfers[transferId] = _OutgoingTransfer(
-      fileName: name,
-      lastAckIndex: -1,
-      totalSize: size,
-    );
-    
-    // Show "Sending..." message immediately
-    _notifyMessageListeners(DeviceMessage(
-      type: 'text',
-      content: 'Sending: $name (${_formatFileSize(size)})',
-      senderName: deviceName,
-      timestamp: DateTime.now(),
-    ));
-    
-    // Emit initial progress event to render UI tile
-    _notifyMessageListeners(DeviceMessage(
-      type: 'file_progress',
-      content: name,
-      senderName: deviceName,
-      timestamp: DateTime.now(),
-      metadata: {
-        'transferId': transferId,
-        'bytes': 0,
-        'total': size,
-        'outgoing': true,
-      },
-    ));
-
-    // Wait for initial ACK (nextExpectedIndex = 0) which is sent after receiver accepts
-    final starter = _outgoingTransfers[transferId];
-    if (starter != null) {
-      starter.chunkPermit = Completer<void>();
-      await starter.chunkPermit!.future;
-    }
-
-    await for (final data in stream) {
-      int offset = 0;
-      while (offset < data.length) {
-        final end = (offset + chunkSize).clamp(0, data.length);
-        final slice = data.sublist(offset, end);
-        // Wait for permit if previous chunk not acked
-        final ot = _outgoingTransfers[transferId];
-        if (ot == null) return; // Cancelled
-        if (ot.lastAckIndex != index - 1) {
-          ot.chunkPermit = Completer<void>();
-          await ot.chunkPermit!.future;
+      // Optional: compute sha256 in isolate for integrity
+      String? sha;
+      try {
+        if (file.bytes != null) {
+          sha = sha256.convert(file.bytes!).toString();
         }
-        // Record chunk size for accurate progress
-        ot.chunkSizes[index] = slice.length;
-        final chunk = FileChunk(
-          transferId: transferId,
-          index: index++,
-          dataBase64: base64Encode(slice),
-          isLast: false,
-        );
-        await sendMessage(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': chunk.toJson()}));
-        offset = end;
-      }
-    }
-    // Final marker
-    final otFinal = _outgoingTransfers[transferId];
-    if (otFinal != null) {
-      if (otFinal.lastAckIndex != index - 1) {
-        otFinal.chunkPermit = Completer<void>();
-        await otFinal.chunkPermit!.future;
-      }
-      final finalChunk = FileChunk(
+      } catch (_) {}
+
+      final offer = FileOffer(
         transferId: transferId,
-        index: index,
-        dataBase64: base64Encode(Uint8List(0)),
-        isLast: true,
+        fileName: name,
+        fileSize: size,
+        mimeType: mime,
+        sha256: sha,
       );
-      otFinal.completer = Completer<void>();
-      await sendMessage(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': finalChunk.toJson()}));
-      await otFinal.completer!.future; // Wait for final ack
+      await sendMessage(DeviceMessage(
+        type: 'file_offer',
+        content: name, // provide filename directly for dialog display
+        senderName: deviceName,
+        metadata: {
+          'payload': offer.toJson(),
+          'name': name,
+        },
+      ));
+
+      // Stream chunks
+      const chunkSize = 64 * 1024; // 64KB per chunk
+      int index = 0;
+      final stream = file.readStream;
+      if (stream == null) continue;
+
+      // Register outgoing transfer
+      _outgoingTransfers[transferId] = _OutgoingTransfer(
+        fileName: name,
+        lastAckIndex: -1,
+        totalSize: size,
+        mime: mime,
+        path: file.path,
+      );
+      
+      // Show "Sending..." message immediately
+      // _notifyMessageListeners(DeviceMessage(
+      //   type: 'text',
+      //   content: 'Sending: $name (${_formatFileSize(size)})',
+      //   senderName: deviceName,
+      //   timestamp: DateTime.now(),
+      // ));
+      
+      // Emit initial progress event to render UI tile
+      _notifyMessageListeners(DeviceMessage(
+        type: 'file_progress',
+        content: name,
+        senderName: deviceName,
+        timestamp: DateTime.now(),
+        metadata: {
+          'transferId': transferId,
+          'bytes': 0,
+          'total': size,
+          'mime': mime,
+          'outgoing': true,
+        },
+      ));
+
+      // Wait for initial ACK (nextExpectedIndex = 0) which is sent after receiver accepts
+      final starter = _outgoingTransfers[transferId];
+      if (starter != null) {
+        starter.chunkPermit = Completer<void>();
+        await starter.chunkPermit!.future;
+      }
+
+      await for (final data in stream) {
+        int offset = 0;
+        while (offset < data.length) {
+          final end = (offset + chunkSize).clamp(0, data.length);
+          final slice = data.sublist(offset, end);
+          // Wait for permit if previous chunk not acked
+          final ot = _outgoingTransfers[transferId];
+          if (ot == null) break; // Cancelled
+          if (ot.lastAckIndex != index - 1) {
+            ot.chunkPermit = Completer<void>();
+            await ot.chunkPermit!.future;
+          }
+          // Record chunk size for accurate progress
+          ot.chunkSizes[index] = slice.length;
+          final chunk = FileChunk(
+            transferId: transferId,
+            index: index++,
+            dataBase64: base64Encode(slice),
+            isLast: false,
+          );
+          await sendMessage(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': chunk.toJson()}));
+          offset = end;
+        }
+      }
+      // Final marker
+      final otFinal = _outgoingTransfers[transferId];
+      if (otFinal != null) {
+        if (otFinal.lastAckIndex != index - 1) {
+          otFinal.chunkPermit = Completer<void>();
+          await otFinal.chunkPermit!.future;
+        }
+        final finalChunk = FileChunk(
+          transferId: transferId,
+          index: index,
+          dataBase64: base64Encode(Uint8List(0)),
+          isLast: true,
+        );
+        otFinal.completer = Completer<void>();
+        await sendMessage(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': finalChunk.toJson()}));
+        await otFinal.completer!.future; // Wait for final ack
+      }
     }
   }
 
@@ -722,6 +764,45 @@ class ConnectionService {
     }
   _pendingOffers.remove(transferId);
     _outgoingTransfers.remove(transferId);
+  }
+
+  /// Ask the peer (receiver) to resend its last ACK for a stuck outgoing transfer
+  Future<void> requestResume(String transferId) async {
+    try {
+      final msg = DeviceMessage(
+        type: 'file_resume_request',
+        content: transferId,
+        senderName: deviceName,
+      );
+      await sendMessage(msg);
+      debugPrint('[ConnectionService] ▶️ Sent resume request for $transferId');
+    } catch (e) {
+      debugPrint('[ConnectionService] ⚠️ Failed to send resume request: $e');
+    }
+  }
+
+  /// For an incoming transfer, resend the last ACK to nudge the sender
+  Future<void> resumeIncoming(String transferId) async {
+    try {
+      final inc = _incomingFiles[transferId];
+      if (inc == null) {
+        debugPrint('[ConnectionService] No incoming state to resume for $transferId');
+        return;
+      }
+      final ack = FileAck(
+        transferId: transferId,
+        nextExpectedIndex: inc.nextIndex,
+        completed: false,
+      );
+      await sendMessage(DeviceMessage(
+        type: 'file_ack',
+        content: jsonEncode(ack.toJson()),
+        senderName: deviceName,
+      ));
+      debugPrint('[ConnectionService] 🔁 Resent ACK for $transferId at index ${inc.nextIndex}');
+    } catch (e) {
+      debugPrint('[ConnectionService] ⚠️ Failed to resume incoming: $e');
+    }
   }
 
   /// Handle connection error
@@ -835,16 +916,7 @@ class ConnectionService {
     _statusListeners.clear();
   }
   
-  String _formatFileSize(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    double size = bytes.toDouble();
-    int unit = 0;
-    while (size >= 1024 && unit < units.length - 1) {
-      size /= 1024;
-      unit++;
-    }
-    return '${size.toStringAsFixed(size < 10 && unit > 0 ? 1 : 0)} ${units[unit]}';
-  }
+  // removed unused _formatFileSize helper
 }
 
 class _IncomingFile {
@@ -872,5 +944,15 @@ class _OutgoingTransfer {
   Completer<void>? chunkPermit; // completed when next chunk may be sent
   Completer<void>? completer; // completed when transfer fully done
 
-  _OutgoingTransfer({required this.fileName, required this.lastAckIndex, required this.totalSize});
+  // Optional metadata for better UI on sender side
+  final String? mime;
+  final String? path;
+
+  _OutgoingTransfer({
+    required this.fileName,
+    required this.lastAckIndex,
+    required this.totalSize,
+    this.mime,
+    this.path,
+  });
 }
