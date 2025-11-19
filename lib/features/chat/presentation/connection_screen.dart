@@ -642,38 +642,39 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                 _buildErrorBanner(),
               Expanded(
                 child: (() {
-                  final totalItems = _messages.length +
+                  final totalItems =
+                      _messages.length +
                       _incomingProgress.length +
                       _outgoingProgress.length;
                   if (totalItems == 0) {
                     return _buildEmptyState();
                   }
                   return ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        itemCount: totalItems,
-                        itemBuilder: (context, index) {
-                          if (index < _messages.length) {
-                            return _buildMessageBubble(_messages[index]);
-                          }
-                          final extra = index - _messages.length;
-                          final incomingKeys = _incomingProgress.keys.toList();
-                          if (extra < incomingKeys.length) {
-                            final tId = incomingKeys[extra];
-                            return _buildProgressTile(_incomingProgress[tId]!);
-                          }
-                          final outExtra = extra - incomingKeys.length;
-                          final outKeys = _outgoingProgress.keys.toList();
-                          if (outExtra < outKeys.length) {
-                            final tId = outKeys[outExtra];
-                            return _buildProgressTile(_outgoingProgress[tId]!);
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      );
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    itemCount: totalItems,
+                    itemBuilder: (context, index) {
+                      if (index < _messages.length) {
+                        return _buildMessageBubble(_messages[index]);
+                      }
+                      final extra = index - _messages.length;
+                      final incomingKeys = _incomingProgress.keys.toList();
+                      if (extra < incomingKeys.length) {
+                        final tId = incomingKeys[extra];
+                        return _buildProgressTile(_incomingProgress[tId]!);
+                      }
+                      final outExtra = extra - incomingKeys.length;
+                      final outKeys = _outgoingProgress.keys.toList();
+                      if (outExtra < outKeys.length) {
+                        final tId = outKeys[outExtra];
+                        return _buildProgressTile(_outgoingProgress[tId]!);
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  );
                 })(),
               ),
               if (isConnected) _buildFileTaglineBar(),
@@ -902,13 +903,13 @@ class _ConnectionScreenState extends State<ConnectionScreen>
         : null;
     final now = DateTime.now();
     final stalled =
-      now.difference(tp.lastUpdate).inSeconds >= 10 && // no updates for 10s
-      tp.progress > 0 &&
-      (tp.total == 0 || tp.progress < tp.total);
+        now.difference(tp.lastUpdate).inSeconds >= 10 && // no updates for 10s
+        tp.progress > 0 &&
+        (tp.total == 0 || tp.progress < tp.total);
     final failed =
-      now.difference(tp.lastUpdate).inSeconds >= 60 &&
-      tp.progress > 0 &&
-      (tp.total == 0 || tp.progress < tp.total);
+        now.difference(tp.lastUpdate).inSeconds >= 60 &&
+        tp.progress > 0 &&
+        (tp.total == 0 || tp.progress < tp.total);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.only(left: 12, right: 0, top: 0, bottom: 10),
@@ -958,16 +959,17 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                             ),
                           ),
                         ),
-                        Text(
-                          tp.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                        Expanded(
+                          child: Text(
+                            tp.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
                           ),
                         ),
-                        Spacer(),
                         PopupMenuButton<String>(
                           color: Colors.white,
                           icon: const Icon(Icons.more_vert, size: 28),
@@ -1424,174 +1426,196 @@ class _ConnectionScreenState extends State<ConnectionScreen>
           splashColor: Colors.blue.withOpacity(0.08),
           highlightColor: Colors.blue.withOpacity(0.04),
           hoverColor: Colors.blue.withOpacity(0.03),
-          mouseCursor:
-              savedPath != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          mouseCursor: savedPath != null
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.basic,
           child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.only(left: 12, right: 12, top: 10, bottom: 6),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMyMessage ? 4 : 16),
-            bottomRight: Radius.circular(isMyMessage ? 16 : 4),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(
+              left: 12,
+              right: 12,
+              top: 10,
+              bottom: 6,
             ),
-          ],
-          border: Border.all(color: Colors.blue.shade50),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildFileIcon(name),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFBBDEFB)),
-                            ),
-                            child: Text(
-                              name.contains('.')
-                                  ? _extensionTrim(name.split('.').last)
-                                  : 'FILE',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1565C0),
-                                letterSpacing: .5,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (mime != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2.0),
-                          child: Text(
-                            _readableMime(mime),
-                            style: const TextStyle(
-                              color: Colors.black45,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      if (size != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2.0),
-                          child: Text(
-                            _fmtBytes(size),
-                            style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.7,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(isMyMessage ? 4 : 16),
+                bottomRight: Radius.circular(isMyMessage ? 16 : 4),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
+              border: Border.all(color: Colors.blue.shade50),
             ),
-            if (savedPath != null && isMyMessage) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                alignment: WrapAlignment.start,
-                spacing: 8,
-                runSpacing: 0,
-                children: [
-                  TextButton.icon(
-                    onPressed: () async {
-                      try {
-                        final parent = savedPath.contains('/')
-                            ? savedPath.substring(0, savedPath.lastIndexOf('/'))
-                            : savedPath;
-                        await OpenFilex.open(parent);
-                      } catch (_) {
-                        await OpenFilex.open(savedPath);
-                      }
-                    },
-                    icon: const Icon(Icons.folder_open, size: 16),
-                    label: const Text('Reveal'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.blue.shade700,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      minimumSize: const Size(0, 34),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildFileIcon(name),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE3F2FD),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(0xFFBBDEFB),
+                                  ),
+                                ),
+                                child: Text(
+                                  name.contains('.')
+                                      ? _extensionTrim(name.split('.').last)
+                                      : 'FILE',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1565C0),
+                                    letterSpacing: .5,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 4),
+                          if (mime != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2.0),
+                              child: Text(
+                                _readableMime(mime),
+                                style: const TextStyle(
+                                  color: Colors.black45,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          if (size != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2.0),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    _fmtBytes(size),
+                                    style: const TextStyle(
+                                      color: Colors.black54,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    _formatTime(message.timestamp),
+                                    style: const TextStyle(
+                                      color: Colors.black38,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () async {
-                      await _saveAs(savedPath, name);
-                    },
-                    icon: const Icon(Icons.save_alt, size: 16),
-                    label: const Text('Save As'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.blue.shade700,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      minimumSize: const Size(0, 34),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: Row(
-                children: [
-                  const Spacer(),
-                  Text(
-                    _formatTime(message.timestamp),
-                    style: const TextStyle(
-                      color: Colors.black38,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+                SizedBox(height: 6),
+                // if (savedPath != null && isMyMessage) ...[
+                //   const SizedBox(height: 6),
+                //   Wrap(
+                //     alignment: WrapAlignment.start,
+                //     spacing: 8,
+                //     runSpacing: 0,
+                //     children: [
+                //       TextButton.icon(
+                //         onPressed: () async {
+                //           try {
+                //             final parent = savedPath.contains('/')
+                //                 ? savedPath.substring(0, savedPath.lastIndexOf('/'))
+                //                 : savedPath;
+                //             await OpenFilex.open(parent);
+                //           } catch (_) {
+                //             await OpenFilex.open(savedPath);
+                //           }
+                //         },
+                //         icon: const Icon(Icons.folder_open, size: 16),
+                //         label: const Text('Reveal'),
+                //         style: TextButton.styleFrom(
+                //           foregroundColor: Colors.blue.shade700,
+                //           padding: const EdgeInsets.symmetric(horizontal: 10),
+                //           minimumSize: const Size(0, 34),
+                //           shape: RoundedRectangleBorder(
+                //             borderRadius: BorderRadius.circular(8),
+                //           ),
+                //         ),
+                //       ),
+                //       TextButton.icon(
+                //         onPressed: () async {
+                //           await _saveAs(savedPath, name);
+                //         },
+                //         icon: const Icon(Icons.save_alt, size: 16),
+                //         label: const Text('Save As'),
+                //         style: TextButton.styleFrom(
+                //           foregroundColor: Colors.blue.shade700,
+                //           padding: const EdgeInsets.symmetric(horizontal: 10),
+                //           minimumSize: const Size(0, 34),
+                //           shape: RoundedRectangleBorder(
+                //             borderRadius: BorderRadius.circular(8),
+                //           ),
+                //         ),
+                //       ),
+                //     ],
+                //   ),
+                // ],
+                // Padding(
+                //   padding: const EdgeInsets.only(top: 4.0),
+                //   child: Row(
+                //     children: [
+                //       const Spacer(),
+                //       Text(
+                //         _formatTime(message.timestamp),
+                //         style: const TextStyle(
+                //           color: Colors.black38,
+                //           fontSize: 10,
+                //         ),
+                //       ),
+                //     ],
+                //   ),
+                // ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-      ),
       ),
     );
   }
@@ -1696,7 +1720,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
             ),
           ],
         ),
-        ),
+      ),
     );
   }
 
