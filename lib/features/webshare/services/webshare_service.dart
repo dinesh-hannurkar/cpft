@@ -9,6 +9,7 @@ import '../../../utils/network_utils.dart';
 class WebShareService {
   WebServer? _webServer;
   final String deviceName;
+  bool _externalServerRunning = false;
 
   // State notifiers
   final ValueNotifier<int> connectedClients = ValueNotifier<int>(0);
@@ -25,8 +26,13 @@ class WebShareService {
     this.onFileUploadComplete,
   });
 
-  bool get isRunning => _webServer?.isRunning ?? false;
+  bool get isRunning => _webServer?.isRunning ?? false || _externalServerRunning;
   int get port => _webServer?.port ?? 8080;
+
+  /// Mark that an external web server is running
+  void setExternalServerRunning() {
+    _externalServerRunning = true;
+  }
 
   /// Start the web server
   Future<bool> startWebServer({int port = 8080}) async {
@@ -48,12 +54,13 @@ class WebShareService {
         // Small delay to ensure file is fully written to disk
         await Future.delayed(const Duration(milliseconds: 100));
         
-        // Automatically share the uploaded file for download
+        // Note: Do not auto-share back uploads to the browser.
+        // This prevents sent files from appearing in the Receive tab.
+        // If needed later, gate with a setting to re-enable.
         final file = File(savedPath);
         if (await file.exists()) {
-          final id = _webServer!.addFileForDownload(savedPath, filename);
+          // intentionally not adding to _availableFiles
           await _refreshSharedFiles();
-          debugPrint('[WebShareService] 📤 Auto-shared uploaded file: $filename (ID: $id)');
         }
         
         // Track received file
@@ -90,11 +97,20 @@ class WebShareService {
 
   /// Stop the web server
   Future<void> stopWebServer() async {
+    debugPrint('[WebShareService] Stopping web server...');
     if (_webServer != null) {
       await _webServer!.stop();
       _webServer = null;
       debugPrint('[WebShareService] Web server stopped');
     }
+    // Reset external server flag
+    _externalServerRunning = false;
+    
+    // Clear all state
+    sharedFiles.value = [];
+    receivedFiles.value = [];
+    connectedClients.value = 0;
+    debugPrint('[WebShareService] All state cleared');
   }
 
   /// Get server URL for sharing

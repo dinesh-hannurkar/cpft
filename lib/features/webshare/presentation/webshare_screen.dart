@@ -3,11 +3,14 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/rendering.dart';
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_action_button.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
 import '../services/webshare_service.dart';
+import '../services/web_server.dart';
 
 /// Main screen for web share functionality
 class WebShareScreen extends StatefulWidget {
@@ -101,6 +104,90 @@ class _WebShareScreenState extends State<WebShareScreen>
           _slideFromLeft = !_slideFromLeft; // alternate direction each swap
         });
       });
+    });
+
+    // Check if web server is already running and handle accordingly
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final portInUse = await WebServer.isPortInUse();
+      if (portInUse) {
+        // Port is in use, assume server is running externally
+        debugPrint('[WebShareScreen] Port 8080 already in use, assuming server is running');
+        // Create a dummy WebServer instance that reports as running
+        _webShareService = WebShareService(
+          deviceName: widget.deviceName,
+          onFileUploadProgress: (filename, received, total) {
+            if (!mounted) return;
+            debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
+            setState(() {
+              _uploadProgress[filename] = _UploadProgress(
+                filename: filename,
+                received: received,
+                total: total,
+                startedAt: _uploadProgress[filename]?.startedAt ?? DateTime.now(),
+              );
+            });
+          },
+          onFileUploadComplete: (filename, savedPath) {
+            if (!mounted) return;
+            debugPrint('[WebShareScreen] Upload complete: $filename');
+
+            // Delay progress removal to ensure user sees completion
+            Future.delayed(const Duration(milliseconds: 800), () {
+              if (mounted) {
+                setState(() {
+                  _uploadProgress.remove(filename);
+                });
+              }
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('File received: $filename', style: const TextStyle(color: Colors.white))),
+            );
+          },
+        );
+        _webShareService.setExternalServerRunning();
+        // Get the URL for the existing server
+        _webShareService.getServerUrl().then((url) {
+          if (mounted) setState(() => _serverUrl = url);
+        });
+      } else {
+        // Port is free, proceed with normal initialization
+        _webShareService = WebShareService(
+          deviceName: widget.deviceName,
+          onFileUploadProgress: (filename, received, total) {
+            if (!mounted) return;
+            debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
+            setState(() {
+              _uploadProgress[filename] = _UploadProgress(
+                filename: filename,
+                received: received,
+                total: total,
+                startedAt: _uploadProgress[filename]?.startedAt ?? DateTime.now(),
+              );
+            });
+          },
+          onFileUploadComplete: (filename, savedPath) {
+            if (!mounted) return;
+            debugPrint('[WebShareScreen] Upload complete: $filename');
+
+            // Delay progress removal to ensure user sees completion
+            Future.delayed(const Duration(milliseconds: 800), () {
+              if (mounted) {
+                setState(() {
+                  _uploadProgress.remove(filename);
+                });
+              }
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('File received: $filename', style: const TextStyle(color: Colors.white))),
+            );
+          },
+        );
+
+        // Auto-start the web server
+        _toggleWebServer();
+      }
     });
   }
 
@@ -465,7 +552,12 @@ class _WebShareScreenState extends State<WebShareScreen>
                             destructive: true,
                           ),
                         );
-                        if (ok == true) _toggleWebServer();
+                        if (ok == true) {
+                          await _webShareService.stopWebServer();
+                          if (mounted) {
+                            Navigator.pop(context);
+                          }
+                        }
                       },
                       backgroundColor: const Color(0xFFFDF1F1),
                       textColor: AppColors.red,
@@ -506,7 +598,7 @@ class _WebShareScreenState extends State<WebShareScreen>
       textColor: AppColors.primary,
       borderColor: active
           ? AppColors.white
-          : AppColors.greyDark.withOpacity(0.25),
+          : AppColors.greyDark.withOpacity(0),
       shadowColor: active
           ? AppColors.primary.withOpacity(0.1)
           : Colors.transparent,
@@ -523,7 +615,7 @@ class _WebShareScreenState extends State<WebShareScreen>
         if (files.isEmpty) {
           return Center(
             child: Text(
-              'No files shared yet. Tap + to add.',
+              'No files shared yet.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.greyLight),
@@ -540,7 +632,8 @@ class _WebShareScreenState extends State<WebShareScreen>
               f.filename,
               f.sizeBytes,
               f.sharedAt,
-              onDelete: () => _webShareService.removeSharedFile(f.id),
+              onAction: (context) => _webShareService.removeSharedFile(f.id),
+              actionIcon: Icons.delete_forever,
             );
           },
         );
@@ -578,7 +671,6 @@ class _WebShareScreenState extends State<WebShareScreen>
               return _buildUploadingFileCard(item.progress);
             } else if (item is _ReceivedFileItem) {
               final receivedFile = item.file;
-              final index = receivedFiles.indexOf(receivedFile);
               return _buildFileCard(
                 receivedFile.filename,
                 receivedFile.sizeBytes,
@@ -588,14 +680,13 @@ class _WebShareScreenState extends State<WebShareScreen>
                     await OpenFilex.open(receivedFile.path);
                   } catch (_) {}
                 },
-                onDelete: () async {
-                  try {
-                    await File(receivedFile.path).delete();
-                  } catch (_) {}
-                  final list = [..._webShareService.receivedFiles.value];
-                  list.removeAt(index);
-                  _webShareService.receivedFiles.value = list;
+                onAction: (context) async {
+                  final box = context.findRenderObject() as RenderBox?;
+                  final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                  final size = box?.size ?? Size.zero;
+                  await Share.shareXFiles([XFile(receivedFile.path)], sharePositionOrigin: Rect.fromLTWH(position.dx, position.dy, size.width, size.height));
                 },
+                actionIcon: Icons.download,
               );
             }
             return const SizedBox.shrink();
@@ -831,7 +922,8 @@ class _WebShareScreenState extends State<WebShareScreen>
     int sizeBytes,
     DateTime timestamp, {
     VoidCallback? onTap,
-    VoidCallback? onDelete,
+    Function(BuildContext)? onAction,
+    IconData? actionIcon,
   }) {
     return Material(
       color: Colors.transparent,
@@ -934,14 +1026,16 @@ class _WebShareScreenState extends State<WebShareScreen>
                       ],
                     ),
                   ),
-                  if (onDelete != null)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.delete_forever,
-                        color: Color(0xFFD32F2F),
-                        size: 22,
+                  if (onAction != null)
+                    Builder(
+                      builder: (buttonContext) => IconButton(
+                        icon: Icon(
+                          actionIcon ?? Icons.delete_forever,
+                          color: actionIcon == Icons.download ? AppColors.primary : const Color(0xFFD32F2F),
+                          size: 22,
+                        ),
+                        onPressed: () => onAction.call(buttonContext),
                       ),
-                      onPressed: onDelete,
                     ),
                 ],
               ),

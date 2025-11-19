@@ -32,10 +32,11 @@ class IncomingConnectionService {
   /// Start listening for incoming connections
   Future<void> startListening() async {
     if (_isListening) {
-      debugPrint('[IncomingConnection] Already listening');
+      debugPrint('[IncomingConnection] Already listening on port $port');
       return;
     }
 
+    debugPrint('[IncomingConnection] Attempting to bind to port $port...');
     try {
       _serverSocket = await ServerSocket.bind(
         InternetAddress.anyIPv4,
@@ -44,7 +45,7 @@ class IncomingConnectionService {
       );
 
       _isListening = true;
-      debugPrint('[IncomingConnection] ✅ Listening for incoming connections on port $port');
+      debugPrint('[IncomingConnection] ✅ Successfully bound to port $port');
 
       _serverSocket!.listen(
         _handleIncomingConnection,
@@ -84,18 +85,19 @@ class IncomingConnectionService {
     }
   }
 
-  /// Stop listening for connections
+  /// Stop listening for incoming connections
   Future<void> stopListening() async {
     if (!_isListening) {
       debugPrint('[IncomingConnection] Not listening');
       return;
     }
 
+    debugPrint('[IncomingConnection] Stopping listening on port $port...');
     try {
       await _serverSocket?.close();
       _serverSocket = null;
       _isListening = false;
-      debugPrint('[IncomingConnection] ✅ Stopped listening');
+      debugPrint('[IncomingConnection] ✅ Successfully closed socket on port $port');
     } catch (e) {
       debugPrint('[IncomingConnection] ⚠️  Error stopping: $e');
     }

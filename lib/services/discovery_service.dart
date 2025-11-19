@@ -420,14 +420,14 @@ class DiscoveryService {
   }
 
   /// Dispose all services
-  void dispose() {
+  Future<void> dispose() async {
     print('[DiscoveryService] Disposing...');
     _cleanupTimer?.cancel();
     _networkScanTimer?.cancel();
     _multicastService.dispose();
     _bonjourService?.dispose();
-    _httpServer.dispose();
-    _incomingConnectionService.dispose();
+    await _httpServer.dispose();
+    await _incomingConnectionService.dispose();
     _discoveryListeners.clear();
   _queuedIncoming.clear();
     _discoveredDevices.clear();
@@ -457,15 +457,18 @@ class DiscoveryService {
   /// Force restart all discovery services (useful when discovery stops working)
   Future<void> restartDiscovery() async {
     print('[DiscoveryService] 🔄 Restarting discovery services...');
-    
+
     try {
-      // Check if we're initialized
+      // If not initialized, initialize first
       if (!_isInitialized) {
         print('[DiscoveryService] Not initialized yet, initializing first...');
         await initialize();
         return;
       }
-      
+
+      // For already initialized services, do a complete restart
+      print('[DiscoveryService] Already initialized, doing complete restart...');
+
       // Proactively close any active P2P connections to avoid stale handshake state
       try {
         print('[DiscoveryService] Closing all active P2P connections before restart');
@@ -474,20 +477,84 @@ class DiscoveryService {
         print('[DiscoveryService] ⚠️  Error closing active connections: $e');
       }
 
-      // Stop existing services
-      await _stopDiscoveryServices();
-      
-      // Allow time for ports to be released
-      await Future.delayed(const Duration(seconds: 1));
-      
       // Clear discovered devices
       _discoveredDevices.clear();
-      
-      // Reinitialize services
-      await _startDiscoveryServices();
-      
+
+      // Stop all services first for a clean restart
+      print('[DiscoveryService] Stopping HTTP server...');
+      try {
+        await _httpServer.dispose();
+      } catch (e) {
+        print('[DiscoveryService] Error stopping HTTP server: $e');
+      }
+
+      print('[DiscoveryService] Stopping incoming connection service...');
+      try {
+        await _incomingConnectionService.stopListening();
+      } catch (e) {
+        print('[DiscoveryService] Error stopping incoming connection service: $e');
+      }
+
+      print('[DiscoveryService] Stopping multicast service...');
+      try {
+        _multicastService.dispose();
+      } catch (e) {
+        print('[DiscoveryService] Error stopping multicast service: $e');
+      }
+
+      // Stop Bonjour on iOS
+      if (Platform.isIOS && _bonjourService != null) {
+        print('[DiscoveryService] Stopping Bonjour service...');
+        try {
+          _bonjourService!.dispose();
+          _bonjourService = null;
+        } catch (e) {
+          print('[DiscoveryService] Error stopping Bonjour service: $e');
+        }
+      }
+
+      // Restart services after stopping
+      print('[DiscoveryService] Restarting HTTP server...');
+      try {
+        await _httpServer.start();
+      } catch (e) {
+        print('[DiscoveryService] Error restarting HTTP server: $e');
+      }
+
+      print('[DiscoveryService] Restarting incoming connection service...');
+      try {
+        await _incomingConnectionService.startListening();
+      } catch (e) {
+        print('[DiscoveryService] Error restarting incoming connection service: $e');
+      }
+
+      print('[DiscoveryService] Restarting multicast service...');
+      try {
+        await _multicastService.startListening();
+        _multicastService.addDiscoveryListener(_onMulticastDiscovery);
+      } catch (e) {
+        print('[DiscoveryService] Error restarting multicast service: $e');
+      }
+
+      // Restart Bonjour on iOS
+      if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        print('[DiscoveryService] Restarting Bonjour service...');
+        try {
+          _bonjourService = BonjourService(
+            alias: alias,
+            port: port,
+            fingerprint: fingerprint,
+            deviceModel: deviceModel,
+          );
+          await _bonjourService!.start();
+          _bonjourService!.addDiscoveryListener(_onBonjourDiscovery);
+        } catch (e) {
+          print('[DiscoveryService] Error restarting Bonjour service: $e');
+        }
+      }
+
       print('[DiscoveryService] ✅ Discovery services restarted successfully');
-      
+
       // Notify listeners that devices were cleared (restart)
       for (var listener in _discoveryListeners) {
         try {
@@ -497,112 +564,9 @@ class DiscoveryService {
         }
       }
     } catch (e) {
-      print('[DiscoveryService] ❌ Failed to restart discovery services: $e');
+      print('[DiscoveryService] ❌ Error during restart: $e');
       rethrow;
     }
-  }
-
-  /// Stop all discovery services
-  Future<void> _stopDiscoveryServices() async {
-    print('[DiscoveryService] Stopping discovery services...');
-    
-    // Stop timers
-    _cleanupTimer?.cancel();
-    _networkScanTimer?.cancel();
-  _healthCheckTimer?.cancel();
-    
-    // Stop multicast service
-    try {
-      _multicastService.dispose();
-    } catch (e) {
-      print('[DiscoveryService] Error stopping multicast service: $e');
-    }
-    
-    // Stop Bonjour service
-    try {
-      _bonjourService?.dispose();
-    } catch (e) {
-      print('[DiscoveryService] Error stopping Bonjour service: $e');
-    }
-    
-    // Stop HTTP server (check if initialized)
-    try {
-      // Use a more defensive approach for late fields
-      await _httpServer.dispose();
-    } catch (e) {
-      print('[DiscoveryService] Error stopping HTTP server: $e');
-      // If it's a late initialization error, the service wasn't initialized
-      if (e.toString().contains('LateInitializationError') || 
-          e.toString().contains('has not been initialized')) {
-        print('[DiscoveryService] HTTP server was not initialized, skipping...');
-      }
-    }
-    
-    // Stop incoming connection service (check if initialized)
-    try {
-      await _incomingConnectionService.dispose();
-    } catch (e) {
-      print('[DiscoveryService] Error stopping incoming connection service: $e');
-      if (e.toString().contains('LateInitializationError') || 
-          e.toString().contains('has not been initialized')) {
-        print('[DiscoveryService] Incoming connection service was not initialized, skipping...');
-      }
-    }
-
-    // Ensure all P2P connections are closed (defensive second pass)
-    try {
-      await _connectionManager.closeAll();
-    } catch (e) {
-      print('[DiscoveryService] Error closing connections during stop: $e');
-    }
-  }
-
-  /// Start all discovery services
-  Future<void> _startDiscoveryServices() async {
-    print('[DiscoveryService] Starting discovery services...');
-    
-    // Start HTTP server
-    try {
-      await _httpServer.start();
-    } catch (e) {
-      print('[DiscoveryService] Error starting HTTP server: $e');
-    }
-    
-    // Start incoming connection service
-    try {
-      await _incomingConnectionService.startListening();
-    } catch (e) {
-      print('[DiscoveryService] Error starting incoming connection service: $e');
-    }
-    
-    // Start multicast service
-    try {
-      await _multicastService.startListening();
-      _multicastService.addDiscoveryListener(_onMulticastDiscovery);
-    } catch (e) {
-      print('[DiscoveryService] Error starting multicast service: $e');
-    }
-    
-    // Start Bonjour on iOS
-    if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
-      try {
-        _bonjourService = BonjourService(
-          alias: alias,
-          fingerprint: fingerprint,
-          port: port,
-          deviceModel: deviceModel,
-        );
-        _bonjourService!.addDiscoveryListener(_onBonjourDiscovery);
-        await _bonjourService!.start();
-      } catch (e) {
-        print('[DiscoveryService] ⚠️  Bonjour failed to start: $e');
-      }
-    }
-    
-    // Restart timers
-    _startCleanupTimer();
-    _startNetworkScanTimer();
-    _startHealthCheckTimer();
   }
 
   /// Start periodic health check timer

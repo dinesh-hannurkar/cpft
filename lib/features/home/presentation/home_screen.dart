@@ -16,6 +16,7 @@ import 'widgets/incoming_request_dialog.dart';
 import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../../../features/chat/presentation/connection_screen.dart';
 import '../../../features/webshare/presentation/webshare_screen.dart';
+import '../../../features/webshare/services/web_server.dart';
 
 /// Simple data class to track device positions for collision detection
 class DevicePosition {
@@ -46,7 +47,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late HomeController controller;
   String? _networkName;
-  bool _isRestartingDiscovery = false;
+  bool _isRestartingServices = false;
   // Track in-flight incoming prompts to avoid duplicate dialogs
   final Set<String> _pendingIncoming = {};
   String? _localIp;
@@ -360,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: _isRestartingDiscovery
+                            icon: _isRestartingServices
                                 ? SizedBox(
                                     width: AppSizes.iconMd,
                                     height: AppSizes.iconMd,
@@ -376,11 +377,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                     color: AppColors.primary,
                                     size: AppSizes.iconMd,
                                   ),
-                            onPressed: _isRestartingDiscovery
+                            onPressed: _isRestartingServices
                                 ? null
                                 : () async {
                                     setState(() {
-                                      _isRestartingDiscovery = true;
+                                      _isRestartingServices = true;
                                     });
 
                                     // Show loading indicator
@@ -388,20 +389,54 @@ class _HomeScreenState extends State<HomeScreen> {
                                     messenger.showSnackBar(
                                       const SnackBar(
                                         content: Text(
-                                          'Restarting device discovery...',
+                                          'Restarting all services...',
                                           style: TextStyle(color: Colors.white),
                                         ),
-                                        duration: Duration(seconds: 2),
+                                        duration: Duration(seconds: 3),
                                       ),
                                     );
 
                                     try {
-                                      await widget.discoveryService
-                                          .restartDiscovery();
+                                      // Check web server status
+                                      final portInUse = await WebServer.isPortInUse();
+                                      if (portInUse) {
+                                        debugPrint('[HomeScreen] Web server detected on port 8080, stopping it...');
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Stopping web server...',
+                                              style: TextStyle(color: Colors.white),
+                                            ),
+                                            duration: Duration(seconds: 1),
+                                          ),
+                                        );
+                                        
+                                        // Force stop the web server
+                                        final stopped = await WebServer.forceStop();
+                                        if (stopped) {
+                                          debugPrint('[HomeScreen] Web server force stopped successfully');
+                                        } else {
+                                          debugPrint('[HomeScreen] Failed to force stop web server');
+                                        }
+                                        
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Web server stopped',
+                                              style: TextStyle(color: Colors.white),
+                                            ),
+                                            duration: Duration(seconds: 1),
+                                          ),
+                                        );
+                                      }
+
+                                      // Restart device discovery using the existing service
+                                      await widget.discoveryService.restartDiscovery();
+                                      
                                       messenger.showSnackBar(
                                         const SnackBar(
                                           content: Text(
-                                            'Discovery restarted successfully',
+                                            'Services restarted successfully',
                                             style: TextStyle(color: Colors.white),
                                           ),
                                           duration: Duration(seconds: 2),
@@ -411,7 +446,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       messenger.showSnackBar(
                                         SnackBar(
                                           content: Text(
-                                            'Failed to restart discovery: $e',
+                                            'Failed to restart services: $e',
                                             style: const TextStyle(color: Colors.white),
                                           ),
                                           duration: const Duration(seconds: 3),
@@ -420,12 +455,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                     } finally {
                                       if (mounted) {
                                         setState(() {
-                                          _isRestartingDiscovery = false;
+                                          _isRestartingServices = false;
                                         });
                                       }
                                     }
                                   },
-                            tooltip: 'Restart Discovery',
+                            tooltip: 'Restart All Services',
                           ),
                           const SizedBox(width: AppSizes.sm),
                           SettingsButton(
@@ -543,15 +578,33 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         LinkShareButton(
                           onPressed: () async {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => WebShareScreen(
-                                  deviceName: widget.myDeviceName,
-                                  discoveryService: widget.discoveryService,
+                            // Check if web server is already running
+                            final isRunning = await WebServer.isPortInUse();
+                            if (isRunning) {
+                              // Navigate directly to link share screen
+                              if (!mounted) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => WebShareScreen(
+                                    deviceName: widget.myDeviceName,
+                                    discoveryService: widget.discoveryService,
+                                  ),
                                 ),
-                              ),
-                            );
+                              );
+                            } else {
+                              // Navigate to link share screen (it will start the server)
+                              if (!mounted) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => WebShareScreen(
+                                    deviceName: widget.myDeviceName,
+                                    discoveryService: widget.discoveryService,
+                                  ),
+                                ),
+                              );
+                            }
                           },
                         ),
                         const SizedBox(height: AppSizes.md),

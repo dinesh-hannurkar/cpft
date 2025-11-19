@@ -13,8 +13,16 @@ class WebServer {
   final String deviceName;
   final List<WebSocket> _connectedClients = [];
   
+  // Static registry of running instances for force stopping
+  static final Set<WebServer> _runningInstances = {};
+  
   // Files available for download
   final Map<String, _AvailableFile> _availableFiles = {};
+  
+  // Uploaded files for deletion
+  final Map<String, String> _uploadedFiles = {}; // filename -> path
+  
+  bool _isRunning = false;
   
   // Callbacks for integration with app
   final Function(String filename, Uint8List data)? onFileReceived;
@@ -32,7 +40,38 @@ class WebServer {
     this.onFileUploadComplete,
   });
 
-  bool get isRunning => _server != null;
+  /// Check if the web server port is already in use
+  static Future<bool> isPortInUse({int port = 8080}) async {
+    try {
+      final socket = await Socket.connect('127.0.0.1', port, timeout: const Duration(milliseconds: 500));
+      await socket.close();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Force stop any web server running on the specified port
+  static Future<bool> forceStop({int port = 8080}) async {
+    debugPrint('[WebServer] Attempting to force stop servers on port $port');
+    
+    bool stoppedAny = false;
+    final instancesToStop = _runningInstances.where((server) => server._port == port).toList();
+    
+    for (final server in instancesToStop) {
+      debugPrint('[WebServer] Force stopping instance on port ${server._port}');
+      await server.stop();
+      stoppedAny = true;
+    }
+    
+    if (!stoppedAny) {
+      debugPrint('[WebServer] No running instances found on port $port');
+    }
+    
+    return stoppedAny;
+  }
+
+  bool get isRunning => _isRunning;
   int get port => _port;
   int get connectedClientsCount => _connectedClients.length;
   
@@ -58,8 +97,15 @@ class WebServer {
       }
 
       _server!.listen(_handleRequest);
+      _isRunning = true;
+      _runningInstances.add(this); // Register this instance
       return true;
     } catch (e) {
+      if (e is SocketException && e.message.contains('Address already in use')) {
+        debugPrint('[WebServer] Port already in use, assuming server is running externally');
+        _isRunning = true;
+        return true;
+      }
       debugPrint('[WebServer] ❌ Failed to start: $e');
       return false;
     }
@@ -67,7 +113,14 @@ class WebServer {
 
   /// Stop the web server
   Future<void> stop() async {
-    if (_server == null) return;
+    debugPrint('[WebServer] Stopping web server...');
+    // Always reset the running flag, even for external servers
+    _isRunning = false;
+    
+    if (_server == null) {
+      debugPrint('[WebServer] No server instance to stop (external server)');
+      return;
+    }
     
     // Close all WebSocket connections
     for (var ws in _connectedClients) {
@@ -79,6 +132,7 @@ class WebServer {
     
     await _server?.close();
     _server = null;
+    _runningInstances.remove(this); // Unregister this instance
     debugPrint('[WebServer] Stopped');
   }
 
@@ -107,6 +161,42 @@ class WebServer {
         await _handleFileUpload(request);
       } else if (uri.path == '/files') {
         _serveFileList(request);
+      } else if (uri.path.startsWith('/files/') && request.method == 'DELETE') {
+        // Delete a shared file
+        final fileId = uri.pathSegments.last;
+        if (_availableFiles.containsKey(fileId)) {
+          removeFileFromDownload(fileId);
+          request.response.statusCode = HttpStatus.ok;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(json.encode({'deleted': fileId}));
+        } else {
+          request.response.statusCode = HttpStatus.notFound;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(json.encode({'error': 'File not found'}));
+        }
+        await request.response.close();
+      } else if (uri.path.startsWith('/uploaded/') && request.method == 'DELETE') {
+        // Delete an uploaded file
+        final filename = uri.pathSegments.last;
+        if (_uploadedFiles.containsKey(filename)) {
+          final path = _uploadedFiles[filename]!;
+          final file = File(path);
+          try {
+            if (await file.exists()) {
+              await file.delete();
+            }
+            _uploadedFiles.remove(filename);
+            request.response.statusCode = HttpStatus.ok;
+            request.response.write('Deleted');
+          } catch (e) {
+            request.response.statusCode = HttpStatus.internalServerError;
+            request.response.write('Delete failed');
+          }
+        } else {
+          request.response.statusCode = HttpStatus.notFound;
+          request.response.write('File not found');
+        }
+        await request.response.close();
       } else if (uri.path.startsWith('/download/')) {
         await _handleFileDownload(request);
       } else if (uri.path == '/health') {
@@ -272,6 +362,7 @@ class WebServer {
         if (onFileUploadComplete != null) {
           onFileUploadComplete!(filename, savePath);
         }
+        _uploadedFiles[filename] = savePath;
         _broadcastToClients({
           'type': 'file_received',
           'filename': filename,
@@ -514,236 +605,254 @@ class WebServer {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CPFT - $deviceName</title>
+    <title>Link Share - $deviceName</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(180deg, #E9F5FA 0%, #FFFFFF 60%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 16px;
+            color: #212121;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
+        background: #FFFFFF;
+        border-radius: 16px;
+        box-shadow: 0 6px 24px rgba(16, 99, 172, 0.08);
+        padding: 24px;
+        max-width: 420px;
+        width: 100%;
+        min-height: 550px;
         }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
+      h1 {
+        color: #1063AC;
+        margin-bottom: 16px;
+        font-size: 18px;
+        font-weight: 700;
+        text-align: center;
+        letter-spacing: 0.5px;
+      }
         .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
+        color: #4A73A0;
+        margin-bottom: 12px;
+        font-size: 13px;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
         }
-        .status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 15px;
-            background: #f0f9ff;
-            border-radius: 10px;
-            margin-bottom: 30px;
-        }
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            background: #22c55e;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
+      .divider {
+        height: 1px;
+        background: linear-gradient(90deg, rgba(16,99,172,0.10), rgba(16,99,172,0.05), rgba(16,99,172,0.10));
+        margin: 8px 0 12px 0;
+      }
+      /* Mode toggle */
+      .tabs {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin: 8px auto 12px auto;
+        padding: 4px;
+      }
+      .tab {
+        padding: 8px 14px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.25s ease;
+        color: #1063AC;
+        width: 100px;
+      }
+      .tab:hover { background: #EAF6FD; }
+      .tab.active {
+        background: #F0F6F7;
+        border: 3px solid #FFFFFF;
+        box-shadow: 0 1px 4px #F0F6F7;
+        color: #1063AC;
+      }
+      .tab-content { display: none; min-height: 350px; }
+      .tab-content.active { display: block; }
         .upload-area {
-            border: 2px dashed #cbd5e1;
+            border: 2px dashed #B1B1B1;
             border-radius: 12px;
-            padding: 40px;
+            padding: 32px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s;
-            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            margin-bottom: 16px;
+            background: #F0F6F7;
         }
         .upload-area:hover {
-            border-color: #667eea;
-            background: #f8fafc;
+            border-color: #1063AC;
+            background: #E2F6FB;
         }
         .upload-area.dragover {
-            border-color: #667eea;
-            background: #f0f9ff;
+            border-color: #1063AC;
+            background: #E2F6FB;
+            transform: scale(1.02);
         }
         .upload-icon {
             font-size: 48px;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
+            color: #1063AC;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .upload-text {
-            color: #64748b;
+            color: #4A4A4A;
             font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
         }
         .upload-hint {
-            color: #94a3b8;
-            font-size: 12px;
-            margin-top: 8px;
+            color: #878787;
+            font-size: 14px;
         }
         #fileInput {
             display: none;
         }
-        .btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.3s;
-            width: 100%;
-        }
-        .btn:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        .btn:disabled {
-            background: #cbd5e1;
-            cursor: not-allowed;
-            transform: none;
-        }
         .progress {
-            margin-top: 20px;
+        margin-bottom: 16px;
             display: none;
         }
         .progress-bar {
             height: 8px;
-            background: #e2e8f0;
+            background: #E2F6FB;
             border-radius: 4px;
             overflow: hidden;
             margin-bottom: 8px;
         }
         .progress-fill {
             height: 100%;
-            background: #667eea;
+            background: linear-gradient(90deg, #1063AC 0%, #16A5D5 100%);
             width: 0%;
-            transition: width 0.3s;
+            transition: width 0.3s ease;
+            border-radius: 4px;
         }
         .progress-text {
             font-size: 14px;
-            color: #64748b;
+            color: #4A4A4A;
             text-align: center;
+            font-weight: 500;
         }
         .files-list {
-            margin-top: 30px;
+        margin-top: 16px;
         }
         .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px;
-            background: #f8fafc;
-            border-radius: 8px;
-            margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        background: #FFFFFF;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        border: 1px solid #EAF4FA;
+        box-shadow: 0 2px 10px rgba(16,99,172,0.06);
+        transition: all 0.2s ease;
+        }
+        .file-item:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16,99,172,0.1);
         }
         .file-info {
             display: flex;
-            align-items: center;
-            gap: 10px;
+        align-items: center;
+        gap: 12px;
         }
-        .file-icon {
-            font-size: 24px;
-        }
+      .file-icon { font-size: 22px; color: #1063AC; }
         .file-name {
-            font-weight: 500;
-            color: #334155;
+        font-weight: 600;
+        color: #4A4A4A;
+        font-size: 14px;
         }
         .file-size {
-            font-size: 12px;
-            color: #94a3b8;
+        font-size: 12px;
+        color: #94A3B8;
         }
         .success-icon {
-            color: #22c55e;
+            color: #28C76F;
             font-size: 20px;
         }
-        .tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-        }
-        .tab {
-            flex: 1;
-            padding: 12px;
-            background: #f8fafc;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
-        .tab:hover {
-            background: #f0f9ff;
-            border-color: #667eea;
-        }
-        .tab.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #64748b;
+      .empty-state { text-align: center; padding: 48px 20px; color: #878787; }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: #B1B1B1;
         }
         .download-btn {
-            background: #22c55e;
+            background: #28C76F;
             color: white;
             border: none;
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
         }
         .download-btn:hover {
-            background: #16a34a;
+            background: #1F9D57;
             transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(40, 199, 111, 0.3);
         }
+        .download-btn:disabled {
+            background: #B1B1B1;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+      /* Bottom callout */
+      .bottom-banner {
+        margin-top: 14px;
+        background: #FFFFFF;
+        border: 1px solid #EAF4FA;
+        border-radius: 999px;
+        padding: 8px 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 2px 10px rgba(16,99,172,0.06);
+      }
+      .bottom-icon {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: linear-gradient(135deg, #B3E5FC, #81D4FA);
+        display: grid; place-items: center; color: white;
+      }
+      .gradient-text {
+        font-weight: 700; font-size: 13px;
+        background: linear-gradient(90deg, #1063AC, #16A5D5);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📁 CPFT File Transfer</h1>
-        <div class="subtitle">Connected to: <strong>$deviceName</strong></div>
-        
-        <div class="status">
-            <div class="status-dot"></div>
-            <span>Connected and ready to transfer files</span>
-        </div>
+      <h1>CPFT</h1>
+      <div class="divider"></div>
+      <div class="subtitle"><span style="color:#28C76F; font-size:12px;">●</span> Connected to <strong>$deviceName</strong></div>
 
         <!-- Tabs for Send/Receive -->
-        <div class="tabs">
-            <button class="tab active" onclick="switchTab('send')">� Send to $deviceName</button>
-            <button class="tab" onclick="switchTab('receive')">� Receive from $deviceName</button>
-        </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('send')">Send ↗</button>
+        <button class="tab" onclick="switchTab('receive')">Receive ↙</button>
+      </div>
 
         <!-- Send Tab (Upload to device) -->
         <div id="sendTab" class="tab-content active">
             <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📤</div>
+                <div class="upload-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 16L12 21L17 16M12 3V21" stroke="#1063AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
                 <div class="upload-text">Click to select files or drag & drop here</div>
                 <div class="upload-hint">Send files to $deviceName</div>
             </div>
@@ -758,13 +867,15 @@ class WebServer {
             </div>
 
             <div class="files-list" id="uploadedFiles"></div>
+
+           
         </div>
 
         <!-- Receive Tab (Download from device) -->
         <div id="receiveTab" class="tab-content">
             <div id="availableFiles" class="files-list"></div>
             <div id="noFiles" class="empty-state">
-                <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
+                <div style="font-size: 48px; margin-bottom: 16px;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H13L11 5H5C3.89543 5 3 5.89543 3 7Z" stroke="#B1B1B1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
                 <div>No files available to receive</div>
                 <div style="font-size: 12px; color: #94a3b8; margin-top: 8px;">Files shared from $deviceName will appear here</div>
             </div>
@@ -773,6 +884,8 @@ class WebServer {
 
     <script>
         let currentTab = 'send';
+        const recentlyUploaded = new Set(); // suppress duplicate WS echoes
+        const upKey = (name, size) => `\${name}|\${size}`;
         
         function switchTab(tab) {
             currentTab = tab;
@@ -781,10 +894,14 @@ class WebServer {
             
             if (tab === 'send') {
                 document.querySelectorAll('.tab')[0].classList.add('active');
-                document.getElementById('sendTab').classList.add('active');
+            document.getElementById('sendTab').classList.add('active');
+            document.getElementById('sendTab').style.display = 'block';
+            document.getElementById('receiveTab').style.display = 'none';
             } else {
                 document.querySelectorAll('.tab')[1].classList.add('active');
-                document.getElementById('receiveTab').classList.add('active');
+            document.getElementById('receiveTab').classList.add('active');
+            document.getElementById('receiveTab').style.display = 'block';
+            document.getElementById('sendTab').style.display = 'none';
                 loadAvailableFiles();
             }
         }
@@ -807,7 +924,14 @@ class WebServer {
                 console.log('WebSocket message:', data);
                 
                 if (data.type === 'file_received') {
-                    addUploadedFile(data.filename, data.size, true);
+                  // If this browser initiated the upload, skip echo using name+size key
+                  const k = upKey(data.filename, data.size ?? -1);
+                  if (recentlyUploaded.has(k)) {
+                    // clear the marker once seen
+                    recentlyUploaded.delete(k);
+                    return;
+                  }
+                  addUploadedFile(data.filename, data.size, true);
                 } else if (data.type === 'file_available') {
                     if (currentTab === 'receive') {
                         loadAvailableFiles();
@@ -884,7 +1008,11 @@ class WebServer {
                     if (xhr.status >= 200 && xhr.status < 300) {
                         progressFill.style.width = '100%';
                         progressText.textContent = 'Upload complete!';
-                        addUploadedFile(file.name, file.size, true);
+                    addUploadedFile(file.name, file.size, true);
+                    // mark as recently uploaded to avoid WS duplicate
+                    const k = upKey(file.name, file.size ?? -1);
+                    recentlyUploaded.add(k);
+                    setTimeout(()=>recentlyUploaded.delete(k), 15000);
                         setTimeout(() => {
                             progress.style.display = 'none';
                             progressFill.style.width = '0%';
@@ -904,6 +1032,8 @@ class WebServer {
                 });
                 
                 xhr.open('POST', '/upload');
+                // pre-mark to cover race where WS arrives before load
+                try { recentlyUploaded.add(upKey(file.name, file.size ?? -1)); } catch (e) {}
                 xhr.send(formData);
             }).catch((error) => {
                 progressText.textContent = 'Upload failed: ' + error.message;
@@ -930,7 +1060,11 @@ class WebServer {
                     availableFilesList.innerHTML = '';
                     
                     files.forEach(file => {
-                        addAvailableFile(file.id, file.filename, file.size);
+                      try {
+                        const key = upKey(file.filename, file.size ?? -1);
+                        if (recentlyUploaded.has(key)) return; // don't show our own uploads in Receive
+                      } catch (e) {}
+                      addAvailableFile(file.id, file.filename, file.size, file.addedAt);
                     });
                 }
             } catch (error) {
@@ -938,30 +1072,32 @@ class WebServer {
             }
         }
 
-        function addAvailableFile(fileId, filename, size) {
+        function addAvailableFile(fileId, filename, size, addedAt) {
             const item = document.createElement('div');
             item.className = 'file-item';
-            item.innerHTML = \`
-                <div class="file-info">
-                    <div class="file-icon">📄</div>
-                    <div>
-                        <div class="file-name">\${filename}</div>
-                        <div class="file-size">\${formatBytes(size)}</div>
-                    </div>
-                </div>
-                <button class="download-btn" onclick="downloadFile('\${fileId}', '\${filename}', this)">
-                    ⬇️ Download
-                </button>
-            \`;
+          item.style.animation = 'fadeIn 0.3s ease';
+          const time = formatTime(addedAt);
+          item.innerHTML = `
+            <div class="file-info" style="flex:1;">
+              <div class="file-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20Z" fill="#1063AC"/></svg></div>
+              <div>
+                <div class="file-name" title="\${filename}">\${filename}</div>
+                <div class="file-size">\${formatBytes(size)} · \${time}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="download-btn" style="min-width:80px" onclick="downloadFile('\${fileId}', '\${filename}', this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10L12 15L17 10" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15V3" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          `;
             availableFilesList.appendChild(item);
         }
 
         async function downloadFile(fileId, filename, button) {
-            const originalText = button.textContent;
+            const originalHTML = button.innerHTML;
             
             try {
                 // Show progress
-                button.textContent = '⏳ Preparing...';
+                button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#FFFFFF" stroke-width="2"/><path d="M12 6V12L16 14" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 button.disabled = true;
                 
                 const response = await fetch('/download/' + fileId);
@@ -971,7 +1107,7 @@ class WebServer {
                 const contentLength = response.headers.get('content-length');
                 const total = contentLength ? parseInt(contentLength, 10) : 0;
                 
-                button.textContent = '📥 Downloading...';
+                button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10L12 15L17 10" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15V3" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 
                 if (!total) {
                     // No content-length, download as blob
@@ -999,7 +1135,7 @@ class WebServer {
                         
                         // Update progress
                         const percent = Math.round((received / total) * 100);
-                        button.textContent = \`📥 \${percent}%\`;
+                        button.innerHTML = \`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10L12 15L17 10" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15V3" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> \${percent}%\`;
                     }
                     
                     // Create blob from chunks
@@ -1014,18 +1150,18 @@ class WebServer {
                     document.body.removeChild(a);
                 }
                 
-                button.textContent = '✅ Downloaded!';
+                button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7089 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 4L12 14.01L9 11.01" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 setTimeout(() => {
-                    button.textContent = originalText;
+                    button.innerHTML = originalHTML;
                     button.disabled = false;
                 }, 2000);
                 
                 console.log('Downloaded:', filename);
             } catch (error) {
-                button.textContent = '❌ Failed';
+                button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6L18 18" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 button.disabled = false;
                 setTimeout(() => {
-                    button.textContent = originalText;
+                    button.innerHTML = originalHTML;
                 }, 3000);
                 alert('Download failed: ' + error.message);
             }
@@ -1034,15 +1170,19 @@ class WebServer {
         function addUploadedFile(filename, size, success) {
             const item = document.createElement('div');
             item.className = 'file-item';
+            item.style.animation = 'fadeIn 0.3s ease';
             item.innerHTML = \`
                 <div class="file-info">
-                    <div class="file-icon">📄</div>
+                    <div class="file-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20Z" fill="#1063AC"/></svg></div>
                     <div>
                         <div class="file-name">\${filename}</div>
                         <div class="file-size">\${formatBytes(size)}</div>
                     </div>
                 </div>
-                \${success ? '<div class="success-icon">✅</div>' : ''}
+                <div style="display:flex;align-items:center;gap:8px;">
+                   
+                    <button class="download-btn" style="background:#FDF1F1;color:#EA5455;min-width:40px" onclick="deleteUploadedFile('\${filename}', this)" title="Delete file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 6H5H21" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6M8 6V4C8 3.46957 8.21071 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11V17" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11V17" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                </div>
             \`;
             uploadedFilesList.insertBefore(item, uploadedFilesList.firstChild);
         }
@@ -1054,6 +1194,45 @@ class WebServer {
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
+        function formatTime(iso) {
+          try {
+            const d = new Date(iso);
+            let h = d.getHours();
+            const m = d.getMinutes().toString().padStart(2,'0');
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12; if (h === 0) h = 12;
+            return h + ':' + m + ' ' + ampm;
+          } catch { return ''; }
+        }
+        async function deleteFile(fileId, btn) {
+          const original = btn.textContent;
+          btn.textContent = '…';
+          btn.disabled = true;
+          try {
+            const res = await fetch('/files/' + fileId, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed');
+            btn.textContent = '✓';
+            setTimeout(()=>{ loadAvailableFiles(); }, 300);
+          } catch (e) {
+            btn.textContent = 'Err';
+            setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1200);
+          }
+        }
+        async function deleteUploadedFile(filename, btn) {
+          const original = btn.innerHTML;
+          btn.innerHTML = '…';
+          btn.disabled = true;
+          try {
+            const res = await fetch('/uploaded/' + encodeURIComponent(filename), { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed');
+            btn.closest('.file-item').remove();
+          } catch (e) {
+            btn.innerHTML = 'Err';
+            setTimeout(()=>{ btn.innerHTML = original; btn.disabled = false; }, 1200);
+          }
+        }
+      // Ensure initial view is Send tab
+      document.addEventListener('DOMContentLoaded', ()=>switchTab('send'));
     </script>
 </body>
 </html>
