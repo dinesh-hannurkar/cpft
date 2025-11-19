@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../shared/widgets/dialog_helpers.dart' as app_dialog;
-import '../shared/widgets/app_confirm_dialog.dart';
-import '../services/discovery_service.dart';
+import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
+import '../../../shared/widgets/app_confirm_dialog.dart';
+import '../../../services/discovery_service.dart';
 
 /// Screen for managing files shared via web transfer
 class WebFileManagerScreen extends StatefulWidget {

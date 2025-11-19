@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import '../models/connection_state.dart';
 import 'package:crypto/crypto.dart';

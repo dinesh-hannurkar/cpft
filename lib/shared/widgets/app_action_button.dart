@@ -31,7 +31,7 @@ class AppActionButton extends StatelessWidget {
       onTap: onPressed,
       child: Container(
         width: width,
-        height: height ?? 48,
+        height: height ?? 52,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSizes.md,
           vertical: AppSizes.sm,
@@ -39,7 +39,7 @@ class AppActionButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(AppSizes.cardRadiusLg * 10),
-          border: Border.all(color: borderColor, width: 2),
+          border: Border.all(color: borderColor, width: 4),
           boxShadow: [
             BoxShadow(
               color: shadowColor,

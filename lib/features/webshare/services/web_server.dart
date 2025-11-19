@@ -34,6 +34,7 @@ class WebServer {
 
   bool get isRunning => _server != null;
   int get port => _port;
+  int get connectedClientsCount => _connectedClients.length;
   
   /// Start the web server
   Future<bool> start({int port = 8080}) async {
@@ -141,6 +142,12 @@ class WebServer {
       final socket = await WebSocketTransformer.upgrade(request);
       _connectedClients.add(socket);
       debugPrint('[WebServer] WebSocket client connected (${_connectedClients.length} total)');
+      // Fire app-layer callback
+      if (onClientConnected != null) {
+        try {
+          onClientConnected!.call('client_${DateTime.now().microsecondsSinceEpoch}');
+        } catch (_) {}
+      }
       
       // Send welcome message
       socket.add(json.encode({
@@ -154,6 +161,11 @@ class WebServer {
         onDone: () {
           _connectedClients.remove(socket);
           debugPrint('[WebServer] WebSocket client disconnected');
+          if (onClientDisconnected != null) {
+            try {
+              onClientDisconnected!.call('disconnected');
+            } catch (_) {}
+          }
         },
         onError: (error) {
           debugPrint('[WebServer] WebSocket error: $error');

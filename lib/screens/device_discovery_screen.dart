@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cpft/features/webshare/presentation/web_file_manager_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -10,7 +11,6 @@ import '../shared/widgets/app_confirm_dialog.dart';
 
 import '../services/discovery_service.dart';
 import '../features/chat/presentation/connection_screen.dart';
-import 'web_file_manager_screen.dart';
 import 'package:file_picker/file_picker.dart';
 
 class DeviceDiscoveryScreen extends StatefulWidget {

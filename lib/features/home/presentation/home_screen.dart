@@ -15,6 +15,7 @@ import 'widgets/connection_flow_dialog.dart';
 import 'widgets/incoming_request_dialog.dart';
 import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../../../features/chat/presentation/connection_screen.dart';
+import '../../../features/webshare/presentation/webshare_screen.dart';
 
 /// Simple data class to track device positions for collision detection
 class DevicePosition {
@@ -53,7 +54,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    print("=== HomeScreen initState called ===");
     controller = HomeController(
       discoveryService: widget.discoveryService,
       myDeviceName: widget.myDeviceName,
@@ -543,15 +543,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         LinkShareButton(
                           onPressed: () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            final ok = await widget.discoveryService
-                                .startWebServer();
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  ok
-                                      ? 'Web Share started. Open from a browser on the same network.'
-                                      : 'Failed to start Web Share',
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => WebShareScreen(
+                                  deviceName: widget.myDeviceName,
+                                  discoveryService: widget.discoveryService,
                                 ),
                               ),
                             );

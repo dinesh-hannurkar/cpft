@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cpft/features/webshare/services/web_server.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
@@ -11,7 +12,6 @@ import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import '../../features/chat/services/connection_manager.dart';
 import 'background_service.dart';
-import 'web_server.dart';
 
 /// Unified discovery service combining UDP multicast and HTTP
 /// This matches LocalSend's architecture
