@@ -363,7 +363,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       if (file.path == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not access file',)),
+          const SnackBar(content: Text('Could not access file', style: TextStyle(color: Colors.white))),
         );
         return;
       }

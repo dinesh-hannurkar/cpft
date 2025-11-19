@@ -249,8 +249,9 @@ class WebServer {
             received += chunk.length;
             sink.add(chunk);
             if (onFileUploadProgress != null) {
-              // Total unknown in multipart; report received as both for now
-              onFileUploadProgress!(filename, received, received);
+              // For multipart uploads, total size is unknown until complete
+              // Report -1 as total to indicate indeterminate progress
+              onFileUploadProgress!(filename, received, -1);
             }
           },
           onError: (e) async {
@@ -447,26 +448,52 @@ class WebServer {
         return;
       }
 
-      final bytes = await ioFile.readAsBytes();
+      final fileLength = await ioFile.length();
       request.response.headers.contentType = ContentType.binary;
       request.response.headers.add('Content-Disposition', 'attachment; filename="${file.filename}"');
-      request.response.headers.contentLength = bytes.length;
-      request.response.add(bytes);
-      await request.response.close();
+      request.response.headers.contentLength = fileLength;
+      request.response.headers.add('Accept-Ranges', 'bytes');
 
-      debugPrint('[WebServer] ✅ File downloaded: ${file.filename}');
+      debugPrint('[WebServer] 📤 Starting file download: ${file.filename} (${_fmtBytes(fileLength)})');
 
-      // Notify clients
-      _broadcastToClients({
-        'type': 'file_downloaded',
-        'fileId': fileId,
-        'filename': file.filename,
-      });
+      // Stream the file instead of loading it entirely into memory
+      final stream = ioFile.openRead();
+      int totalSent = 0;
+
+      await stream.listen(
+        (chunk) {
+          request.response.add(chunk);
+          totalSent += chunk.length;
+        },
+        onDone: () async {
+          await request.response.close();
+          debugPrint('[WebServer] ✅ File download completed: ${file.filename} (${_fmtBytes(totalSent)})');
+
+          // Notify clients
+          _broadcastToClients({
+            'type': 'file_downloaded',
+            'fileId': fileId,
+            'filename': file.filename,
+          });
+        },
+        onError: (error) async {
+          debugPrint('[WebServer] Error streaming file: $error');
+          try {
+            await request.response.close();
+          } catch (e) {
+            debugPrint('[WebServer] Error closing response after stream error: $e');
+          }
+        },
+        cancelOnError: true,
+      );
+
     } catch (e) {
       debugPrint('[WebServer] Error serving file: $e');
-      request.response.statusCode = HttpStatus.internalServerError;
-      request.response.write(json.encode({'error': e.toString()}));
-      await request.response.close();
+      try {
+        await request.response.close();
+      } catch (closeError) {
+        debugPrint('[WebServer] Error closing response: $closeError');
+      }
     }
   }
 
@@ -824,8 +851,14 @@ class WebServer {
 
         async function uploadFiles(files) {
             for (let i = 0; i < files.length; i++) {
-                await uploadFile(files[i]);
+                try {
+                    await uploadFile(files[i]);
+                } catch (error) {
+                    console.error('Failed to upload file:', files[i].name, error);
+                    // Continue with next file even if one fails
+                }
             }
+            fileInput.value = '';
         }
 
         async function uploadFile(file) {
@@ -833,31 +866,53 @@ class WebServer {
             formData.append('file', file);
 
             progress.style.display = 'block';
-            progressText.textContent = 'Uploading ' + file.name + '...';
+            progressText.textContent = 'Preparing upload...';
+            progressFill.style.width = '0%';
 
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressFill.style.width = percentComplete + '%';
+                        progressText.textContent = \`Uploading \${file.name}... \${percentComplete}%\`;
+                    }
                 });
-
-                if (response.ok) {
-                    progressFill.style.width = '100%';
-                    progressText.textContent = 'Upload complete!';
-                    addUploadedFile(file.name, file.size, true);
-                    setTimeout(() => {
-                        progress.style.display = 'none';
-                        progressFill.style.width = '0%';
-                    }, 2000);
-                } else {
-                    throw new Error('Upload failed');
-                }
-            } catch (error) {
+                
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        progressFill.style.width = '100%';
+                        progressText.textContent = 'Upload complete!';
+                        addUploadedFile(file.name, file.size, true);
+                        setTimeout(() => {
+                            progress.style.display = 'none';
+                            progressFill.style.width = '0%';
+                        }, 2000);
+                        resolve();
+                    } else {
+                        reject(new Error(\`Upload failed: \${xhr.status} \${xhr.statusText}\`));
+                    }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    reject(new Error('Network error during upload'));
+                });
+                
+                xhr.addEventListener('abort', () => {
+                    reject(new Error('Upload aborted'));
+                });
+                
+                xhr.open('POST', '/upload');
+                xhr.send(formData);
+            }).catch((error) => {
                 progressText.textContent = 'Upload failed: ' + error.message;
                 progressFill.style.width = '0%';
-            }
-
-            fileInput.value = '';
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                }, 3000);
+                throw error;
+            });
         }
 
         async function loadAvailableFiles() {
@@ -894,30 +949,84 @@ class WebServer {
                         <div class="file-size">\${formatBytes(size)}</div>
                     </div>
                 </div>
-                <button class="download-btn" onclick="downloadFile('\${fileId}', '\${filename}')">
+                <button class="download-btn" onclick="downloadFile('\${fileId}', '\${filename}', this)">
                     ⬇️ Download
                 </button>
             \`;
             availableFilesList.appendChild(item);
         }
 
-        async function downloadFile(fileId, filename) {
+        async function downloadFile(fileId, filename, button) {
+            const originalText = button.textContent;
+            
             try {
+                // Show progress
+                button.textContent = '⏳ Preparing...';
+                button.disabled = true;
+                
                 const response = await fetch('/download/' + fileId);
                 if (!response.ok) throw new Error('Download failed');
                 
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
+                // Get total size if available
+                const contentLength = response.headers.get('content-length');
+                const total = contentLength ? parseInt(contentLength, 10) : 0;
+                
+                button.textContent = '📥 Downloading...';
+                
+                if (!total) {
+                    // No content-length, download as blob
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    // Stream download with progress
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    let received = 0;
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        chunks.push(value);
+                        received += value.length;
+                        
+                        // Update progress
+                        const percent = Math.round((received / total) * 100);
+                        button.textContent = \`📥 \${percent}%\`;
+                    }
+                    
+                    // Create blob from chunks
+                    const blob = new Blob(chunks);
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }
+                
+                button.textContent = '✅ Downloaded!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }, 2000);
                 
                 console.log('Downloaded:', filename);
             } catch (error) {
+                button.textContent = '❌ Failed';
+                button.disabled = false;
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 3000);
                 alert('Download failed: ' + error.message);
             }
         }
@@ -949,6 +1058,17 @@ class WebServer {
 </body>
 </html>
 ''';
+  }
+
+  String _fmtBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    double size = bytes.toDouble();
+    int unit = 0;
+    while (size >= 1024 && unit < units.length - 1) {
+      size /= 1024;
+      unit++;
+    }
+    return '${size.toStringAsFixed(size < 10 && unit > 0 ? 1 : 0)} ${units[unit]}';
   }
 }
 

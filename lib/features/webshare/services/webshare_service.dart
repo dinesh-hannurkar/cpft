@@ -41,9 +41,21 @@ class WebShareService {
         debugPrint('[WebShareService] Upload progress: $filename - $received/$total bytes');
         onFileUploadProgress?.call(filename, received, total);
       },
-      onFileUploadComplete: (filename, savedPath) {
+      onFileUploadComplete: (filename, savedPath) async {
         debugPrint('[WebShareService] ✅ File upload complete: $filename -> $savedPath');
         onFileUploadComplete?.call(filename, savedPath);
+        
+        // Small delay to ensure file is fully written to disk
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        // Automatically share the uploaded file for download
+        final file = File(savedPath);
+        if (await file.exists()) {
+          final id = _webServer!.addFileForDownload(savedPath, filename);
+          await _refreshSharedFiles();
+          debugPrint('[WebShareService] 📤 Auto-shared uploaded file: $filename (ID: $id)');
+        }
+        
         // Track received file
         receivedFiles.value = [
           ReceivedFile(
