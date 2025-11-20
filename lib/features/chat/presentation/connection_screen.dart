@@ -23,6 +23,7 @@ class ConnectionScreen extends StatefulWidget {
   final int port;
   final String myDeviceName;
   final ConnectionManager connectionManager;
+  final String? initialDeviceId;
 
   const ConnectionScreen({
     super.key,
@@ -31,6 +32,7 @@ class ConnectionScreen extends StatefulWidget {
     required this.port,
     required this.myDeviceName,
     required this.connectionManager,
+    this.initialDeviceId,
   });
 
   @override
@@ -150,9 +152,19 @@ class _ConnectionScreenState extends State<ConnectionScreen>
   void initState() {
     super.initState();
 
+    // Use initialDeviceId if provided, otherwise use the widget.deviceName
+    final targetDeviceName = widget.initialDeviceId ?? widget.deviceName;
+
     // Get or create connection service from the shared ConnectionManager
     _connectionService = widget.connectionManager.getOrCreateConnection(
-      widget.deviceName,
+      targetDeviceName,
+    );
+
+    // Preload existing history filtering out any unexpected types (defensive)
+    _messages.addAll(
+      _connectionService.messageHistory.where((m) => const {
+        'text', 'file_complete', 'goodbye'
+      }.contains(m.type)),
     );
 
     _connectionService.addMessageListener(_onMessageReceived);
@@ -178,17 +190,53 @@ class _ConnectionScreenState extends State<ConnectionScreen>
 
     // Check if already connected (incoming connection case)
     if (_connectionService.isConnected) {
-      print('[ConnectionScreen] Already connected to ${widget.deviceName}');
+      print('[ConnectionScreen] Already connected to ${_connectionService.deviceName}');
       _connectionInfo = _connectionService.currentConnection;
     } else if (_connectionInfo?.status == ConnectionStatus.connecting) {
       // Avoid starting an outgoing connection while an incoming connection is being established
       print(
-        '[ConnectionScreen] Connection to ${widget.deviceName} is already in progress (incoming). Not starting outgoing connect.',
+        '[ConnectionScreen] Connection to ${_connectionService.deviceName} is already in progress (incoming). Not starting outgoing connect.',
       );
     } else {
       // Not connected yet - initiate outgoing connection
       _connectToDevice();
     }
+    
+    // Check for pending file offers and show dialogs
+    _checkPendingFileOffers();
+  }
+
+  /// Check for any pending file offers and show dialogs for them
+  void _checkPendingFileOffers() {
+    // Wait a bit for the screen to be fully built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      final pendingOffers = _connectionService.pendingOffers;
+      debugPrint('[ConnectionScreen] Checking pending offers: ${pendingOffers.length}');
+      
+      for (final entry in pendingOffers.entries) {
+        final transferId = entry.key;
+        final offer = entry.value;
+        
+        debugPrint('[ConnectionScreen] Showing dialog for pending offer: ${offer.fileName}');
+        
+        // Create a DeviceMessage for the offer to use existing handler
+        final offerMessage = DeviceMessage(
+          type: 'file_offer',
+          content: offer.fileName,
+          senderName: _connectionService.deviceName,
+          timestamp: DateTime.now(),
+          metadata: {
+            'transferId': transferId,
+            'size': offer.fileSize,
+            'mime': offer.mimeType,
+          },
+        );
+        
+        _handleIncomingOffer(offerMessage);
+      }
+    });
   }
 
   @override
@@ -211,7 +259,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
 
     // Use dedicated P2P port (53318) instead of HTTP server port (53317)
     final success = await _connectionService.connect(
-      widget.deviceName,
+      _connectionService.deviceName,
       widget.ipAddress,
       p2pPort,
     );
@@ -223,7 +271,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to connect to ${widget.deviceName}'),
+          content: Text('Failed to connect to ${_connectionService.deviceName}'),
           backgroundColor: Colors.red,
           action: SnackBarAction(
             label: 'Retry',
@@ -264,7 +312,10 @@ class _ConnectionScreenState extends State<ConnectionScreen>
         final tId = message.metadata?['transferId'] as String?;
         final path = message.metadata?['path'] as String?;
         setState(() {
-          _messages.add(message);
+          // Skip if already in messages (preloaded from history or already added)
+          if (!_messages.any((m) => m.timestamp == message.timestamp && m.content == message.content)) {
+            _messages.add(message);
+          }
           if (tId != null) {
             _incomingProgress.remove(tId);
             _outgoingProgress.remove(tId);
@@ -281,7 +332,10 @@ class _ConnectionScreenState extends State<ConnectionScreen>
         });
       } else {
         setState(() {
-          _messages.add(message);
+          // Skip if already in messages (preloaded from history or already added)
+          if (!_messages.any((m) => m.timestamp == message.timestamp && m.content == message.content)) {
+            _messages.add(message);
+          }
         });
       }
       _scrollToBottom();
@@ -716,7 +770,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Connected to ${widget.deviceName}',
+                  'Connected to ${_connectionService.deviceName}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -1244,7 +1298,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Connecting to ${widget.deviceName}...',
+              'Connecting to ${_connectionService.deviceName}...',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(

@@ -9,7 +9,7 @@ import '../models/connection_state.dart';
 
 /// Manages all active P2P connections (both incoming and outgoing)
 class ConnectionManager {
-  late final String deviceName;
+  String? deviceName;
   final Map<String, ConnectionService> _activeConnections = {};
   final List<Function(String deviceName, ConnectionService service, bool isIncoming)> _connectionListeners = [];
 
@@ -32,35 +32,47 @@ class ConnectionManager {
   // FIX: Use the remote device's name, not local deviceName, for proper identity in handshake
   final service = ConnectionService(deviceName: deviceName);
     _activeConnections[deviceName] = service;
+    debugPrint('[ConnectionManager] 📊 Active connections count: ${_activeConnections.length}, devices: ${_activeConnections.keys.join(", ")}');
+    
+    // Notify listeners about the new connection being created
+    _notifyConnectionListeners(deviceName, service, isIncoming: false);
     
     // Listen for connection status changes to manage foreground service
     service.addStatusListener((info) {
       if (info.status == ConnectionStatus.connected) {
         debugPrint('[ConnectionManager] Connection to ${info.deviceName} is now connected');
         _startForegroundServiceIfNeeded();
-
-        // Show notification for established connection
         NotificationService().showNotification(
           type: NotificationType.connectionEstablished,
           title: 'Connected',
           body: 'Successfully connected to ${info.deviceName}',
         );
-      } else if (info.status == ConnectionStatus.disconnected || info.status == ConnectionStatus.failed) {
-        debugPrint('[ConnectionManager] Connection to ${info.deviceName} disconnected/failed');
-        // Remove from active connections and stop service if needed
+      } else if (info.status == ConnectionStatus.failed) {
+        // Only remove failed connections immediately. Disconnected connections are retained
+        // so the UI (bottom sheet) can still show them and allow manual reconnection attempts.
+        debugPrint('[ConnectionManager] Connection to ${info.deviceName} failed – removing');
         _activeConnections.remove(deviceName);
         _stopForegroundServiceIfNeeded();
-
-        // Show notification for lost connection
-        final statusText = info.status == ConnectionStatus.disconnected ? 'disconnected' : 'failed';
         NotificationService().showNotification(
           type: NotificationType.connectionLost,
-          title: 'Connection Lost',
-          body: 'Connection to ${info.deviceName} $statusText',
+          title: 'Connection Failed',
+          body: 'Connection to ${info.deviceName} failed',
+        );
+      } else if (info.status == ConnectionStatus.disconnected) {
+        // Keep the service so UI can show a "Disconnected" state.
+        debugPrint('[ConnectionManager] Connection to ${info.deviceName} disconnected (retaining for UI)');
+        _stopForegroundServiceIfNeeded();
+        NotificationService().showNotification(
+          type: NotificationType.connectionLost,
+          title: 'Disconnected',
+          body: 'Connection to ${info.deviceName} disconnected',
         );
       }
-      // Update notification whenever status changes
+
+      // Update notification whenever status changes and we have at least one connected device
       if (info.status == ConnectionStatus.connected) {
+        _updateForegroundServiceNotification();
+      } else {
         _updateForegroundServiceNotification();
       }
     });
@@ -78,6 +90,7 @@ class ConnectionManager {
     }
     _activeConnections.clear();
     _connectionListeners.clear();
+    deviceName = null; // Clear for restart capability
   }
 
   /// Handle incoming connection (socket-only, legacy path)
@@ -119,6 +132,44 @@ class ConnectionManager {
   debugPrint('[ConnectionManager] Creating new connection service for remote device $remoteName');
   final service = ConnectionService(deviceName: remoteName);
       _activeConnections[remoteName] = service;
+      
+      // Attach status listener for incoming connections (same as outgoing)
+      service.addStatusListener((info) {
+        if (info.status == ConnectionStatus.connected) {
+          debugPrint('[ConnectionManager] Connection to ${info.deviceName} is now connected');
+          _startForegroundServiceIfNeeded();
+          NotificationService().showNotification(
+            type: NotificationType.connectionEstablished,
+            title: 'Connected',
+            body: 'Successfully connected to ${info.deviceName}',
+          );
+        } else if (info.status == ConnectionStatus.failed) {
+          debugPrint('[ConnectionManager] Connection to ${info.deviceName} failed – removing');
+          _activeConnections.remove(remoteName);
+          _stopForegroundServiceIfNeeded();
+          NotificationService().showNotification(
+            type: NotificationType.connectionLost,
+            title: 'Connection Failed',
+            body: 'Connection to ${info.deviceName} failed',
+          );
+        } else if (info.status == ConnectionStatus.disconnected) {
+          debugPrint('[ConnectionManager] Connection to ${info.deviceName} disconnected (retaining for UI)');
+          _stopForegroundServiceIfNeeded();
+          NotificationService().showNotification(
+            type: NotificationType.connectionLost,
+            title: 'Disconnected',
+            body: 'Connection to ${info.deviceName} disconnected',
+          );
+        }
+
+        // Update notification whenever status changes
+        if (info.status == ConnectionStatus.connected) {
+          _updateForegroundServiceNotification();
+        } else {
+          _updateForegroundServiceNotification();
+        }
+      });
+      
       debugPrint('[ConnectionManager] 🔍 Got ConnectionService for $remoteName');
 
       // Accept the connection using the provided socket
@@ -150,9 +201,9 @@ class ConnectionManager {
   /// Start foreground service if this is the first connection
   Future<void> _startForegroundServiceIfNeeded() async {
     if (!Platform.isAndroid) return;
-    
-    if (_activeConnections.length == 1 && !BackgroundService.isRunning) {
-      debugPrint('[ConnectionManager] Starting foreground service (first connection)');
+    final connectedCount = _activeConnections.values.where((s) => s.isConnected).length;
+    if (connectedCount == 1 && !BackgroundService.isRunning) {
+      debugPrint('[ConnectionManager] Starting foreground service (first connected device)');
       try {
         final started = await BackgroundService.start();
         if (started) {
@@ -162,8 +213,7 @@ class ConnectionManager {
       } catch (e) {
         debugPrint('[ConnectionManager] ❌ Failed to start foreground service: $e');
       }
-    } else if (_activeConnections.isNotEmpty) {
-      // Update notification with current connections
+    } else if (connectedCount > 0) {
       _updateForegroundServiceNotification();
     }
   }
@@ -171,9 +221,9 @@ class ConnectionManager {
   /// Stop foreground service if no connections remain
   Future<void> _stopForegroundServiceIfNeeded() async {
     if (!Platform.isAndroid) return;
-    
-    if (_activeConnections.isEmpty && BackgroundService.isRunning) {
-      debugPrint('[ConnectionManager] Stopping foreground service (no connections)');
+    final connectedCount = _activeConnections.values.where((s) => s.isConnected).length;
+    if (connectedCount == 0 && BackgroundService.isRunning) {
+      debugPrint('[ConnectionManager] Stopping foreground service (no connected devices)');
       try {
         await BackgroundService.stop();
         debugPrint('[ConnectionManager] ✅ Foreground service stopped');
@@ -187,8 +237,9 @@ class ConnectionManager {
   void _updateForegroundServiceNotification() {
     if (!Platform.isAndroid || !BackgroundService.isRunning) return;
     
-    final count = _activeConnections.length;
-    final deviceNames = _activeConnections.keys.take(3).join(', ');
+    final connectedEntries = _activeConnections.entries.where((e) => e.value.isConnected).toList();
+    final count = connectedEntries.length;
+    final deviceNames = connectedEntries.map((e) => e.key).take(3).join(', ');
     
     String notificationText;
     if (count == 1) {
@@ -217,6 +268,7 @@ class ConnectionManager {
 
   /// Notify listeners about new connection
   void _notifyConnectionListeners(String deviceName, ConnectionService service, {required bool isIncoming}) {
+    debugPrint('[ConnectionManager] 🔔 Notifying ${_connectionListeners.length} listeners about ${isIncoming ? "incoming" : "outgoing"} connection to $deviceName');
     for (final listener in _connectionListeners) {
       try {
         listener(deviceName, service, isIncoming);

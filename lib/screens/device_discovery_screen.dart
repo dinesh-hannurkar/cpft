@@ -994,7 +994,28 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       return;
     }
     
-    // Navigate to connection screen
+    // Check if already connected to this device
+    final existingConnection = connectionManager.getConnection(deviceName);
+    if (existingConnection != null && existingConnection.isConnected) {
+      print('[UI] Already connected to $deviceName, navigating to existing chat');
+      // Navigate to existing connection without creating new one
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ConnectionScreen(
+            deviceName: deviceName,
+            ipAddress: ipAddress,
+            port: 53318,
+            myDeviceName: widget.deviceName,
+            connectionManager: connectionManager,
+            initialDeviceId: deviceName,
+          ),
+        ),
+      );
+      return;
+    }
+    
+    // Navigate to connection screen (will create new connection)
     Navigator.push(
       context,
       MaterialPageRoute(

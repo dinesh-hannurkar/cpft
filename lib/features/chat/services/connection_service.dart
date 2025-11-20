@@ -17,9 +17,15 @@ class ConnectionService {
   ConnectionInfo? _currentConnection;
   final List<Function(DeviceMessage)> _messageListeners = [];
   final List<Function(ConnectionInfo)> _statusListeners = [];
+  // Persist message history so reopening a chat screen shows prior conversation.
+  final List<DeviceMessage> _messageHistory = [];
   StreamSubscription? _socketSubscription;
   final StringBuffer _messageBuffer = StringBuffer();
   Timer? _keepAliveTimer;
+  // Track consecutive socket errors to avoid premature disconnection
+  int _consecutiveErrors = 0;
+  static const int _maxConsecutiveErrors = 3;
+  Timer? _errorResetTimer;
   // Track incoming file transfers
   final Map<String, _IncomingFile> _incomingFiles = {};
   // Pending offers awaiting user decision
@@ -34,6 +40,9 @@ class ConnectionService {
 
   /// Check if connected
   bool get isConnected => _currentConnection?.status == ConnectionStatus.connected;
+
+  /// Get pending file offers
+  Map<String, FileOffer> get pendingOffers => Map.unmodifiable(_pendingOffers);
 
   /// Add message listener
   void addMessageListener(Function(DeviceMessage) listener) {
@@ -253,6 +262,20 @@ class ConnectionService {
       _socket!.add(bytes);
       await _socket!.flush();
       debugPrint('[ConnectionService] 📤 Sent message: ${message.type}');
+
+      // Add outgoing message to history (not via listener to avoid duplicate notification)
+      const historyTypes = {'text', 'file_complete', 'file_offer', 'goodbye'};
+      if (historyTypes.contains(message.type)) {
+        _messageHistory.add(message);
+      }
+
+      // Reset error count on successful send
+      if (_consecutiveErrors > 0) {
+        debugPrint('[ConnectionService] ✅ Message sent successfully, resetting error count');
+        _consecutiveErrors = 0;
+        _errorResetTimer?.cancel();
+      }
+
       return true;
     } catch (e) {
       debugPrint('[ConnectionService] ❌ Failed to send message: $e');
@@ -272,6 +295,13 @@ class ConnectionService {
 
   /// Handle incoming data from socket
   void _handleIncomingData(List<int> data) async {
+    // Reset error count on successful data reception
+    if (_consecutiveErrors > 0) {
+      debugPrint('[ConnectionService] ✅ Connection recovered, resetting error count');
+      _consecutiveErrors = 0;
+      _errorResetTimer?.cancel();
+    }
+
     try {
       final text = utf8.decode(data);
       _messageBuffer.write(text);
@@ -397,6 +427,18 @@ class ConnectionService {
         final offer = FileOffer.fromJson((message.metadata?['payload'] as Map?)?.cast<String, dynamic>() ?? {});
               // Defer accepting until UI approves; store pending
               _pendingOffers[offer.transferId] = offer;
+              
+              // Show notification for incoming file offer
+              // Use this.deviceName for both display and connection lookup
+              // since it's the consistent identifier for this peer
+              NotificationService().showFileTransferNotification(
+                senderDisplayName: this.deviceName, // Use peer's device name
+                fileName: offer.fileName,
+                fileSize: offer.fileSize,
+                transferId: offer.transferId,
+                deviceName: this.deviceName, // Connection lookup name
+              );
+              
               _notifyMessageListeners(DeviceMessage(
                 type: 'file_offer',
                 content: offer.fileName,
@@ -830,11 +872,29 @@ class ConnectionService {
 
   /// Handle connection error
   void _handleConnectionError(String error) {
-    if (_currentConnection != null) {
-      _updateStatus(_currentConnection!.copyWith(
-        status: ConnectionStatus.failed,
-        error: error,
-      ));
+    _consecutiveErrors++;
+    debugPrint('[ConnectionService] ⚠️ Socket error #$_consecutiveErrors: $error');
+
+    // Reset error count after 10 seconds of no errors
+    _errorResetTimer?.cancel();
+    _errorResetTimer = Timer(const Duration(seconds: 10), () {
+      if (_consecutiveErrors > 0) {
+        debugPrint('[ConnectionService] 🔄 Resetting error count after timeout');
+        _consecutiveErrors = 0;
+      }
+    });
+
+    // Only mark as disconnected after multiple consecutive errors (not failed)
+    // This prevents removal from activeConnections, allowing UI to show disconnected state
+    if (_consecutiveErrors >= _maxConsecutiveErrors) {
+      debugPrint('[ConnectionService] ❌ Too many consecutive errors, marking connection as disconnected (not failed)');
+      if (_currentConnection != null) {
+        _updateStatus(_currentConnection!.copyWith(
+          status: ConnectionStatus.disconnected,
+          error: 'Connection lost: $error',
+        ));
+      }
+      _consecutiveErrors = 0; // Reset for potential reconnection
     }
   }
 
@@ -846,6 +906,27 @@ class ConnectionService {
 
   /// Notify message listeners
   void _notifyMessageListeners(DeviceMessage message) {
+    // Persist only user-relevant messages to history to avoid duplicate technical entries.
+    const historyTypes = {
+      'text',
+      'file_complete',
+      // 'file_offer' removed - offers are prompts, not chat messages
+      'goodbye',
+      // add future types here (e.g. 'reaction')
+    };
+    if (historyTypes.contains(message.type)) {
+      // Avoid consecutive duplicates for file_complete with same name
+      if (message.type == 'file_complete' && _messageHistory.isNotEmpty) {
+        final last = _messageHistory.last;
+        if (last.type == 'file_complete' && last.content == message.content) {
+          // Skip storing duplicate completion event
+        } else {
+          _messageHistory.add(message);
+        }
+      } else {
+        _messageHistory.add(message);
+      }
+    }
     for (final listener in _messageListeners) {
       try {
         listener(message);
@@ -854,6 +935,9 @@ class ConnectionService {
       }
     }
   }
+
+  /// Expose immutable view of message history
+  List<DeviceMessage> get messageHistory => List.unmodifiable(_messageHistory);
 
   /// Notify status listeners
   void _notifyStatusListeners(ConnectionInfo info) {
@@ -935,6 +1019,7 @@ class ConnectionService {
   /// Dispose the service
   Future<void> dispose() async {
     await disconnect();
+    _errorResetTimer?.cancel();
     _messageListeners.clear();
     _statusListeners.clear();
   }

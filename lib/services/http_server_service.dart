@@ -33,8 +33,9 @@ class HttpServerService {
       return;
     }
 
-    int currentPort = port;
-    const int maxPortAttempts = 10;
+    // If we have a previously used server, try a different port range to avoid conflicts
+    int currentPort = (_server != null) ? port + 100 : port; // Offset by 100 if restarting
+    const int maxPortAttempts = 20; // Increased attempts
 
     for (int attempt = 0; attempt < maxPortAttempts; attempt++) {
       try {
@@ -168,6 +169,7 @@ class HttpServerService {
   Future<void> dispose() async {
     debugPrint('[HttpServer] Stopping server...');
     await _server?.close(force: true);
+    _server = null;
     _isRunning = false;
   }
 }

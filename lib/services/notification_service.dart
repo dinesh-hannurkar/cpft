@@ -28,11 +28,37 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
+  
+  /// Callback for notification tap (to navigate to chat)
+  Function(String deviceName, String transferId)? onNotificationTap;
 
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('[NotificationService] Notification tapped: ${response.payload}');
-    // Handle notification tap actions here if needed
+    debugPrint('[NotificationService] ========================================');
+    debugPrint('[NotificationService] Notification tapped!');
+    debugPrint('[NotificationService] Payload: ${response.payload}');
+    debugPrint('[NotificationService] Action ID: ${response.actionId}');
+    debugPrint('[NotificationService] Notification ID: ${response.id}');
+    debugPrint('[NotificationService] onNotificationTap callback set: ${onNotificationTap != null}');
+    debugPrint('[NotificationService] ========================================');
+    
+    // Handle file transfer notification tap - navigate to chat
+    if (response.payload != null && response.payload!.startsWith('file_offer:')) {
+      final parts = response.payload!.split(':');
+      debugPrint('[NotificationService] Payload parts: $parts');
+      if (parts.length >= 3) {
+        final transferId = parts[1];
+        final deviceName = parts[2];
+        debugPrint('[NotificationService] Opening chat with $deviceName for file transfer $transferId');
+        debugPrint('[NotificationService] Calling onNotificationTap callback...');
+        onNotificationTap?.call(deviceName, transferId);
+        debugPrint('[NotificationService] Callback invoked');
+      } else {
+        debugPrint('[NotificationService] ERROR: Invalid payload format, expected 3+ parts but got ${parts.length}');
+      }
+    } else {
+      debugPrint('[NotificationService] Not a file_offer notification, ignoring');
+    }
   }
 
   /// Create notification channels for Android
@@ -165,6 +191,77 @@ class NotificationService {
     );
 
     debugPrint('[NotificationService] 📱 Notification shown: $title - $body');
+  }
+
+  /// Show file transfer notification (tap to open chat)
+  Future<void> showFileTransferNotification({
+    required String senderDisplayName,
+    required String fileName,
+    required int fileSize,
+    required String transferId,
+    required String deviceName, // Connection lookup name
+  }) async {
+    if (!_isInitialized) {
+      debugPrint('[NotificationService] ⚠️  Not initialized, call initialize() first');
+      return;
+    }
+
+    final int id = transferId.hashCode; // Use transferId hash for consistent ID
+    final String payload = 'file_offer:$transferId:$deviceName';
+    
+    // Format file size
+    String sizeStr;
+    if (fileSize < 1024) {
+      sizeStr = '$fileSize B';
+    } else if (fileSize < 1024 * 1024) {
+      sizeStr = '${(fileSize / 1024).toStringAsFixed(1)} KB';
+    } else if (fileSize < 1024 * 1024 * 1024) {
+      sizeStr = '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
+    } else {
+      sizeStr = '${(fileSize / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    }
+    
+    final title = 'Incoming File from $senderDisplayName';
+    final body = '$fileName ($sizeStr) - Tap to accept or decline';
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'transfers',
+      'File Transfers',
+      channelDescription: 'File transfer status notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const DarwinNotificationDetails macOSDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: macOSDetails,
+    );
+
+    await _flutterLocalNotificationsPlugin.show(
+      id,
+      title,
+      body,
+      details,
+      payload: payload,
+    );
+
+    debugPrint('[NotificationService] 📱 File transfer notification shown: $title');
   }
 
   /// Get channel ID for notification type

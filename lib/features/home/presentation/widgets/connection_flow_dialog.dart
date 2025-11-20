@@ -38,6 +38,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
   @override
   void initState() {
     super.initState();
+    debugPrint('[ConnectionFlowDialog] Creating connection to ${widget.peerDeviceName}');
     _service.addStatusListener(_onStatus);
     _connect();
   }
@@ -64,6 +65,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
 
   void _onStatus(ConnectionInfo info) {
     if (!mounted) return;
+    debugPrint('[ConnectionFlowDialog] Status update for ${widget.peerDeviceName}: ${info.status}');
     setState(() {
       _status = info.status;
       _error = info.error;
@@ -71,6 +73,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     // When connected, close this dialog and let caller proceed
     if (info.status == ConnectionStatus.connected && !_completed) {
       _completed = true;
+      debugPrint('[ConnectionFlowDialog] Connection established to ${widget.peerDeviceName}, closing dialog');
       // Pop with a result the caller can use to navigate
       Navigator.of(context).pop('connected');
     } else if ((info.status == ConnectionStatus.failed || info.status == ConnectionStatus.disconnected) && !_completed) {

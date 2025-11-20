@@ -6,8 +6,16 @@ import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
 import 'services/notification_service.dart';
 import 'features/home/presentation/home_screen.dart';
+import 'features/chat/presentation/connection_screen.dart';
 import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
+
+// Global navigator key for navigation from anywhere (e.g., notifications)
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// Global reference to discovery service for notification handling
+DiscoveryService? globalDiscoveryService;
+String? globalDeviceName;
 
 void main() {
   runApp(const MainApp());
@@ -21,6 +29,7 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       title: 'CPFT',
       theme: AppTheme.lightTheme,
+      navigatorKey: navigatorKey,
       initialRoute: '/',
       routes: {
         '/': (context) => const PermissionWrapper(),
@@ -40,11 +49,18 @@ class HomeWrapper extends StatefulWidget {
 
 class _HomeWrapperState extends State<HomeWrapper> {
   String? _deviceName;
+  DiscoveryService? _discoveryService;
 
   @override
   void initState() {
     super.initState();
     _loadDeviceName();
+  }
+
+  @override
+  void dispose() {
+    _discoveryService?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDeviceName() async {
@@ -54,6 +70,8 @@ class _HomeWrapperState extends State<HomeWrapper> {
       setState(() {
         _deviceName = name;
       });
+      // Create discovery service once we have the device name
+      _initializeDiscoveryService(name);
     } else {
       // This should not happen since PermissionWrapper already checked
       // But as a safety net, redirect to setup
@@ -63,9 +81,75 @@ class _HomeWrapperState extends State<HomeWrapper> {
     }
   }
 
+  void _initializeDiscoveryService(String deviceName) {
+    _discoveryService = DiscoveryService(
+      alias: deviceName,
+      deviceModel: Platform.operatingSystem,
+      port: 53317,
+    );
+    // Store globally for notification handler
+    globalDiscoveryService = _discoveryService;
+    globalDeviceName = deviceName;
+    // Set up notification tap handler
+    _setupNotificationHandler();
+  }
+  
+  void _setupNotificationHandler() {
+    debugPrint('[HomeWrapper] Setting up notification handler');
+    NotificationService().onNotificationTap = (String deviceName, String transferId) async {
+      debugPrint('[HomeWrapper] ========================================');
+      debugPrint('[HomeWrapper] Notification callback triggered!');
+      debugPrint('[HomeWrapper] Device: $deviceName, Transfer: $transferId');
+      debugPrint('[HomeWrapper] globalDiscoveryService is null: ${globalDiscoveryService == null}');
+      debugPrint('[HomeWrapper] globalDeviceName: $globalDeviceName');
+      
+      final cm = globalDiscoveryService?.connectionManager;
+      debugPrint('[HomeWrapper] ConnectionManager is null: ${cm == null}');
+      
+      if (cm == null) {
+        debugPrint('[HomeWrapper] ERROR: ConnectionManager not available');
+        return;
+      }
+      
+      final connection = cm.getConnection(deviceName);
+      debugPrint('[HomeWrapper] Connection found: ${connection != null}');
+      
+      if (connection == null) {
+        debugPrint('[HomeWrapper] ERROR: No connection found for $deviceName');
+        debugPrint('[HomeWrapper] Available connections: ${cm.activeConnections.keys.toList()}');
+        return;
+      }
+      
+      // Navigate using global navigator key
+      final context = navigatorKey.currentContext;
+      debugPrint('[HomeWrapper] Navigator context available: ${context != null}');
+      
+      if (context != null) {
+        debugPrint('[HomeWrapper] Navigating to ConnectionScreen...');
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ConnectionScreen(
+              deviceName: deviceName,
+              ipAddress: connection.currentConnection?.ipAddress ?? '',
+              port: DiscoveryService.p2pPort,
+              myDeviceName: globalDeviceName ?? '',
+              connectionManager: cm,
+              initialDeviceId: deviceName,
+            ),
+          ),
+        );
+        debugPrint('[HomeWrapper] Navigation pushed successfully');
+      } else {
+        debugPrint('[HomeWrapper] ERROR: No navigator context available');
+      }
+      debugPrint('[HomeWrapper] ========================================');
+    };
+    debugPrint('[HomeWrapper] Notification handler setup complete');
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_deviceName == null) {
+    if (_deviceName == null || _discoveryService == null) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -73,13 +157,8 @@ class _HomeWrapperState extends State<HomeWrapper> {
       );
     }
 
-    final discovery = DiscoveryService(
-      alias: _deviceName!,
-      deviceModel: Platform.operatingSystem,
-      port: 53317,
-    );
     return HomeScreen(
-      discoveryService: discovery,
+      discoveryService: _discoveryService!,
       myDeviceName: _deviceName!,
     );
   }
@@ -221,6 +300,11 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
         deviceModel: Platform.operatingSystem,
         port: 53317,
       );
+      // Store globally for notification handler
+      globalDiscoveryService = discovery;
+      globalDeviceName = _deviceName;
+      // Set up notification handler
+      _setupNotificationHandler();
       return HomeScreen(
         discoveryService: discovery,
         myDeviceName: _deviceName!,
@@ -233,5 +317,57 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
         child: CircularProgressIndicator(),
       ),
     );
+  }
+  
+  void _setupNotificationHandler() {
+    debugPrint('[PermissionWrapper] Setting up notification handler');
+    NotificationService().onNotificationTap = (String deviceName, String transferId) async {
+      debugPrint('[PermissionWrapper] ========================================');
+      debugPrint('[PermissionWrapper] Notification callback triggered!');
+      debugPrint('[PermissionWrapper] Device: $deviceName, Transfer: $transferId');
+      debugPrint('[PermissionWrapper] globalDiscoveryService is null: ${globalDiscoveryService == null}');
+      
+      final cm = globalDiscoveryService?.connectionManager;
+      debugPrint('[PermissionWrapper] ConnectionManager is null: ${cm == null}');
+      
+      if (cm == null) {
+        debugPrint('[PermissionWrapper] ERROR: ConnectionManager not available');
+        return;
+      }
+      
+      final connection = cm.getConnection(deviceName);
+      debugPrint('[PermissionWrapper] Connection found: ${connection != null}');
+      
+      if (connection == null) {
+        debugPrint('[PermissionWrapper] ERROR: No connection found for $deviceName');
+        debugPrint('[PermissionWrapper] Available connections: ${cm.activeConnections.keys.toList()}');
+        return;
+      }
+      
+      // Navigate using global navigator key
+      final context = navigatorKey.currentContext;
+      debugPrint('[PermissionWrapper] Navigator context available: ${context != null}');
+      
+      if (context != null) {
+        debugPrint('[PermissionWrapper] Navigating to ConnectionScreen...');
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ConnectionScreen(
+              deviceName: deviceName,
+              ipAddress: connection.currentConnection?.ipAddress ?? '',
+              port: DiscoveryService.p2pPort,
+              myDeviceName: globalDeviceName ?? '',
+              connectionManager: cm,
+              initialDeviceId: deviceName,
+            ),
+          ),
+        );
+        debugPrint('[PermissionWrapper] Navigation pushed successfully');
+      } else {
+        debugPrint('[PermissionWrapper] ERROR: No navigator context available');
+      }
+      debugPrint('[PermissionWrapper] ========================================');
+    };
+    debugPrint('[PermissionWrapper] Notification handler setup complete');
   }
 }

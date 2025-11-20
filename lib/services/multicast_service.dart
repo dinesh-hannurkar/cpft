@@ -201,7 +201,7 @@ class MulticastService {
         
         try {
           debugPrint('[MulticastService] Creating socket for interface: ${interface.name}');
-          final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
+          final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port, reuseAddress: true);
           
           // Try to join multicast group
           try {
@@ -236,7 +236,7 @@ class MulticastService {
           try {
             final interface = interfaces.first;
             debugPrint('[MulticastService] Creating fallback socket for interface: ${interface.name}');
-            final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
+            final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port, reuseAddress: true);
             socket.joinMulticast(InternetAddress(multicastGroup), interface);
             _sockets.add(_SocketResult(interface, socket));
             debugPrint('[MulticastService] ✅ Fallback socket created for ${interface.name}');
@@ -245,7 +245,7 @@ class MulticastService {
             // LAST RESORT: Try binding without specifying interface
             debugPrint('[MulticastService] Attempting last resort: binding to any IPv4 address...');
             try {
-              final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
+              final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port, reuseAddress: true);
               socket.joinMulticast(InternetAddress(multicastGroup));
               _sockets.add(_SocketResult(null, socket));  // null interface means any
               debugPrint('[MulticastService] ✅ Last resort socket created (bound to any interface)');
@@ -258,7 +258,7 @@ class MulticastService {
           // No interfaces found at all - try binding to any IPv4
           debugPrint('[MulticastService] No interfaces found. Attempting direct IPv4 binding...');
           try {
-            final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port);
+            final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, port, reuseAddress: true);
             socket.joinMulticast(InternetAddress(multicastGroup));
             _sockets.add(_SocketResult(null, socket));  // null interface means any
             debugPrint('[MulticastService] ✅ Socket created with direct IPv4 binding');

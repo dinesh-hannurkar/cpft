@@ -12,17 +12,15 @@ import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import '../../features/chat/services/connection_manager.dart';
 import 'background_service.dart';
-import 'notification_service.dart';
 
 /// Unified discovery service combining UDP multicast and HTTP
 /// This matches LocalSend's architecture
 class DiscoveryService {
-  late final MulticastService _multicastService;
-  late final HttpServerService _httpServer;
-  late final HttpDiscoveryClient _httpClient;
-  late final IncomingConnectionService _incomingConnectionService;
-  late final ConnectionManager _connectionManager;
-  bool _httpClientInitialized = false; // guard against LateInitializationError on restart
+  MulticastService? _multicastService;
+  HttpServerService? _httpServer;
+  HttpDiscoveryClient? _httpClient;
+  IncomingConnectionService? _incomingConnectionService;
+  ConnectionManager? _connectionManager;
   BonjourService? _bonjourService;  // For iOS real devices
   WebServer? _webServer;  // For browser-based file transfers
 
@@ -88,10 +86,19 @@ class DiscoveryService {
   }
 
   /// Check if VPN is detected (iOS specific issue)
-  bool get isVpnDetected => _multicastService.isVpnDetected;
+  bool get isVpnDetected => _multicastService!.isVpnDetected;
 
   /// Get the connection manager for managing P2P connections
-  ConnectionManager? get connectionManager => _isInitialized ? _connectionManager : null;
+  /// Returns the manager even if discovery isn't fully initialized, as connections can work independently
+  ConnectionManager? get connectionManager {
+    // Ensure ConnectionManager exists even if discovery had issues
+    if (_connectionManager == null && alias.isNotEmpty) {
+      print('[DiscoveryService] Creating ConnectionManager on demand');
+      _connectionManager = ConnectionManager();
+      _connectionManager!.initialize(alias);
+    }
+    return _connectionManager;
+  }
 
   /// Initialize and start all services
   Future<void> initialize() async {
@@ -118,14 +125,13 @@ class DiscoveryService {
       }
 
       // Initialize HTTP client
-      if (!_httpClientInitialized) {
+      if (_httpClient == null) {
         _httpClient = HttpDiscoveryClient(
           fingerprint: fingerprint,
           alias: alias,
           port: port,
           deviceModel: deviceModel,
         );
-        _httpClientInitialized = true;
       } else {
         print('[DiscoveryService] Reusing existing HttpDiscoveryClient instance');
       }
@@ -138,30 +144,37 @@ class DiscoveryService {
         deviceModel: deviceModel,
         onDeviceRegistered: _onDeviceDiscovered,
       );
-      await _httpServer.start();
+      await _httpServer!.start();
 
       // Initialize ConnectionManager for handling P2P connections
       print('[DiscoveryService] Initializing ConnectionManager');
-      _connectionManager = ConnectionManager();
-      _connectionManager.initialize(alias);
+      if (_connectionManager == null) {
+        _connectionManager = ConnectionManager();
+        _connectionManager!.initialize(alias);
+      } else {
+        print('[DiscoveryService] Reusing existing ConnectionManager (preserving active connections)');
+        // Ensure it has the correct alias in case of restart
+        _connectionManager!.initialize(alias);
+      }
 
       // Initialize and start P2P incoming connection listener
       print('[DiscoveryService] Starting P2P connection listener on port $p2pPort');
-      _incomingConnectionService = IncomingConnectionService(
+      _incomingConnectionService ??= IncomingConnectionService(
         port: p2pPort,
         deviceName: alias,
       );
-      _incomingConnectionService.addConnectionListener(_onIncomingConnection);
-      await _incomingConnectionService.startListening();
+      _incomingConnectionService!.addConnectionListener(_onIncomingConnection);
+      await _incomingConnectionService!.startListening();
 
       // Initialize and start multicast listener
-      _multicastService = MulticastService(
+      _multicastService ??= MulticastService(
         alias: alias,
         fingerprint: fingerprint,
         port: port,
         deviceModel: deviceModel,
       );
-      await _multicastService.startListening();
+      _multicastService!.addDiscoveryListener(_onMulticastDiscovery);
+      await _multicastService!.startListening();
 
       // iOS real devices: Use Bonjour/mDNS instead of multicast
       if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -184,6 +197,24 @@ class DiscoveryService {
         } catch (e) {
           print('[DiscoveryService] ⚠️  Bonjour failed to start: $e');
           print('[DiscoveryService] This usually means Local Network permission is denied');
+        }
+      }
+      
+      // macOS: Also use Bonjour for local network discovery
+      if (Platform.isMacOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        print('[DiscoveryService] macOS detected - starting Bonjour service');
+        
+        try {
+          _bonjourService = BonjourService(
+            alias: alias,
+            fingerprint: fingerprint,
+            port: port,
+            deviceModel: deviceModel,
+          );
+          _bonjourService!.addDiscoveryListener(_onBonjourDiscovery);
+          await _bonjourService!.start();
+        } catch (e) {
+          print('[DiscoveryService] ⚠️  Bonjour failed to start on macOS: $e');
         }
       }
 
@@ -255,7 +286,7 @@ class DiscoveryService {
     // Build accept/decline closures
     Future<void> accept() async {
       print('[DiscoveryService] ✅ Accepting incoming connection from $displayName');
-      await _connectionManager.handleIncomingConnection(socket, displayName);
+      await _connectionManager!.handleIncomingConnection(socket, displayName);
     }
 
     Future<void> decline() async {
@@ -279,9 +310,9 @@ class DiscoveryService {
 
       // Safety: ensure our incoming listener remains active after a decline
       try {
-        if (!_incomingConnectionService.isListening) {
+        if (!_incomingConnectionService!.isListening) {
           print('[DiscoveryService] 🔁 Incoming service not listening after decline. Restarting listener...');
-          await _incomingConnectionService.startListening();
+          await _incomingConnectionService!.startListening();
         }
       } catch (e) {
         print('[DiscoveryService] ⚠️ Failed to ensure incoming listening after decline: $e');
@@ -329,7 +360,7 @@ class DiscoveryService {
     
     // Try to register with the device via HTTP
     print('[DiscoveryService] Attempting HTTP registration with $deviceName...');
-    _httpClient.registerWithDevice(ipAddress, port).then((success) {
+    _httpClient!.registerWithDevice(ipAddress, port).then((success) {
       print('[DiscoveryService] 📡 HTTP registration ${success ? "SUCCESS" : "FAILED"} for $deviceName');
       if (success) {
         print('[DiscoveryService] ✅ Calling _onDeviceDiscovered for $deviceName');
@@ -347,7 +378,7 @@ class DiscoveryService {
     print('[DiscoveryService] 🎯 Bonjour discovery: $deviceName at $ipAddress:$port');
     
     // Try to register with the device via HTTP
-    _httpClient.registerWithDevice(ipAddress, port).then((success) {
+    _httpClient!.registerWithDevice(ipAddress, port).then((success) {
       print('[DiscoveryService] HTTP registration result (Bonjour): $success for $deviceName');
       if (success) {
         _onDeviceDiscovered(deviceName, ipAddress, port);
@@ -403,10 +434,10 @@ class DiscoveryService {
     }
 
     print('[DiscoveryService] Sending announcement...');
-    await _multicastService.sendAnnouncement();
+    await _multicastService!.sendAnnouncement();
     
-    // On iOS, also trigger Bonjour refresh
-    if (Platform.isIOS && _bonjourService != null) {
+    // On iOS/macOS, also trigger Bonjour refresh
+    if ((Platform.isIOS || Platform.isMacOS) && _bonjourService != null) {
       print('[DiscoveryService] Triggering Bonjour refresh...');
       _bonjourService!.refreshDiscovery();
     }
@@ -425,14 +456,32 @@ class DiscoveryService {
     print('[DiscoveryService] Disposing...');
     _cleanupTimer?.cancel();
     _networkScanTimer?.cancel();
-    _multicastService.dispose();
+    _healthCheckTimer?.cancel();
+    _multicastService?.dispose();
     _bonjourService?.dispose();
-    await _httpServer.dispose();
-    await _incomingConnectionService.dispose();
+    if (_httpServer != null) {
+      await _httpServer!.dispose();
+      _httpServer = null;
+    }
+    _incomingConnectionService?.dispose();
+    // Don't dispose ConnectionManager - it manages active connections that should persist
+    // Only clear it on full app shutdown, not on discovery restart
+    // _connectionManager?.dispose();
     _discoveryListeners.clear();
-  _queuedIncoming.clear();
+    _queuedIncoming.clear();
     _discoveredDevices.clear();
     _isInitialized = false;
+    
+    // Reset readyCompleter for restart capability
+    _readyCompleter = null;
+    
+    // Set fields to null for restart capability (except ConnectionManager)
+    _multicastService = null;
+    _httpClient = null;
+    _incomingConnectionService = null;
+    // Don't null ConnectionManager to preserve active connections
+    // _connectionManager = null;
+    _bonjourService = null;
     
     // Stop foreground service on Android
     if (Platform.isAndroid) {
@@ -460,119 +509,30 @@ class DiscoveryService {
     print('[DiscoveryService] 🔄 Restarting discovery services...');
 
     try {
-      // If not initialized, initialize first
-      if (!_isInitialized) {
-        print('[DiscoveryService] Not initialized yet, initializing first...');
-        await initialize();
-        return;
-      }
+      // Always dispose first to ensure clean state, regardless of current initialization status
+      print('[DiscoveryService] Disposing current services for clean restart...');
+      await dispose();
 
-      // For already initialized services, do a complete restart
-      print('[DiscoveryService] Already initialized, doing complete restart...');
+      // Wait for sockets to be fully released by the OS
+      print('[DiscoveryService] Waiting for socket cleanup...');
+      await Future.delayed(const Duration(seconds: 5));
 
-      // Proactively close any active P2P connections to avoid stale handshake state
-      try {
-        print('[DiscoveryService] Closing all active P2P connections before restart');
-        await _connectionManager.closeAll();
-      } catch (e) {
-        print('[DiscoveryService] ⚠️  Error closing active connections: $e');
-      }
-
-      // Clear discovered devices
-      _discoveredDevices.clear();
-
-      // Stop all services first for a clean restart
-      print('[DiscoveryService] Stopping HTTP server...');
-      try {
-        await _httpServer.dispose();
-      } catch (e) {
-        print('[DiscoveryService] Error stopping HTTP server: $e');
-      }
-
-      print('[DiscoveryService] Stopping incoming connection service...');
-      try {
-        await _incomingConnectionService.stopListening();
-      } catch (e) {
-        print('[DiscoveryService] Error stopping incoming connection service: $e');
-      }
-
-      print('[DiscoveryService] Stopping multicast service...');
-      try {
-        _multicastService.dispose();
-      } catch (e) {
-        print('[DiscoveryService] Error stopping multicast service: $e');
-      }
-
-      // Stop Bonjour on iOS
-      if (Platform.isIOS && _bonjourService != null) {
-        print('[DiscoveryService] Stopping Bonjour service...');
-        try {
-          _bonjourService!.dispose();
-          _bonjourService = null;
-        } catch (e) {
-          print('[DiscoveryService] Error stopping Bonjour service: $e');
-        }
-      }
-
-      // Restart services after stopping
-      print('[DiscoveryService] Restarting HTTP server...');
-      try {
-        await _httpServer.start();
-      } catch (e) {
-        print('[DiscoveryService] Error restarting HTTP server: $e');
-      }
-
-      print('[DiscoveryService] Restarting incoming connection service...');
-      try {
-        await _incomingConnectionService.startListening();
-      } catch (e) {
-        print('[DiscoveryService] Error restarting incoming connection service: $e');
-      }
-
-      print('[DiscoveryService] Restarting multicast service...');
-      try {
-        await _multicastService.startListening();
-        _multicastService.addDiscoveryListener(_onMulticastDiscovery);
-      } catch (e) {
-        print('[DiscoveryService] Error restarting multicast service: $e');
-      }
-
-      // Restart Bonjour on iOS
-      if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
-        print('[DiscoveryService] Restarting Bonjour service...');
-        try {
-          _bonjourService = BonjourService(
-            alias: alias,
-            port: port,
-            fingerprint: fingerprint,
-            deviceModel: deviceModel,
-          );
-          await _bonjourService!.start();
-          _bonjourService!.addDiscoveryListener(_onBonjourDiscovery);
-        } catch (e) {
-          print('[DiscoveryService] Error restarting Bonjour service: $e');
-        }
-      }
+      // Now initialize fresh
+      print('[DiscoveryService] Reinitializing services...');
+      await initialize();
 
       print('[DiscoveryService] ✅ Discovery services restarted successfully');
-
-      // Notify listeners that devices were cleared (restart)
-      for (var listener in _discoveryListeners) {
-        try {
-          listener('', '', 0);
-        } catch (e) {
-          print('[DiscoveryService] ❌ Error notifying restart listener: $e');
-        }
-      }
-
-      // Show notification for service restart
-      NotificationService().showNotification(
-        type: NotificationType.serviceRestarted,
-        title: 'Services Restarted',
-        body: 'Network discovery services have been restarted',
-      );
     } catch (e) {
       print('[DiscoveryService] ❌ Error during restart: $e');
+      // Try to recover by just initializing if dispose worked but initialize failed
+      if (!_isInitialized) {
+        try {
+          print('[DiscoveryService] Attempting recovery initialization...');
+          await initialize();
+        } catch (recoveryError) {
+          print('[DiscoveryService] ❌ Recovery initialization also failed: $recoveryError');
+        }
+      }
       rethrow;
     }
   }
@@ -596,9 +556,9 @@ class DiscoveryService {
 
     try {
       // Check if HTTP server is running
-      final serverHealthy = _httpServer.isRunning;
+      final serverHealthy = _httpServer?.isRunning ?? false;
       // Check if incoming P2P listener is running
-      final incomingHealthy = _incomingConnectionService.isListening;
+      final incomingHealthy = _incomingConnectionService!.isListening;
       
       // Check if multicast service is listening
       // (We can't easily check this, so we'll assume it's working if no errors)
@@ -622,7 +582,7 @@ class DiscoveryService {
       if (!incomingHealthy) {
         print('[DiscoveryService] 🔁 Incoming listener not active - restarting listener');
         try {
-          await _incomingConnectionService.startListening();
+          await _incomingConnectionService!.startListening();
           print('[DiscoveryService] ✅ Incoming listener restarted successfully');
         } catch (e) {
           print('[DiscoveryService] ❌ Failed to restart incoming listener: $e');
@@ -694,7 +654,7 @@ class DiscoveryService {
   /// Check if a device is running at the given IP and port
   Future<void> _checkDeviceAt(String ip, int port) async {
     try {
-      final info = await _httpClient.getDeviceInfo(ip, port);
+      final info = await _httpClient!.getDeviceInfo(ip, port);
       if (info != null && info.fingerprint != fingerprint) {
         print('[DiscoveryService] 📡 Network scan found device: ${info.alias} at $ip:$port');
         _onDeviceDiscovered(info.alias, ip, port);
