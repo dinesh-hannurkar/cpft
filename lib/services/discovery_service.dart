@@ -94,15 +94,8 @@ class DiscoveryService {
   ConnectionManager? get connectionManager {
     // Ensure ConnectionManager exists even if discovery had issues
     if (_sharedConnectionManager == null && alias.isNotEmpty) {
-      print('\n╔═══════════════════════════════════════════════════════════════');
-      print('║ ⚠️  CREATING NEW ConnectionManager (static singleton)');
-      print('║ This should ONLY happen ONCE across app lifetime!');
-      print('╚═══════════════════════════════════════════════════════════════\n');
       _sharedConnectionManager = ConnectionManager();
       _sharedConnectionManager!.initialize(alias);
-    }
-    if (_sharedConnectionManager != null) {
-      print('🔍 [DiscoveryService.connectionManager] HashCode: ${_sharedConnectionManager.hashCode} | Connections: ${_sharedConnectionManager!.activeConnections.length}');
     }
     return _sharedConnectionManager;
   }

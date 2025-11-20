@@ -736,15 +736,6 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((service) => service.isConnected)
         .length ?? 0;
     
-    print('\n════════════════════════════════════════════════════════════');
-    print('🏠 [HOME BADGE] Manager HashCode: ${cm.hashCode}');
-    print('🏠 [HOME BADGE] Connected Count: $connectedCount');
-    print('🏠 [HOME BADGE] Total Entries: ${cm?.activeConnections.length ?? 0}');
-    if (cm != null && cm.activeConnections.isNotEmpty) {
-      print('🏠 [HOME BADGE] Keys: ${cm.activeConnections.keys.join(", ")}');
-    }
-    print('════════════════════════════════════════════════════════════\n');
-    
     return Badge(
       label: Text(connectedCount.toString()),
       child: IconButton(

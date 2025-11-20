@@ -394,9 +394,6 @@ class _ConnectionScreenState extends State<ConnectionScreen>
       targetDeviceName,
     );
 
-    debugPrint('[ConnectionScreen] ✅ Got ConnectionService for $targetDeviceName');
-    debugPrint('[ConnectionScreen] 🔌 isConnected: ${_connectionService.isConnected}, status: ${_connectionService.currentConnection?.status}');
-
     // Preload existing history filtering out any unexpected types (defensive)
     _messages.addAll(
       _connectionService.messageHistory.where((m) => const {
