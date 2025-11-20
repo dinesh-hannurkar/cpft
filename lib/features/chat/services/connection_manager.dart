@@ -5,6 +5,7 @@ import 'dart:io';
 import 'connection_service.dart';
 import 'package:cpft/services/background_service.dart';
 import 'package:cpft/services/notification_service.dart';
+import 'package:cpft/utils/connection_logger.dart';
 import '../models/connection_state.dart';
 
 /// Manages all active P2P connections (both incoming and outgoing)
@@ -33,6 +34,7 @@ class ConnectionManager {
   final service = ConnectionService(deviceName: deviceName);
     _activeConnections[deviceName] = service;
     debugPrint('[ConnectionManager] 📊 Active connections count: ${_activeConnections.length}, devices: ${_activeConnections.keys.join(", ")}');
+    ConnectionLogger.instance.log('Created connection to $deviceName. Total: ${_activeConnections.length}');
     
     // Notify listeners about the new connection being created
     _notifyConnectionListeners(deviceName, service, isIncoming: false);
@@ -41,6 +43,7 @@ class ConnectionManager {
     service.addStatusListener((info) {
       if (info.status == ConnectionStatus.connected) {
         debugPrint('[ConnectionManager] Connection to ${info.deviceName} is now connected');
+        ConnectionLogger.instance.log('✅ CONNECTED to ${info.deviceName}. Active: ${_activeConnections.keys.join(", ")}');
         _startForegroundServiceIfNeeded();
         NotificationService().showNotification(
           type: NotificationType.connectionEstablished,
@@ -48,10 +51,12 @@ class ConnectionManager {
           body: 'Successfully connected to ${info.deviceName}',
         );
       } else if (info.status == ConnectionStatus.failed) {
-        // Only remove failed connections immediately. Disconnected connections are retained
-        // so the UI (bottom sheet) can still show them and allow manual reconnection attempts.
-        debugPrint('[ConnectionManager] Connection to ${info.deviceName} failed – removing');
+        // ONLY remove failed connections. NEVER remove disconnected connections.
+        // Disconnected connections must be retained so the UI can show them and allow reconnection.
+        debugPrint('[ConnectionManager] ❌ Connection to ${info.deviceName} failed – REMOVING');
         _activeConnections.remove(deviceName);
+        debugPrint('[ConnectionManager] 📊 Active connections after removal: ${_activeConnections.length}, devices: ${_activeConnections.keys.join(", ")}');
+        ConnectionLogger.instance.log('❌ FAILED connection to ${info.deviceName} REMOVED. Remaining: ${_activeConnections.keys.join(", ")}');
         _stopForegroundServiceIfNeeded();
         NotificationService().showNotification(
           type: NotificationType.connectionLost,
@@ -59,8 +64,11 @@ class ConnectionManager {
           body: 'Connection to ${info.deviceName} failed',
         );
       } else if (info.status == ConnectionStatus.disconnected) {
-        // Keep the service so UI can show a "Disconnected" state.
-        debugPrint('[ConnectionManager] Connection to ${info.deviceName} disconnected (retaining for UI)');
+        // Remove disconnected connections so user can reconnect fresh from radar
+        debugPrint('[ConnectionManager] 🔌 Connection to ${info.deviceName} disconnected - REMOVING for fresh reconnect');
+        _activeConnections.remove(deviceName);
+        debugPrint('[ConnectionManager] 📊 Active connections after disconnect: ${_activeConnections.length}, devices: ${_activeConnections.keys.join(", ")}');
+        ConnectionLogger.instance.log('⚠️  DISCONNECTED from ${info.deviceName} - REMOVED. Remaining: ${_activeConnections.keys.join(", ")}');
         _stopForegroundServiceIfNeeded();
         NotificationService().showNotification(
           type: NotificationType.connectionLost,
@@ -82,45 +90,117 @@ class ConnectionManager {
 
   /// Dispose all active connections (called when tearing down discovery)
   Future<void> dispose() async {
+    debugPrint('[ConnectionManager] ⚠️ dispose() called – PRESERVING active connections (count: ${_activeConnections.length})');
+    // Instead of clearing, mark all as disconnected but retain for UI/history
     for (final entry in _activeConnections.entries) {
       try {
         await entry.value.disconnect();
-        await entry.value.dispose();
-      } catch (_) {}
+        // Do NOT call entry.value.dispose(); we keep listeners/state for potential reuse
+      } catch (e) {
+        debugPrint('[ConnectionManager] dispose() error disconnecting ${entry.key}: $e');
+      }
     }
-    _activeConnections.clear();
+    // Do not clear maps; only clear listeners to avoid memory leaks
     _connectionListeners.clear();
-    deviceName = null; // Clear for restart capability
+    // Keep deviceName so reinitialization can reuse it; if we must reset, set via initialize()
+    ConnectionLogger.instance.log('ConnectionManager.dispose invoked – connections retained (${_activeConnections.keys.join(", ")})');
   }
 
   /// Handle incoming connection (socket-only, legacy path)
   Future<void> handleIncomingConnection(Socket socket, String remoteName) async {
     try {
-      debugPrint('[ConnectionManager] 📞 Handling incoming connection from $remoteName');
+      final ip = socket.remoteAddress.address;
+      debugPrint('[ConnectionManager] 📞 Handling incoming connection from $remoteName (IP: $ip)');
       debugPrint('[ConnectionManager] 🔍 Socket details - Address: ${socket.remoteAddress.address}, Port: ${socket.remotePort}');
 
-      // Check if we already have a connection to this device
-      final existingService = _activeConnections[remoteName];
-      if (existingService != null) {
-        // Check if existing connection is active/connected
-        if (existingService.isConnected) {
-          debugPrint('[ConnectionManager] ⚠️  Already connected to $remoteName, rejecting duplicate incoming connection');
-          // Close the duplicate incoming socket
-          try {
-            socket.close();
-          } catch (_) {}
-          return;
+      // IMPORTANT: remoteName might be IP address or display name from discovery
+      // We need to check all existing connections to see if we're already connected to this IP
+      ConnectionService? existingServiceByIp;
+      String? existingKeyByIp;
+      
+      for (final entry in _activeConnections.entries) {
+        final connInfo = entry.value.currentConnection;
+        if (connInfo != null && connInfo.ipAddress == ip) {
+          existingServiceByIp = entry.value;
+          existingKeyByIp = entry.key;
+          debugPrint('[ConnectionManager] 🔍 Found existing connection to IP $ip under key: $existingKeyByIp');
+          break;
+        }
+      }
+
+      // Check if we already have a connection to this device (by name OR IP)
+      final foundService = _activeConnections[remoteName] ?? existingServiceByIp;
+      final foundKey = foundService != null ? (existingKeyByIp ?? remoteName) : null;
+      
+      if (foundService != null && foundKey != null) {
+        final status = foundService.currentConnection?.status;
+        
+        debugPrint('[ConnectionManager] ⚠️  Connection to $foundKey already exists (status: $status)');
+        
+        // If already connected or connecting, handle the duplicate
+        if (status == ConnectionStatus.connected || status == ConnectionStatus.connecting) {
+          
+          if (status == ConnectionStatus.connected) {
+            // Already fully connected - notify UI to navigate
+            debugPrint('[ConnectionManager] 🔔 Notifying listeners to navigate to existing chat with $foundKey');
+            _notifyConnectionListeners(foundKey, foundService, isIncoming: true);
+            // Close the duplicate incoming socket
+            try {
+              socket.close();
+            } catch (_) {}
+            return;
+          } else if (status == ConnectionStatus.connecting) {
+            // Connection in progress - use "alphabetical order" tie-breaker
+            // Lower device name accepts incoming, higher device name keeps outgoing
+            final shouldAcceptIncoming = foundKey.compareTo(deviceName ?? '') < 0;
+            
+            if (shouldAcceptIncoming) {
+              debugPrint('[ConnectionManager] 🔄 Tie-breaker: accepting incoming connection (remote: $foundKey < local: $deviceName)');
+              debugPrint('[ConnectionManager] 🔄 Reusing existing service and replacing socket with incoming connection');
+              
+              // Don't dispose the service! Just accept the incoming socket into the existing service
+              // This prevents creating a new service and avoids the connection loop
+              final success = await foundService.acceptConnection(socket, foundKey);
+              if (success) {
+                debugPrint('[ConnectionManager] ✅ Incoming connection accepted into existing service');
+                _notifyConnectionListeners(foundKey, foundService, isIncoming: true);
+              } else {
+                debugPrint('[ConnectionManager] ❌ Failed to accept incoming connection into existing service');
+              }
+              return;
+            } else {
+              debugPrint('[ConnectionManager] 🔄 Tie-breaker: keeping outgoing connection (local: $deviceName < remote: $foundKey)');
+              // Keep the outgoing connection, reject this incoming one
+              try {
+                socket.close();
+              } catch (_) {}
+              return;
+            }
+          }
         } else {
-          // Existing connection is not active, remove it
-          debugPrint('[ConnectionManager] 🗑️  Removing stale (not connected) existing connection to $remoteName');
-          _activeConnections.remove(remoteName);
-          try {
-            // Ensure we fully clean up the old service to release any socket/subscriptions
-            await existingService.disconnect();
-            await existingService.dispose();
-            debugPrint('[ConnectionManager] ✅ Stale connection to $remoteName fully disposed');
-          } catch (e) {
-            debugPrint('[ConnectionManager] ⚠️  Error disposing stale connection to $remoteName: $e');
+          // Existing connection is not active (disconnected or failed)
+          // Only remove and replace if it's failed. Keep disconnected for UI.
+          if (status == ConnectionStatus.failed) {
+            debugPrint('[ConnectionManager] 🗑️  Removing stale (failed) existing connection to $foundKey');
+            _activeConnections.remove(foundKey);
+            try {
+              await foundService.disconnect();
+              await foundService.dispose();
+              debugPrint('[ConnectionManager] ✅ Failed connection to $foundKey fully disposed');
+            } catch (e) {
+              debugPrint('[ConnectionManager] ⚠️  Error disposing failed connection to $foundKey: $e');
+            }
+            // Continue to create new connection
+            remoteName = foundKey;
+          } else {
+            // Connection is disconnected - keep it and navigate to existing chat
+            debugPrint('[ConnectionManager] ✅ Connection to $foundKey is disconnected (RETAINING and navigating)');
+            debugPrint('[ConnectionManager] 📊 Active connections: ${_activeConnections.length}, devices: ${_activeConnections.keys.join(", ")}');
+            _notifyConnectionListeners(foundKey, foundService, isIncoming: true);
+            try {
+              socket.close();
+            } catch (_) {}
+            return;
           }
         }
       }
@@ -144,8 +224,10 @@ class ConnectionManager {
             body: 'Successfully connected to ${info.deviceName}',
           );
         } else if (info.status == ConnectionStatus.failed) {
-          debugPrint('[ConnectionManager] Connection to ${info.deviceName} failed – removing');
+          // ONLY remove failed connections. NEVER remove disconnected connections.
+          debugPrint('[ConnectionManager] ❌ Connection to ${info.deviceName} failed – REMOVING');
           _activeConnections.remove(remoteName);
+          debugPrint('[ConnectionManager] 📊 Active connections after removal: ${_activeConnections.length}, devices: ${_activeConnections.keys.join(", ")}');
           _stopForegroundServiceIfNeeded();
           NotificationService().showNotification(
             type: NotificationType.connectionLost,
@@ -153,7 +235,10 @@ class ConnectionManager {
             body: 'Connection to ${info.deviceName} failed',
           );
         } else if (info.status == ConnectionStatus.disconnected) {
-          debugPrint('[ConnectionManager] Connection to ${info.deviceName} disconnected (retaining for UI)');
+          // Remove disconnected connections for fresh reconnect from radar
+          debugPrint('[ConnectionManager] 🔌 Connection to ${info.deviceName} disconnected - REMOVING for fresh reconnect');
+          _activeConnections.remove(remoteName);
+          debugPrint('[ConnectionManager] 📊 Active connections after disconnect: ${_activeConnections.length}, devices: ${_activeConnections.keys.join(", ")}');
           _stopForegroundServiceIfNeeded();
           NotificationService().showNotification(
             type: NotificationType.connectionLost,
@@ -278,9 +363,36 @@ class ConnectionManager {
     }
   }
 
-  /// Get active connection to a device (if any)
+  /// Get active connection to a device by name or IP
   ConnectionService? getConnection(String deviceName) {
-    return _activeConnections[deviceName];
+    // First try exact name match
+    var connection = _activeConnections[deviceName];
+    debugPrint('[ConnectionManager] 🔍 getConnection($deviceName) -> ${connection != null ? "found by name" : "not found by name"}');
+    
+    // If not found by name, try to find by IP (in case deviceName is an IP or we need to match by IP)
+    if (connection == null) {
+      // Check if deviceName might be an IP address
+      final ipPattern = RegExp(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$');
+      final isIp = ipPattern.hasMatch(deviceName);
+      
+      if (isIp) {
+        // deviceName is an IP, search by IP
+        for (final entry in _activeConnections.entries) {
+          if (entry.value.currentConnection?.ipAddress == deviceName) {
+            connection = entry.value;
+            debugPrint('[ConnectionManager] 🔍 Found connection by IP match: $deviceName -> ${entry.key}');
+            break;
+          }
+        }
+      }
+    }
+    
+    if (connection == null) {
+      debugPrint('[ConnectionManager] 🔍 Available connection keys: ${_activeConnections.keys.join(", ")}');
+      debugPrint('[ConnectionManager] 🔍 Connection IPs: ${_activeConnections.entries.map((e) => "${e.key}:${e.value.currentConnection?.ipAddress}").join(", ")}');
+    }
+    
+    return connection;
   }
 
   /// Remove a connection
@@ -300,14 +412,15 @@ class ConnectionManager {
 
   /// Close all connections
   Future<void> closeAll() async {
-    debugPrint('[ConnectionManager] Closing all connections');
-    for (final service in _activeConnections.values) {
-      await service.disconnect();
-      service.dispose();
+    debugPrint('[ConnectionManager] closeAll() called – converting all to disconnected but NOT clearing');
+    for (final entry in _activeConnections.entries) {
+      try {
+        await entry.value.disconnect();
+      } catch (e) {
+        debugPrint('[ConnectionManager] closeAll() error disconnecting ${entry.key}: $e');
+      }
     }
-    _activeConnections.clear();
-    
-    // Stop foreground service when all connections closed
+    ConnectionLogger.instance.log('closeAll() executed – active keys retained: ${_activeConnections.keys.join(", ")}');
     await _stopForegroundServiceIfNeeded();
   }
 }

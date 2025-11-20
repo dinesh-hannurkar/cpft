@@ -44,6 +44,24 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
   }
 
   Future<void> _connect() async {
+    // Don't attempt connection if already connecting or connected
+    final currentStatus = _service.currentConnection?.status;
+    if (currentStatus == ConnectionStatus.connected || 
+        currentStatus == ConnectionStatus.connecting) {
+      debugPrint('[ConnectionFlowDialog] Already ${currentStatus}, skipping connect()');
+      setState(() {
+        _status = currentStatus!; // safe: we checked it's not null above
+      });
+      if (currentStatus == ConnectionStatus.connected) {
+        // Already connected, close dialog immediately
+        if (mounted && !_completed) {
+          _completed = true;
+          Navigator.of(context).pop('connected');
+        }
+      }
+      return;
+    }
+    
     try {
       await _service.connect(
         widget.peerDeviceName,

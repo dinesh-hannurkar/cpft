@@ -248,10 +248,26 @@ class BonjourService {
   Future<void> stop() async {
     debugPrint('[BonjourService] Stopping...');
     
+    if (!_isRunning) {
+      debugPrint('[BonjourService] Not running, nothing to stop');
+      return;
+    }
+    
     try {
-      _discovery?.dispose();
-      await stopDiscovery(_discovery!);
-      await unregister(_registration!);
+      // Stop discovery
+      if (_discovery != null) {
+        debugPrint('[BonjourService] Disposing discovery...');
+        _discovery!.dispose();
+        await stopDiscovery(_discovery!);
+        _discovery = null;
+      }
+      
+      // Unregister service
+      if (_registration != null) {
+        debugPrint('[BonjourService] Unregistering service...');
+        await unregister(_registration!);
+        _registration = null;
+      }
     } catch (e) {
       debugPrint('[BonjourService] Error stopping: $e');
     }
@@ -261,7 +277,7 @@ class BonjourService {
     debugPrint('[BonjourService] ✅ Stopped');
   }
   
-  void dispose() {
-    stop();
+  Future<void> dispose() async {
+    await stop();
   }
 }

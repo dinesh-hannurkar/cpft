@@ -65,7 +65,7 @@ class HttpDiscoveryClient {
             debugPrint('[HttpClient] ❌ Registration timeout to $ip:$port');
             break;
           default:
-            debugPrint('[HttpClient] ❌ Socket error ($errorCode) during registration with $ip:$port: $errorMessage');
+            // debugPrint('[HttpClient] ❌ Socket error ($errorCode) during registration with $ip:$port: $errorMessage');
         }
       } else if (e is TimeoutException) {
         debugPrint('[HttpClient] ❌ Registration timeout with $ip:$port');
@@ -80,7 +80,7 @@ class HttpDiscoveryClient {
   Future<InfoDto?> getDeviceInfo(String ip, int port) async {
     try {
       final url = Uri.parse('http://$ip:$port/info?fingerprint=$fingerprint');
-      debugPrint('[HttpClient] Fetching info from $ip:$port...');
+      // debugPrint('[HttpClient] Fetching info from $ip:$port...');
 
       final response = await http.get(url).timeout(const Duration(seconds: 3));
 
@@ -100,7 +100,7 @@ class HttpDiscoveryClient {
         
         switch (errorCode) {
           case 113: // EHOSTUNREACH - No route to host
-            debugPrint('[HttpClient] ❌ No route to host $ip:$port - device may be offline or unreachable');
+            // debugPrint('[HttpClient] ❌ No route to host $ip:$port - device may be offline or unreachable');
             debugPrint('[HttpClient] 💡 Check: Is the device on the same network? Is firewall blocking?');
             break;
           case 111: // ECONNREFUSED - Connection refused
@@ -114,12 +114,12 @@ class HttpDiscoveryClient {
             debugPrint('[HttpClient] ❌ Network unreachable for $ip:$port - check network connectivity');
             break;
           default:
-            debugPrint('[HttpClient] ❌ Socket error ($errorCode) connecting to $ip:$port: $errorMessage');
+            // debugPrint('[HttpClient] ❌ Socket error ($errorCode) connecting to $ip:$port: $errorMessage');
         }
       } else if (e is TimeoutException) {
-        debugPrint('[HttpClient] ❌ Timeout connecting to $ip:$port - device may be slow to respond');
+        // debugPrint('[HttpClient] ❌ Timeout connecting to $ip:$port - device may be slow to respond');
       } else {
-        debugPrint('[HttpClient] ❌ Error getting info from $ip:$port: $e');
+        // debugPrint('[HttpClient] ❌ Error getting info from $ip:$port: $e');
       }
       
       return null;

@@ -33,7 +33,9 @@ class ConnectionService {
   // Backpressure: track outgoing transfers waiting for ACKs
   final Map<String, _OutgoingTransfer> _outgoingTransfers = {};
 
-  ConnectionService({required this.deviceName});
+  ConnectionService({required this.deviceName}) {
+    debugPrint('[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName (${hashCode})');
+  }
 
   /// Get current connection info
   ConnectionInfo? get currentConnection => _currentConnection;
@@ -68,7 +70,17 @@ class ConnectionService {
   Future<bool> connect(String deviceName, String ipAddress, int port) async {
     debugPrint('[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port');
 
-    // If already connected, disconnect first
+    // Prevent duplicate connection attempts
+    if (currentConnection?.status == ConnectionStatus.connecting) {
+      debugPrint('[ConnectionService] ⚠️ Already connecting to ${currentConnection?.deviceName}, ignoring duplicate connect()');
+      return false;
+    }
+    if (currentConnection?.status == ConnectionStatus.connected) {
+      debugPrint('[ConnectionService] ⚠️ Already connected to ${currentConnection?.deviceName}, ignoring duplicate connect()');
+      return true;
+    }
+
+    // If socket exists from previous connection, disconnect first
     if (_socket != null) {
       debugPrint('[ConnectionService] Disconnecting from previous connection');
       await disconnect();
@@ -261,7 +273,7 @@ class ConnectionService {
       final bytes = utf8.encode(data);
       _socket!.add(bytes);
       await _socket!.flush();
-      debugPrint('[ConnectionService] 📤 Sent message: ${message.type}');
+      debugPrint('[ConnectionService] 📤 Sent message: ${message.type} to $deviceName');
 
       // Add outgoing message to history (not via listener to avoid duplicate notification)
       const historyTypes = {'text', 'file_complete', 'file_offer', 'goodbye'};
@@ -952,7 +964,8 @@ class ConnectionService {
 
   /// Disconnect from current device
   Future<void> disconnect() async {
-    debugPrint('[ConnectionService] 🔌 Disconnecting...');
+    debugPrint('[ConnectionService] 🔌 DISCONNECT CALLED for ${_currentConnection?.deviceName ?? "unknown"}');
+    debugPrint('[ConnectionService] 🔌 Current status: ${_currentConnection?.status}, socket: ${_socket != null}, timer: ${_keepAliveTimer != null}');
 
     // Send goodbye message if connected
     if (_socket != null && _currentConnection?.status == ConnectionStatus.connected) {
@@ -973,8 +986,10 @@ class ConnectionService {
     _socketSubscription = null;
 
     // Stop keep-alive timer
+    debugPrint('[ConnectionService] 🛑 Cancelling keep-alive timer (was ${_keepAliveTimer != null ? "active" : "null"})');
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
+    debugPrint('[ConnectionService] 🛑 Keep-alive timer cancelled and nullified');
 
     // Close socket
     try {
@@ -999,29 +1014,39 @@ class ConnectionService {
 
   /// Start keep-alive timer to prevent connection timeout
   void _startKeepAlive() {
+    debugPrint('[ConnectionService] 🔄 Starting keep-alive timer (cancelling old one first if exists)');
     _keepAliveTimer?.cancel();
     _keepAliveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      debugPrint('[ConnectionService] ⏰ Keep-alive timer fired: socket=${_socket != null}, isConnected=$isConnected');
       if (_socket != null && isConnected) {
         final ping = DeviceMessage(
           type: 'ping',
           content: 'keep-alive',
           senderName: deviceName,
         );
+        debugPrint('[ConnectionService] 📤 Sending keep-alive ping to ${_currentConnection?.deviceName ?? "unknown"}');
         sendMessage(ping).then((success) {
           if (!success) {
             debugPrint('[ConnectionService] ⚠️  Keep-alive ping failed');
+          } else {
+            debugPrint('[ConnectionService] ✅ Keep-alive ping sent successfully');
           }
         });
+      } else {
+        debugPrint('[ConnectionService] ⏸️  Keep-alive timer fired but NOT sending (socket=${_socket != null}, isConnected=$isConnected)');
       }
     });
+    debugPrint('[ConnectionService] 🔄 Keep-alive timer started successfully');
   }
 
   /// Dispose the service
   Future<void> dispose() async {
+    debugPrint('[ConnectionService] 🗑️  DISPOSE called for ${_currentConnection?.deviceName ?? deviceName} (${hashCode})');
     await disconnect();
     _errorResetTimer?.cancel();
     _messageListeners.clear();
     _statusListeners.clear();
+    debugPrint('[ConnectionService] 🗑️  DISPOSE completed for ${_currentConnection?.deviceName ?? deviceName} (${hashCode})');
   }
   
   // removed unused _formatFileSize helper

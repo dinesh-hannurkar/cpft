@@ -73,14 +73,54 @@ class _HomeScreenState extends State<HomeScreen> {
     // Attach connection manager listener if available to refresh connected device count
     final cm = widget.discoveryService.connectionManager;
     if (cm != null) {
+      debugPrint('[HomeScreen] 🎯 Setting up connection listener. Current connections: ${cm.activeConnections.length}');
+      
       _connectionListener = (deviceName, service, isIncoming) {
+        debugPrint('[HomeScreen] 🔔 Connection listener fired: $deviceName, isIncoming: $isIncoming, isConnected: ${service.isConnected}');
+        debugPrint('[HomeScreen] 🔔 Total active connections: ${cm.activeConnections.length}, devices: ${cm.activeConnections.keys.join(", ")}');
+        
+        // ONLY navigate for incoming connections (outgoing connections are handled by the caller who initiated them)
+        if (isIncoming && service.isConnected) {
+          debugPrint('[HomeScreen] 📲 Auto-navigating to chat for INCOMING connection from $deviceName');
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ConnectionScreen(
+                  deviceName: deviceName,
+                  ipAddress: service.currentConnection?.ipAddress ?? '',
+                  port: DiscoveryService.p2pPort,
+                  myDeviceName: widget.myDeviceName,
+                  connectionManager: cm,
+                  initialDeviceId: deviceName,
+                ),
+              ),
+            );
+          }
+        } else if (!isIncoming && service.isConnected) {
+          debugPrint('[HomeScreen] ✅ Outgoing connection to $deviceName completed - caller will handle navigation');
+        }
+        
         // Also listen for status changes on this service to update UI when it disconnects/reconnects
-        service.addStatusListener((_) {
-          if (mounted) setState(() {});
+        service.addStatusListener((info) {
+          debugPrint('[HomeScreen] 🔔 Status changed for $deviceName: ${info.status}');
+          if (mounted) {
+            setState(() {
+              debugPrint('[HomeScreen] 🔔 setState called - rebuilding HomeScreen');
+            });
+          }
         });
-        if (mounted) setState(() {});
+        
+        if (mounted) {
+          setState(() {
+            debugPrint('[HomeScreen] 🔔 setState called from connection listener');
+          });
+        }
       };
       cm.addConnectionListener(_connectionListener!);
+      debugPrint('[HomeScreen] 🎯 Connection listener registered successfully');
+    } else {
+      debugPrint('[HomeScreen] ⚠️  ConnectionManager is null - cannot set up listener');
     }
   }
 
@@ -124,30 +164,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Connected with $deviceName', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white))),
       );
-      // Navigate to chat on the receiver side as well
-      var cm = widget.discoveryService.connectionManager;
-      if (cm == null) {
-        try {
-          await widget.discoveryService.initialize();
-        } catch (_) {}
-        cm = widget.discoveryService.connectionManager;
-      }
-      if (!mounted) return;
-  if (cm != null) {
-    final nonNullCm = cm;
-    Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ConnectionScreen(
-              deviceName: deviceName,
-              ipAddress: ipAddress,
-              port: DiscoveryService.p2pPort,
-              myDeviceName: widget.myDeviceName,
-      connectionManager: nonNullCm,
-            ),
-          ),
-        );
-      }
+      // Don't navigate here - the _connectionListener will handle navigation for incoming connections
+      debugPrint('[HomeScreen] ✅ Accepted incoming connection from $deviceName - listener will navigate');
     } else if (result == false) {
       await decline();
       if (!mounted) return;
@@ -318,25 +336,53 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Re-read to a non-nullable local after initialization above
                 final cm = manager;
                 
-                // Check if already connected to this device
-                final existingConnection = cm.getConnection(d.name);
-                debugPrint('[HomeScreen] Tapped device: ${d.name}, existing connection: ${existingConnection != null}, isConnected: ${existingConnection?.isConnected}, status: ${existingConnection?.currentConnection?.status}');
+                // Check if already connected to this device (by name or IP)
+                debugPrint('[HomeScreen] 🔍 Tapped device: ${d.name} (IP: ${d.ip})');
+                debugPrint('[HomeScreen] 🔍 Active connections keys: ${cm.activeConnections.keys.join(", ")}');
+                
+                // Try to find connection by name first, then by IP
+                var existingConnection = cm.getConnection(d.name);
+                if (existingConnection == null) {
+                  debugPrint('[HomeScreen] 🔍 No connection found by name, trying by IP: ${d.ip}');
+                  existingConnection = cm.getConnection(d.ip);
+                }
+                
+                debugPrint('[HomeScreen] 🔍 Connection found: ${existingConnection != null}, isConnected: ${existingConnection?.isConnected}, status: ${existingConnection?.currentConnection?.status}');
                 
                 if (existingConnection != null) {
                   final status = existingConnection.currentConnection?.status;
+                  final connectionDeviceName = existingConnection.currentConnection?.deviceName ?? d.name;
+                  
                   // If connected or connecting, navigate directly (avoid duplicate connection attempts)
                   if (status == ConnectionStatus.connected || status == ConnectionStatus.connecting) {
-                    debugPrint('[HomeScreen] Already connected/connecting to ${d.name}, navigating directly');
+                    debugPrint('[HomeScreen] ✅ Already connected/connecting to ${connectionDeviceName}, navigating to chat');
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => ConnectionScreen(
-                          deviceName: d.name,
+                          deviceName: connectionDeviceName,
                           ipAddress: d.ip,
                           port: DiscoveryService.p2pPort,
                           myDeviceName: widget.myDeviceName,
                           connectionManager: cm,
-                          initialDeviceId: d.name,
+                          initialDeviceId: connectionDeviceName,
+                        ),
+                      ),
+                    );
+                    return;
+                  } else if (status == ConnectionStatus.disconnected) {
+                    // Connection exists but is disconnected - navigate to chat to allow reconnect
+                    debugPrint('[HomeScreen] 📡 Connection to ${connectionDeviceName} is disconnected, navigating to chat for reconnect');
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ConnectionScreen(
+                          deviceName: connectionDeviceName,
+                          ipAddress: d.ip,
+                          port: DiscoveryService.p2pPort,
+                          myDeviceName: widget.myDeviceName,
+                          connectionManager: cm,
+                          initialDeviceId: connectionDeviceName,
                         ),
                       ),
                     );
@@ -684,7 +730,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildConnectedDevicesButton() {
-    final connectedCount = widget.discoveryService.connectionManager?.activeConnections.length ?? 0;
+    final cm = widget.discoveryService.connectionManager;
+    // Count only truly connected devices (not disconnected/failed)
+    final connectedCount = cm?.activeConnections.values
+        .where((service) => service.isConnected)
+        .length ?? 0;
+    
+    print('\n════════════════════════════════════════════════════════════');
+    print('🏠 [HOME BADGE] Manager HashCode: ${cm.hashCode}');
+    print('🏠 [HOME BADGE] Connected Count: $connectedCount');
+    print('🏠 [HOME BADGE] Total Entries: ${cm?.activeConnections.length ?? 0}');
+    if (cm != null && cm.activeConnections.isNotEmpty) {
+      print('🏠 [HOME BADGE] Keys: ${cm.activeConnections.keys.join(", ")}');
+    }
+    print('════════════════════════════════════════════════════════════\n');
     
     return Badge(
       label: Text(connectedCount.toString()),
@@ -702,12 +761,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showConnectedDevicesDialog() {
     final connectionManager = widget.discoveryService.connectionManager;
-    if (connectionManager == null) return;
+    if (connectionManager == null) {
+      debugPrint('[HomeScreen] ⚠️  ConnectionManager is null when trying to show devices');
+      return;
+    }
+
+    debugPrint('[HomeScreen] ============ Opening connected devices bottom sheet ============');
+    debugPrint('[HomeScreen] Active connections count: ${connectionManager.activeConnections.length}');
+    debugPrint('[HomeScreen] Connection keys: ${connectionManager.activeConnections.keys.join(", ")}');
+    for (final entry in connectionManager.activeConnections.entries) {
+      debugPrint('[HomeScreen]   ${entry.key}: status=${entry.value.currentConnection?.status}, isConnected=${entry.value.isConnected}');
+    }
     
-    debugPrint('[HomeScreen] Opening connected devices bottom sheet - active connections: ${connectionManager.activeConnections.length}');
-    debugPrint('[HomeScreen] Connected devices: ${connectionManager.activeConnections.keys.join(", ")}');
-    
-    showModalBottomSheet(
+    // Force a rebuild to update the badge count
+    if (mounted) {
+      setState(() {
+        debugPrint('[HomeScreen] Forcing rebuild before showing sheet');
+      });
+    }    showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -765,7 +836,12 @@ class _ConnectedDevicesBottomSheetState extends State<_ConnectedDevicesBottomShe
   @override
   void initState() {
     super.initState();
-    debugPrint('[ConnectedDevicesSheet] initState - active connections: ${widget.connectionManager.activeConnections.length}');
+    debugPrint('[ConnectedDevicesSheet] ============ INIT STATE ============');
+    debugPrint('[ConnectedDevicesSheet] Active connections count: ${widget.connectionManager.activeConnections.length}');
+    debugPrint('[ConnectedDevicesSheet] Connection keys: ${widget.connectionManager.activeConnections.keys.join(", ")}');
+    for (final entry in widget.connectionManager.activeConnections.entries) {
+      debugPrint('[ConnectedDevicesSheet]   - ${entry.key}: status=${entry.value.currentConnection?.status}, isConnected=${entry.value.isConnected}');
+    }
     _updateEntries();
     
     // Listen for new connections
@@ -790,6 +866,7 @@ class _ConnectedDevicesBottomSheetState extends State<_ConnectedDevicesBottomShe
     if (_statusListeners.containsKey(deviceId)) return;
     
     final listener = (ConnectionInfo info) {
+      debugPrint('[ConnectedDevicesSheet] Status changed for $deviceId: ${info.status}');
       if (mounted) {
         _updateEntries();
       }
@@ -803,6 +880,9 @@ class _ConnectedDevicesBottomSheetState extends State<_ConnectedDevicesBottomShe
     setState(() {
       _entries = widget.connectionManager.activeConnections.entries.toList();
       debugPrint('[ConnectedDevicesSheet] Updated entries: ${_entries.length} devices');
+      for (final entry in _entries) {
+        debugPrint('[ConnectedDevicesSheet]   Entry: ${entry.key}, status=${entry.value.currentConnection?.status}');
+      }
     });
   }
 
@@ -868,13 +948,42 @@ class _ConnectedDevicesBottomSheetState extends State<_ConnectedDevicesBottomShe
                     itemBuilder: (context, index) {
                       final deviceId = _entries[index].key;
                       final connection = _entries[index].value;
+                      final status = connection.currentConnection?.status;
                       final connected = connection.isConnected;
+                      
+                      // Determine status display
+                      String statusText;
+                      Color statusColor;
+                      IconData statusIcon;
+                      
+                      if (status == ConnectionStatus.connected) {
+                        statusText = 'Connected';
+                        statusColor = Colors.green;
+                        statusIcon = Icons.wifi;
+                      } else if (status == ConnectionStatus.connecting) {
+                        statusText = 'Connecting...';
+                        statusColor = Colors.blue;
+                        statusIcon = Icons.sync;
+                      } else if (status == ConnectionStatus.disconnected) {
+                        statusText = 'Disconnected';
+                        statusColor = Colors.orange;
+                        statusIcon = Icons.wifi_off;
+                      } else if (status == ConnectionStatus.failed) {
+                        statusText = 'Failed';
+                        statusColor = Colors.red;
+                        statusIcon = Icons.error_outline;
+                      } else {
+                        statusText = 'Unknown';
+                        statusColor = Colors.grey;
+                        statusIcon = Icons.help_outline;
+                      }
+                      
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                         leading: CircleAvatar(
-                          backgroundColor: connected ? Colors.green : Colors.orange,
+                          backgroundColor: statusColor,
                           child: Icon(
-                            connected ? Icons.wifi : Icons.wifi_off,
+                            statusIcon,
                             color: Colors.white,
                           ),
                         ),
@@ -884,8 +993,8 @@ class _ConnectedDevicesBottomSheetState extends State<_ConnectedDevicesBottomShe
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          connected ? 'Connected' : 'Disconnected',
-                          style: TextStyle(color: connected ? Colors.green : Colors.orange),
+                          statusText,
+                          style: TextStyle(color: statusColor),
                         ),
                         trailing: connected
                             ? IconButton(

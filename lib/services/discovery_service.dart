@@ -20,7 +20,8 @@ class DiscoveryService {
   HttpServerService? _httpServer;
   HttpDiscoveryClient? _httpClient;
   IncomingConnectionService? _incomingConnectionService;
-  ConnectionManager? _connectionManager;
+  // Static shared instance to survive hot reloads
+  static ConnectionManager? _sharedConnectionManager;
   BonjourService? _bonjourService;  // For iOS real devices
   WebServer? _webServer;  // For browser-based file transfers
 
@@ -92,12 +93,18 @@ class DiscoveryService {
   /// Returns the manager even if discovery isn't fully initialized, as connections can work independently
   ConnectionManager? get connectionManager {
     // Ensure ConnectionManager exists even if discovery had issues
-    if (_connectionManager == null && alias.isNotEmpty) {
-      print('[DiscoveryService] Creating ConnectionManager on demand');
-      _connectionManager = ConnectionManager();
-      _connectionManager!.initialize(alias);
+    if (_sharedConnectionManager == null && alias.isNotEmpty) {
+      print('\n╔═══════════════════════════════════════════════════════════════');
+      print('║ ⚠️  CREATING NEW ConnectionManager (static singleton)');
+      print('║ This should ONLY happen ONCE across app lifetime!');
+      print('╚═══════════════════════════════════════════════════════════════\n');
+      _sharedConnectionManager = ConnectionManager();
+      _sharedConnectionManager!.initialize(alias);
     }
-    return _connectionManager;
+    if (_sharedConnectionManager != null) {
+      print('🔍 [DiscoveryService.connectionManager] HashCode: ${_sharedConnectionManager.hashCode} | Connections: ${_sharedConnectionManager!.activeConnections.length}');
+    }
+    return _sharedConnectionManager;
   }
 
   /// Initialize and start all services
@@ -148,13 +155,13 @@ class DiscoveryService {
 
       // Initialize ConnectionManager for handling P2P connections
       print('[DiscoveryService] Initializing ConnectionManager');
-      if (_connectionManager == null) {
-        _connectionManager = ConnectionManager();
-        _connectionManager!.initialize(alias);
+      if (_sharedConnectionManager == null) {
+        _sharedConnectionManager = ConnectionManager();
+        _sharedConnectionManager!.initialize(alias);
       } else {
         print('[DiscoveryService] Reusing existing ConnectionManager (preserving active connections)');
         // Ensure it has the correct alias in case of restart
-        _connectionManager!.initialize(alias);
+        _sharedConnectionManager!.initialize(alias);
       }
 
       // Initialize and start P2P incoming connection listener
@@ -286,7 +293,7 @@ class DiscoveryService {
     // Build accept/decline closures
     Future<void> accept() async {
       print('[DiscoveryService] ✅ Accepting incoming connection from $displayName');
-      await _connectionManager!.handleIncomingConnection(socket, displayName);
+      await _sharedConnectionManager!.handleIncomingConnection(socket, displayName);
     }
 
     Future<void> decline() async {
@@ -458,7 +465,18 @@ class DiscoveryService {
     _networkScanTimer?.cancel();
     _healthCheckTimer?.cancel();
     _multicastService?.dispose();
-    _bonjourService?.dispose();
+    
+    // Properly await Bonjour service disposal (important for iOS/macOS)
+    if (_bonjourService != null) {
+      print('[DiscoveryService] Stopping Bonjour service...');
+      try {
+        await _bonjourService!.dispose();
+        print('[DiscoveryService] Bonjour service stopped');
+      } catch (e) {
+        print('[DiscoveryService] Error stopping Bonjour service: $e');
+      }
+    }
+    
     if (_httpServer != null) {
       await _httpServer!.dispose();
       _httpServer = null;

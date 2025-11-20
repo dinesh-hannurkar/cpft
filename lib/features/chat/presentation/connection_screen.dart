@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart'; // For MissingPluginException
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
+import 'package:cpft/utils/connection_logger.dart';
 
 import '../models/connection_state.dart';
 import '../services/connection_service.dart';
@@ -51,6 +52,8 @@ class _ConnectionScreenState extends State<ConnectionScreen>
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocus = FocusNode();
+  // Track which file offers already have dialogs shown to prevent duplicates
+  final Set<String> _shownOfferDialogs = {};
   // Floating button icon cycle
   final List<IconData> _fileIcons = const [
     Icons.text_snippet,
@@ -109,15 +112,20 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                 color: Colors.white,
                 onSelected: (value) async {
                   if (value == 'open') {
-                    await OpenFilex.open(rf.path);
+                    await _openFile(rf.path, rf.name);
                   } else if (value == 'reveal') {
                     try {
-                      final parent = rf.path.contains('/')
-                          ? rf.path.substring(0, rf.path.lastIndexOf('/'))
-                          : rf.path;
-                      await OpenFilex.open(parent);
-                    } catch (_) {
-                      await OpenFilex.open(rf.path);
+                      final file = io.File(rf.path);
+                      final parentDir = file.parent.path;
+                      debugPrint('[ConnectionScreen] Revealing file in: $parentDir');
+                      await OpenFilex.open(parentDir);
+                    } catch (e) {
+                      debugPrint('[ConnectionScreen] Error revealing file: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('File at: ${rf.path}')),
+                        );
+                      }
                     }
                   } else if (value == 'saveas') {
                     await _saveAs(rf.path, rf.name);
@@ -145,12 +153,238 @@ class _ConnectionScreenState extends State<ConnectionScreen>
     );
   }
 
+  void _showAllConnectedDevices() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final connections = widget.connectionManager.activeConnections.entries.toList();
+        
+        debugPrint('[ConnectionScreen] Showing all connected devices: ${connections.length}');
+        for (final entry in connections) {
+          debugPrint('[ConnectionScreen]   ${entry.key}: status=${entry.value.currentConnection?.status}');
+        }
+        
+        if (connections.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Center(child: Text('No connections')),
+          );
+        }
+        
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Connected Devices (${connections.length})',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.description),
+                      tooltip: 'View connection log',
+                      onPressed: () async {
+                        final logPath = await ConnectionLogger.instance.getLogPath();
+                        final logs = await ConnectionLogger.instance.readLogs();
+                        
+                        if (!context.mounted) return;
+                        
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Connection Log'),
+                            content: SingleChildScrollView(
+                              child: SelectableText(
+                                logs,
+                                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () async {
+                                  if (logPath != null) {
+                                    await Share.shareXFiles([XFile(logPath)], text: 'CPFT Connection Log');
+                                  }
+                                },
+                                child: const Text('Share'),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  await ConnectionLogger.instance.clearLogs();
+                                  Navigator.pop(ctx);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Log cleared')),
+                                    );
+                                  }
+                                },
+                                child: const Text('Clear'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: connections.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final deviceId = connections[index].key;
+                    final connection = connections[index].value;
+                    final status = connection.currentConnection?.status;
+                    final isCurrentDevice = deviceId == widget.deviceName || 
+                                           deviceId == (widget.initialDeviceId ?? widget.deviceName);
+                    
+                    // Determine status display
+                    String statusText;
+                    Color statusColor;
+                    IconData statusIcon;
+                    
+                    if (status == ConnectionStatus.connected) {
+                      statusText = 'Connected';
+                      statusColor = Colors.green;
+                      statusIcon = Icons.wifi;
+                    } else if (status == ConnectionStatus.connecting) {
+                      statusText = 'Connecting...';
+                      statusColor = Colors.blue;
+                      statusIcon = Icons.sync;
+                    } else if (status == ConnectionStatus.disconnected) {
+                      statusText = 'Disconnected';
+                      statusColor = Colors.orange;
+                      statusIcon = Icons.wifi_off;
+                    } else if (status == ConnectionStatus.failed) {
+                      statusText = 'Failed';
+                      statusColor = Colors.red;
+                      statusIcon = Icons.error_outline;
+                    } else {
+                      statusText = 'Unknown';
+                      statusColor = Colors.grey;
+                      statusIcon = Icons.help_outline;
+                    }
+                    
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                      leading: CircleAvatar(
+                        backgroundColor: statusColor,
+                        child: Icon(statusIcon, color: Colors.white),
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              deviceId,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isCurrentDevice)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Current',
+                                style: TextStyle(fontSize: 10, color: Colors.blue),
+                              ),
+                            ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        statusText,
+                        style: TextStyle(color: statusColor),
+                      ),
+                      trailing: !isCurrentDevice && status == ConnectionStatus.connected
+                          ? IconButton(
+                              icon: const Icon(Icons.chat_bubble_outline),
+                              tooltip: 'Switch to this chat',
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ConnectionScreen(
+                                      deviceName: deviceId,
+                                      ipAddress: connection.currentConnection?.ipAddress ?? '',
+                                      port: p2pPort,
+                                      myDeviceName: widget.myDeviceName,
+                                      connectionManager: widget.connectionManager,
+                                      initialDeviceId: deviceId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : null,
+                      onTap: !isCurrentDevice && status == ConnectionStatus.connected
+                          ? () {
+                              Navigator.pop(ctx);
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ConnectionScreen(
+                                    deviceName: deviceId,
+                                    ipAddress: connection.currentConnection?.ipAddress ?? '',
+                                    port: p2pPort,
+                                    myDeviceName: widget.myDeviceName,
+                                    connectionManager: widget.connectionManager,
+                                    initialDeviceId: deviceId,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // Use a different port for peer-to-peer connections (53318)
   static const int p2pPort = 53318;
 
   @override
   void initState() {
     super.initState();
+
+    print('\n════════════════════════════════════════════════════════════');
+    print('💬 [CHAT SCREEN] Initializing for ${widget.deviceName}');
+    print('💬 [CHAT SCREEN] Manager HashCode: ${widget.connectionManager.hashCode}');
+    print('💬 [CHAT SCREEN] Total Connections: ${widget.connectionManager.activeConnections.length}');
+    if (widget.connectionManager.activeConnections.isNotEmpty) {
+      print('💬 [CHAT SCREEN] Keys: ${widget.connectionManager.activeConnections.keys.join(", ")}');
+    }
+    print('════════════════════════════════════════════════════════════\n');
 
     // Use initialDeviceId if provided, otherwise use the widget.deviceName
     final targetDeviceName = widget.initialDeviceId ?? widget.deviceName;
@@ -159,6 +393,9 @@ class _ConnectionScreenState extends State<ConnectionScreen>
     _connectionService = widget.connectionManager.getOrCreateConnection(
       targetDeviceName,
     );
+
+    debugPrint('[ConnectionScreen] ✅ Got ConnectionService for $targetDeviceName');
+    debugPrint('[ConnectionScreen] 🔌 isConnected: ${_connectionService.isConnected}, status: ${_connectionService.currentConnection?.status}');
 
     // Preload existing history filtering out any unexpected types (defensive)
     _messages.addAll(
@@ -250,6 +487,102 @@ class _ConnectionScreenState extends State<ConnectionScreen>
     _fileIconTimer?.cancel();
     _fileIconPulse?.dispose();
     super.dispose();
+  }
+
+  /// Helper method to open files with special handling for APK files
+  Future<void> _openFile(String filePath, String fileName) async {
+    try {
+      // Special handling for APK files on Android
+      if (filePath.toLowerCase().endsWith('.apk') && io.Platform.isAndroid) {
+        debugPrint('[ConnectionScreen] Opening APK file: $filePath');
+        
+        // Check if we can install packages (Android 8.0+)
+        if (await Permission.requestInstallPackages.isDenied) {
+          final status = await Permission.requestInstallPackages.request();
+          if (status.isDenied || status.isPermanentlyDenied) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Permission required to install APK files.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+                  ),
+                  duration: const Duration(seconds: 30),
+                  action: SnackBarAction(
+                    label: 'Allow',
+                    textColor: AppColors.primary,
+                    onPressed: () async {
+                      await openAppSettings();
+                    },
+                  ),
+                ),
+              );
+            }
+            return;
+          }
+        }
+        
+        // First try with type specification
+        var result = await OpenFilex.open(
+          filePath,
+          type: 'application/vnd.android.package-archive',
+        );
+        
+        debugPrint('[ConnectionScreen] APK open result: ${result.type} - ${result.message}');
+        
+        if (result.type != ResultType.done) {
+          // Fallback: try without type specification
+          result = await OpenFilex.open(filePath);
+          debugPrint('[ConnectionScreen] APK open fallback result: ${result.type} - ${result.message}');
+        }
+        
+        if (result.type != ResultType.done) {
+          // Still failed, open file manager
+          final file = io.File(filePath);
+          final parentDir = file.parent.path;
+          await OpenFilex.open(parentDir);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Could not open installer. File shown in file manager.'),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } else {
+        // Normal file opening
+        final result = await OpenFilex.open(filePath);
+        debugPrint('[ConnectionScreen] Open file result: ${result.type} - ${result.message}');
+        
+        if (result.type != ResultType.done) {
+          // Can't open file directly, open file manager location instead
+          debugPrint('[ConnectionScreen] Cannot open file directly, opening folder...');
+          final file = io.File(filePath);
+          final parentDir = file.parent.path;
+          
+          final dirResult = await OpenFilex.open(parentDir);
+          debugPrint('[ConnectionScreen] Open directory result: ${dirResult.type}');
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$fileName - Opened in file manager'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[ConnectionScreen] Error opening file: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening file: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _connectToDevice() async {
@@ -358,6 +691,13 @@ class _ConnectionScreenState extends State<ConnectionScreen>
     final mime = (message.metadata?['mime'] ?? payload?['mimeType']) as String?;
     final transferId =
         (message.metadata?['transferId'] ?? payload?['transferId']) as String?;
+    
+    // Prevent duplicate dialogs for the same offer
+    if (transferId != null && _shownOfferDialogs.contains(transferId)) {
+      debugPrint('[ConnectionScreen] Dialog already shown for transfer $transferId, skipping');
+      return;
+    }
+    
     String name = message.content;
     if (name.trim().isEmpty) {
       final dynamicName =
@@ -373,6 +713,12 @@ class _ConnectionScreenState extends State<ConnectionScreen>
     debugPrint(
       '[ConnectionScreen] Incoming offer transferId=$transferId name="$name" size=$size mime=$mime rawContent="${message.content}"',
     );
+    
+    // Mark this offer as being shown
+    if (transferId != null) {
+      _shownOfferDialogs.add(transferId);
+    }
+    
     // Show prompt
     if (!mounted) return;
     final accept = await app_dialog.showAppDialog<bool>(
@@ -498,10 +844,14 @@ class _ConnectionScreenState extends State<ConnectionScreen>
             mime: mime,
           );
         });
+        // Remove from shown dialogs set after accepting
+        _shownOfferDialogs.remove(transferId);
       }
     } else {
       if (transferId != null) {
         await _connectionService.declineFileOffer(transferId);
+        // Remove from shown dialogs set after declining
+        _shownOfferDialogs.remove(transferId);
       }
       setState(() {
         _messages.add(
@@ -547,49 +897,62 @@ class _ConnectionScreenState extends State<ConnectionScreen>
 
   void _onStatusChanged(ConnectionInfo info) {
     if (mounted) {
-      setState(() {
-        _connectionInfo = info;
+      // Schedule setState for after the current frame to avoid "setState during build" errors
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _connectionInfo = info;
+        });
       });
 
-      // Show status changes
+      // Show status changes (these are safe to call during build)
       if (info.status == ConnectionStatus.connected) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Connected to ${info.deviceName}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Connected to ${info.deviceName}',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
             ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+          );
+        });
       } else if (info.status == ConnectionStatus.disconnected) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Disconnected from ${info.deviceName}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Disconnected from ${info.deviceName}',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
             ),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+          );
+        });
       } else if (info.status == ConnectionStatus.failed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Connection failed: ${info.error ?? "Unknown error"}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Connection failed: ${info.error ?? "Unknown error"}',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+              ),
+              backgroundColor: Colors.red,
             ),
-            backgroundColor: Colors.red,
-          ),
-        );
+          );
+        });
       }
     }
   }
@@ -790,6 +1153,14 @@ class _ConnectionScreenState extends State<ConnectionScreen>
               icon: const Icon(Icons.folder_open),
               onPressed: _showReceivedFilesSheet,
             ),
+          IconButton(
+            tooltip: 'All connected devices',
+            icon: Badge(
+              label: Text('${widget.connectionManager.activeConnections.length}'),
+              child: const Icon(Icons.devices),
+            ),
+            onPressed: _showAllConnectedDevices,
+          ),
           if (isConnected)
             IconButton(
               tooltip: 'Disconnect',
@@ -1467,9 +1838,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
         color: Colors.transparent,
         child: InkWell(
           onTap: savedPath != null
-              ? () async {
-                  await OpenFilex.open(savedPath);
-                }
+              ? () => _openFile(savedPath, name)
               : null,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
