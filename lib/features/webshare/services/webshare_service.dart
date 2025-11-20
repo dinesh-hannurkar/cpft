@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'web_server.dart';
 import '../../../utils/network_utils.dart';
+import '../../../services/notification_service.dart';
 
 /// Service to manage web share functionality
 class WebShareService {
@@ -50,6 +51,13 @@ class WebShareService {
       onFileUploadComplete: (filename, savedPath) async {
         debugPrint('[WebShareService] ✅ File upload complete: $filename -> $savedPath');
         onFileUploadComplete?.call(filename, savedPath);
+
+        // Show notification for completed file upload
+        NotificationService().showNotification(
+          type: NotificationType.fileTransferCompleted,
+          title: 'File Uploaded',
+          body: 'Successfully received $filename via web share',
+        );
         
         // Small delay to ensure file is fully written to disk
         await Future.delayed(const Duration(milliseconds: 100));
@@ -76,9 +84,23 @@ class WebShareService {
       },
       onClientConnected: (_) {
         connectedClients.value = _webServer!.connectedClientsCount;
+
+        // Show notification for new client connection
+        NotificationService().showNotification(
+          type: NotificationType.webShareClientConnected,
+          title: 'Web Client Connected',
+          body: 'A browser has connected to your web share',
+        );
       },
       onClientDisconnected: (_) {
         connectedClients.value = _webServer!.connectedClientsCount;
+
+        // Show notification for client disconnection
+        NotificationService().showNotification(
+          type: NotificationType.webShareClientDisconnected,
+          title: 'Web Client Disconnected',
+          body: 'A browser has disconnected from your web share',
+        );
       },
     );
 
@@ -120,7 +142,12 @@ class WebShareService {
     // Get the network IP address that other devices can access
     final networkIp = await NetworkUtils.getLanIPv4();
     final ip = networkIp ?? 'localhost'; // Fallback to localhost if network IP not found
-    
+
+    debugPrint('[WebShareService] 🌐 Web share URL: http://$ip:$port (detected IP: $networkIp)');
+    if (networkIp == null) {
+      debugPrint('[WebShareService] ⚠️  No network IP detected - web share may not be accessible from other devices');
+    }
+
     return 'http://$ip:$port';
   }
 

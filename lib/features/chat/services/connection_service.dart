@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cpft/models/file_transfer.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:cpft/services/notification_service.dart';
 
 /// Service for managing device-to-device connections
 class ConnectionService {
@@ -372,6 +373,13 @@ class ConnectionService {
                       if (outgoing.path != null) 'path': outgoing.path,
                     },
                   ));
+
+                  // Show notification for completed file transfer
+                  NotificationService().showNotification(
+                    type: NotificationType.fileTransferCompleted,
+                    title: 'File Sent',
+                    body: 'Successfully sent ${outgoing.fileName}',
+                  );
                 } else {
                   // Release next chunk permit
                   outgoing.chunkPermit?.complete();
@@ -498,6 +506,13 @@ class ConnectionService {
                     },
                   ));
                   _incomingFiles.remove(chunk.transferId);
+
+                  // Show notification for completed file transfer
+                  NotificationService().showNotification(
+                    type: NotificationType.fileTransferCompleted,
+                    title: 'File Received',
+                    body: 'Successfully received ${incoming.offer.fileName}',
+                  );
                 }
               }
               final ack = FileAck(transferId: chunk.transferId, nextExpectedIndex: chunk.index + 1, completed: chunk.isLast);
@@ -544,6 +559,15 @@ class ConnectionService {
           } else {
             // Normal message - notify listeners
             _notifyMessageListeners(message);
+
+            // Show notification for text messages
+            if (message.type == 'text') {
+              NotificationService().showNotification(
+                type: NotificationType.messageReceived,
+                title: 'New Message',
+                body: '${message.senderName}: ${message.content}',
+              );
+            }
           }
         } catch (e) {
           debugPrint('[ConnectionService] ⚠️  Failed to parse message: $e');

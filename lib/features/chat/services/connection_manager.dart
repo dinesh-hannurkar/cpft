@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'connection_service.dart';
 import 'package:cpft/services/background_service.dart';
+import 'package:cpft/services/notification_service.dart';
 import '../models/connection_state.dart';
 
 /// Manages all active P2P connections (both incoming and outgoing)
@@ -37,11 +38,26 @@ class ConnectionManager {
       if (info.status == ConnectionStatus.connected) {
         debugPrint('[ConnectionManager] Connection to ${info.deviceName} is now connected');
         _startForegroundServiceIfNeeded();
+
+        // Show notification for established connection
+        NotificationService().showNotification(
+          type: NotificationType.connectionEstablished,
+          title: 'Connected',
+          body: 'Successfully connected to ${info.deviceName}',
+        );
       } else if (info.status == ConnectionStatus.disconnected || info.status == ConnectionStatus.failed) {
         debugPrint('[ConnectionManager] Connection to ${info.deviceName} disconnected/failed');
         // Remove from active connections and stop service if needed
         _activeConnections.remove(deviceName);
         _stopForegroundServiceIfNeeded();
+
+        // Show notification for lost connection
+        final statusText = info.status == ConnectionStatus.disconnected ? 'disconnected' : 'failed';
+        NotificationService().showNotification(
+          type: NotificationType.connectionLost,
+          title: 'Connection Lost',
+          body: 'Connection to ${info.deviceName} $statusText',
+        );
       }
       // Update notification whenever status changes
       if (info.status == ConnectionStatus.connected) {

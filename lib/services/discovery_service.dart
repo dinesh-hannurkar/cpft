@@ -12,6 +12,7 @@ import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import '../../features/chat/services/connection_manager.dart';
 import 'background_service.dart';
+import 'notification_service.dart';
 
 /// Unified discovery service combining UDP multicast and HTTP
 /// This matches LocalSend's architecture
@@ -563,6 +564,13 @@ class DiscoveryService {
           print('[DiscoveryService] ❌ Error notifying restart listener: $e');
         }
       }
+
+      // Show notification for service restart
+      NotificationService().showNotification(
+        type: NotificationType.serviceRestarted,
+        title: 'Services Restarted',
+        body: 'Network discovery services have been restarted',
+      );
     } catch (e) {
       print('[DiscoveryService] ❌ Error during restart: $e');
       rethrow;

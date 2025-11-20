@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 
+import 'notification_service.dart';
+
 /// Service for accepting incoming connections from other devices
 class IncomingConnectionService {
   final int port;
@@ -72,6 +74,13 @@ class IncomingConnectionService {
     // The ConnectionService will attach its own listener
     debugPrint('[IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)');
     _notifyListeners(socket, remoteAddress);
+
+    // Show notification for incoming connection
+    NotificationService().showNotification(
+      type: NotificationType.incomingConnectionRequest,
+      title: 'Incoming Connection',
+      body: 'Connection request from $remoteAddress',
+    );
   }
 
   /// Notify listeners about new connection

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'utils/permissions.dart';
 import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
+import 'services/notification_service.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
@@ -109,6 +110,11 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
 
   Future<void> _initialize() async {
     print("=== PermissionWrapper _initialize called ===");
+
+    // Initialize notification service
+    await NotificationService().initialize();
+    await NotificationService().requestPermissions();
+
     await _checkPermissions();
     _deviceName = await _getDeviceName();
     print("=== Device name loaded: $_deviceName ===");
