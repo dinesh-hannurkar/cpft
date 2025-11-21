@@ -23,7 +23,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   late DiscoveryService _discoveryService;
   bool _isInitialized = false;
   bool _isRefreshing = false;
-  Map<String, String> _discoveredDevices = {};
+  final Map<String, String> _discoveredDevices = {};
 
   @override
   void initState() {
@@ -141,7 +141,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _isInitialized ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                    color: _isInitialized ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -168,7 +168,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -283,7 +283,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.1),
+                                    color: Colors.blue.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Icon(

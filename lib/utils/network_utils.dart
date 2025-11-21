@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cpft/core/logging/app_logger.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -27,7 +28,7 @@ class NetworkUtils {
       for (final iface in wifiInterfaces) {
         for (final addr in iface.addresses) {
           if (!addr.isLoopback && _isValidLanAddress(addr.address)) {
-            print('[NetworkUtils] Using WiFi interface ${iface.name}: ${addr.address}');
+            AppLogger.d('[NetworkUtils] Using WiFi interface ${iface.name}: ${addr.address}', tag: 'Network');
             return addr.address;
           }
         }
@@ -35,10 +36,10 @@ class NetworkUtils {
 
       // Don't fall back to other interfaces (mobile data) - return null instead
       // This ensures we only show as connected when on actual WiFi/LAN
-      print('[NetworkUtils] No WiFi interface with valid LAN address found');
+      AppLogger.d('[NetworkUtils] No WiFi interface with valid LAN address found', tag: 'Network');
       return null;
     } catch (e) {
-      print('[NetworkUtils] Error getting LAN IPv4: $e');
+      AppLogger.w('[NetworkUtils] Error getting LAN IPv4: $e', tag: 'Network', error: e);
     }
     return null;
   }
@@ -78,7 +79,7 @@ class NetworkUtils {
       // This ensures we're not on mobile data
       final lanIp = await getLanIPv4();
       if (lanIp == null) {
-        print('No valid LAN IP found - not on WiFi');
+        AppLogger.d('No valid LAN IP found - not on WiFi', tag: 'Network');
         return 'Not Connected';
       }
 
@@ -88,7 +89,7 @@ class NetworkUtils {
         if (!status.isGranted) {
           final req = await Permission.location.request();
           if (!req.isGranted) {
-            print('Android location not granted; cannot read SSID');
+            AppLogger.w('Android location not granted; cannot read SSID', tag: 'Network');
             return await _fallbackNetworkName();
           }
         }
@@ -96,12 +97,12 @@ class NetworkUtils {
 
       final networkInfo = NetworkInfo();
       final wifiName = await networkInfo.getWifiName();
-      print('WiFi name retrieved: $wifiName');
+      AppLogger.d('WiFi name retrieved: $wifiName', tag: 'Network');
       if (wifiName != null && wifiName.trim().isNotEmpty && wifiName != 'unknown ssid') {
         return wifiName.trim();
       }
     } catch (e) {
-      print('Error getting WiFi name: $e');
+      AppLogger.w('Error getting WiFi name: $e', tag: 'Network', error: e);
       // WiFi name access failed (likely iOS restrictions), fall back to IP
     }
     return await _fallbackNetworkName();

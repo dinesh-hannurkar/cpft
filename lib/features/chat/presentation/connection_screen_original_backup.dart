@@ -18,7 +18,6 @@ import '../models/connection_state.dart';
 import '../services/connection_service.dart';
 import '../services/connection_manager.dart';
 
-@Deprecated('Use ConnectionScreenRefactored instead. This legacy monolith will be removed after verification.')
 class ConnectionScreen extends StatefulWidget {
   final String deviceName;
   final String ipAddress;
@@ -306,7 +305,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.1),
+                                color: Colors.blue.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
@@ -1116,7 +1115,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: Colors.black.withOpacity(0.08),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -1232,7 +1231,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
+                      color: Colors.black.withOpacity(0.10),
                       blurRadius: 10,
                       offset: const Offset(0, 3),
                     ),
@@ -1341,7 +1340,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1844,9 +1843,9 @@ class _ConnectionScreenState extends State<ConnectionScreen>
             bottomLeft: Radius.circular(isMyMessage ? 4 : 16),
             bottomRight: Radius.circular(isMyMessage ? 16 : 4),
           ),
-          splashColor: Colors.blue.withValues(alpha: 0.08),
-          highlightColor: Colors.blue.withValues(alpha: 0.04),
-          hoverColor: Colors.blue.withValues(alpha: 0.03),
+          splashColor: Colors.blue.withOpacity(0.08),
+          highlightColor: Colors.blue.withOpacity(0.04),
+          hoverColor: Colors.blue.withOpacity(0.03),
           mouseCursor: savedPath != null
               ? SystemMouseCursors.click
               : SystemMouseCursors.basic,
@@ -1871,7 +1870,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
+                  color: Colors.black.withOpacity(0.05),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -1987,7 +1986,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: Colors.black.withOpacity(0.06),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -2064,7 +2063,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                   color: hasText ? null : const Color(0xFFE9EEF3),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
+                      color: Colors.black.withOpacity(0.10),
                       blurRadius: 10,
                       offset: const Offset(0, 3),
                     ),

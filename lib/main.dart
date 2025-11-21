@@ -6,9 +6,10 @@ import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
 import 'services/notification_service.dart';
 import 'features/home/presentation/home_screen.dart';
-import 'features/chat/presentation/connection_screen.dart';
+import 'features/chat/presentation/connection_screen_refactored.dart';
 import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
+import 'package:cpft/core/logging/app_logger.dart';
 
 // Global navigator key for navigation from anywhere (e.g., notifications)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -125,10 +126,10 @@ class _HomeWrapperState extends State<HomeWrapper> {
       debugPrint('[HomeWrapper] Navigator context available: ${context != null}');
       
       if (context != null) {
-        debugPrint('[HomeWrapper] Navigating to ConnectionScreen...');
+        debugPrint('[HomeWrapper] Navigating to ConnectionScreenRefactored...');
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ConnectionScreen(
+            builder: (_) => ConnectionScreenRefactored(
               deviceName: deviceName,
               ipAddress: connection.currentConnection?.ipAddress ?? '',
               port: DiscoveryService.p2pPort,
@@ -195,13 +196,13 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     super.didChangeAppLifecycleState(state);
     // When app resumes from background (e.g., returning from Settings), re-check permissions
     if (state == AppLifecycleState.resumed && (!_permissionsGranted || _locationServiceDisabled)) {
-      print('[PermissionWrapper] App resumed - re-checking permissions');
+      AppLogger.d('App resumed - re-checking permissions', tag: 'PermWrap');
       _checkPermissions();
     }
   }
 
   Future<void> _initialize() async {
-    print("=== PermissionWrapper _initialize called ===");
+    AppLogger.d('PermissionWrapper _initialize called', tag: 'PermWrap');
 
     // Initialize notification service
     await NotificationService().initialize();
@@ -209,11 +210,11 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
 
     await _checkPermissions();
     _deviceName = await _getDeviceName();
-    print("=== Device name loaded: $_deviceName ===");
+    AppLogger.d('Device name loaded: $_deviceName', tag: 'PermWrap');
     
     // Navigate based on device name after initialization is complete
     if (_deviceName == null) {
-      print("=== Navigating to setup screen ===");
+      AppLogger.d('Navigating to setup screen', tag: 'PermWrap');
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/setup');
       }
@@ -240,7 +241,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     }
 
     final granted = await AppPermissions.requestNetworkPermissions();
-    print("=== Permissions granted: $granted ===");
+    AppLogger.d('Permissions granted: $granted', tag: 'PermWrap');
     
     // For iOS, also show Local Network permission instructions
     if (Platform.isIOS) {
@@ -349,7 +350,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
 
     // If device name is set, show home screen
     if (_deviceName != null) {
-      print("=== Creating HomeScreen with device name: $_deviceName ===");
+      AppLogger.i('Creating HomeScreen with device name: $_deviceName', tag: 'PermWrap');
       final discovery = DiscoveryService(
         alias: _deviceName!,
         deviceModel: Platform.operatingSystem,
@@ -404,10 +405,10 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
       debugPrint('[PermissionWrapper] Navigator context available: ${context != null}');
       
       if (context != null) {
-        debugPrint('[PermissionWrapper] Navigating to ConnectionScreen...');
+        debugPrint('[PermissionWrapper] Navigating to ConnectionScreenRefactored...');
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ConnectionScreen(
+            builder: (_) => ConnectionScreenRefactored(
               deviceName: deviceName,
               ipAddress: connection.currentConnection?.ipAddress ?? '',
               port: DiscoveryService.p2pPort,

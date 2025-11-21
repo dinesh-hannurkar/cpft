@@ -1,0 +1,930 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io' as io;
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cpft/core/constants/app_colors.dart';
+import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
+import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
+import 'package:cpft/utils/connection_logger.dart';
+
+// Extracted models & utils & widgets
+import 'package:cpft/features/chat/models/transfer_progress.dart';
+import 'package:cpft/features/chat/models/received_file.dart';
+import 'package:cpft/features/chat/utils/file_utils.dart';
+import 'package:cpft/features/chat/presentation/widgets/transfer_progress_tile.dart';
+import 'package:cpft/features/chat/presentation/widgets/message_bubble.dart';
+import 'package:cpft/features/chat/presentation/widgets/completed_file_card.dart';
+import 'package:cpft/features/chat/presentation/widgets/received_files_sheet.dart';
+import 'package:cpft/features/chat/presentation/widgets/chat_top_bar.dart';
+import 'package:cpft/features/chat/presentation/widgets/connecting_banner.dart';
+import 'package:cpft/features/chat/presentation/widgets/error_banner.dart';
+import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
+import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
+
+import '../models/connection_state.dart';
+import '../services/connection_service.dart';
+import '../services/connection_manager.dart';
+
+class ConnectionScreenRefactored extends StatefulWidget {
+  final String deviceName;
+  final String ipAddress;
+  final int port;
+  final String myDeviceName;
+  final ConnectionManager connectionManager;
+  final String? initialDeviceId;
+
+  const ConnectionScreenRefactored({
+    super.key,
+    required this.deviceName,
+    required this.ipAddress,
+    required this.port,
+    required this.myDeviceName,
+    required this.connectionManager,
+    this.initialDeviceId,
+  });
+
+  @override
+  State<ConnectionScreenRefactored> createState() => _ConnectionScreenRefactoredState();
+}
+
+class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
+    with TickerProviderStateMixin {
+  late ConnectionService _connectionService;
+  final List<DeviceMessage> _messages = [];
+  final Map<String, TransferProgress> _incomingProgress = {};
+  final Map<String, TransferProgress> _outgoingProgress = {};
+  final List<ReceivedFile> _receivedFiles = [];
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _inputFocus = FocusNode();
+  final Set<String> _shownOfferDialogs = {}; // prevent duplicate offer dialogs
+
+  // Floating button animation state
+  final List<IconData> _fileIcons = const [
+    Icons.text_snippet,
+    Icons.broken_image,
+    Icons.gif,
+    Icons.audiotrack,
+    Icons.video_file,
+    Icons.image,
+    Icons.picture_as_pdf,
+    Icons.archive,
+    Icons.attach_file,
+  ];
+  int _fileIconIndex = 0;
+  bool _slideFromLeft = true;
+  AnimationController? _fileIconPulse;
+  Timer? _fileIconTimer;
+
+  ConnectionInfo? _connectionInfo;
+  bool _isConnecting = false;
+
+  // Peer‑to‑peer port constant
+  static const int p2pPort = 53318;
+
+  @override
+  void initState() {
+    super.initState();
+    // Use initialDeviceId if provided to stay consistent with existing screen logic
+    final targetDeviceName = widget.initialDeviceId ?? widget.deviceName;
+    _connectionService = widget.connectionManager.getOrCreateConnection(targetDeviceName);
+
+    // Preload existing messages (history)
+    _messages.addAll(_connectionService.messageHistory);
+
+    _connectionService.addStatusListener(_onStatusChanged);
+    _connectionService.addMessageListener(_onMessageReceived);
+
+    // Start connect if needed
+    if (_connectionService.isConnected) {
+      _connectionInfo = _connectionService.currentConnection;
+    } else if (_connectionService.currentConnection?.status == ConnectionStatus.connecting) {
+      // Already connecting (incoming) – do not start outgoing connect
+      _connectionInfo = _connectionService.currentConnection;
+    } else {
+      _connectToDevice();
+    }
+
+    // Animation for file icon pulse + cycling
+    _fileIconPulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat(reverse: true);
+    _fileIconTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted) return;
+      setState(() {
+        _slideFromLeft = !_slideFromLeft;
+        _fileIconIndex = (_fileIconIndex + 1) % _fileIcons.length;
+      });
+    });
+
+    // Check pending offers after frame
+    _inputFocus.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPendingFileOffers());
+  }
+
+  @override
+  void dispose() {
+    _connectionService.removeStatusListener(_onStatusChanged);
+    _connectionService.removeMessageListener(_onMessageReceived);
+    _fileIconTimer?.cancel();
+    _fileIconPulse?.dispose();
+    _messageController.dispose();
+    _scrollController.dispose();
+    _inputFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connectToDevice() async {
+    setState(() => _isConnecting = true);
+    final success = await _connectionService.connect(
+      _connectionService.deviceName,
+      widget.ipAddress,
+      p2pPort,
+    );
+    if (mounted) {
+      setState(() => _isConnecting = false);
+    }
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to connect to ${_connectionService.deviceName}'),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: _connectToDevice,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _onMessageReceived(DeviceMessage message) {
+    if (!mounted) return;
+    switch (message.type) {
+      case 'file_offer':
+        _handleIncomingOffer(message);
+        break;
+      case 'file_progress':
+        final tId = message.metadata?['transferId'] as String?;
+        final bytes = message.metadata?['bytes'] as int?;
+        final total = message.metadata?['total'] as int?;
+        final mime = message.metadata?['mime'] as String?;
+        final outgoing = message.metadata?['outgoing'] as bool? ?? false;
+        if (tId != null && bytes != null && total != null) {
+          setState(() {
+            final map = outgoing ? _outgoingProgress : _incomingProgress;
+            map.putIfAbsent(
+              tId,
+              () => TransferProgress(name: message.content, total: total, mime: mime),
+            );
+            map[tId]!.updateProgress(bytes.toDouble());
+          });
+        }
+        break;
+      case 'file_complete':
+        final tId = message.metadata?['transferId'] as String?;
+        final path = message.metadata?['path'] as String?;
+        setState(() {
+          if (!_messages.any((m) => m.timestamp == message.timestamp && m.content == message.content)) {
+            _messages.add(message);
+          }
+          if (tId != null) {
+            _incomingProgress.remove(tId);
+            _outgoingProgress.remove(tId);
+          }
+          if (path != null && path.isNotEmpty) {
+            _receivedFiles.add(ReceivedFile(name: message.content, path: path, timestamp: message.timestamp));
+          }
+        });
+        _scrollToBottom();
+        break;
+      default:
+        setState(() {
+          if (!_messages.any((m) => m.timestamp == message.timestamp && m.content == message.content)) {
+            _messages.add(message);
+          }
+        });
+        _scrollToBottom();
+    }
+  }
+
+  void _handleIncomingOffer(DeviceMessage message) async {
+    // Support legacy flat metadata & nested payload
+    Map<String, dynamic>? payload;
+    final rawPayload = message.metadata?['payload'];
+    if (rawPayload is Map<String, dynamic>) {
+      payload = rawPayload;
+    } else if (rawPayload is String) {
+      try {
+        final decoded = jsonDecode(rawPayload);
+        if (decoded is Map<String, dynamic>) payload = decoded;
+      } catch (_) {}
+    }
+
+    final size = (message.metadata?['size'] ?? payload?['fileSize']) as int?;
+    final mime = (message.metadata?['mime'] ?? payload?['mimeType']) as String?;
+    final transferId = (message.metadata?['transferId'] ?? payload?['transferId']) as String?;
+
+    if (transferId != null && _shownOfferDialogs.contains(transferId)) {
+      debugPrint('[ConnectionScreenRefactored] Duplicate offer dialog suppressed: $transferId');
+      return;
+    }
+
+    String name = message.content.trim();
+    if (name.isEmpty) {
+      final dynamicName = message.metadata?['fileName'] ?? message.metadata?['name'] ?? payload?['fileName'];
+      if (dynamicName is String && dynamicName.trim().isNotEmpty) {
+        name = dynamicName;
+      } else {
+        name = 'Unnamed file';
+      }
+    }
+
+    if (transferId != null) _shownOfferDialogs.add(transferId);
+    if (!mounted) return;
+    final accept = await app_dialog.showAppDialog<bool>(
+      context: context,
+      builder: (ctx) => AppConfirmDialog(
+        title: 'Incoming File Transfer',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: AppSizes.spaceBtwInputFields),
+                // File icon
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.insert_drive_file, color: Colors.blue),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            margin: const EdgeInsets.only(right: 6, top: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE3F2FD),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFBBDEFB)),
+                            ),
+                            child: Text(
+                              extensionTrim(name.split('.').last),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1565C0),
+                                letterSpacing: .5,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (size != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            formatBytes(size),
+                            style: const TextStyle(color: Colors.black54, fontSize: 12),
+                          ),
+                        ),
+                      if (mime != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            readableMime(mime),
+                            style: const TextStyle(color: Colors.black45, fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (size != null || mime != null) const SizedBox(height: 8),
+            if (size != null && size > 50 * 1024 * 1024)
+              Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Large file. Keep app in foreground for reliability.',
+                      style: TextStyle(fontSize: 11, color: Colors.orange),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        cancelLabel: 'Decline',
+        confirmLabel: 'Accept',
+      ),
+    );
+
+    if (accept == true && transferId != null) {
+      final saveDir = await _chooseSaveDirEveryTime(context);
+      await _connectionService.acceptFileOffer(transferId, saveDir: saveDir);
+      setState(() {
+        _incomingProgress[transferId] = TransferProgress(name: name, total: size ?? 0, mime: mime);
+      });
+      _shownOfferDialogs.remove(transferId);
+    } else if (transferId != null) {
+      await _connectionService.declineFileOffer(transferId);
+      _shownOfferDialogs.remove(transferId);
+      setState(() {
+        _messages.add(DeviceMessage(type: 'text', content: 'Declined file: $name', senderName: widget.myDeviceName));
+      });
+    }
+  }
+
+  Future<String?> _chooseSaveDirEveryTime(BuildContext context) async {
+    String? chosen;
+    try {
+      if (Theme.of(context).platform == TargetPlatform.macOS ||
+          Theme.of(context).platform == TargetPlatform.linux ||
+          Theme.of(context).platform == TargetPlatform.windows ||
+          Theme.of(context).platform == TargetPlatform.android) {
+        final dir = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose a folder for received files');
+        if (dir != null) chosen = dir;
+      }
+    } catch (_) {}
+    if (chosen == null) {
+      if (Theme.of(context).platform == TargetPlatform.iOS || Theme.of(context).platform == TargetPlatform.android) {
+        final docs = await getApplicationDocumentsDirectory();
+        chosen = docs.path;
+      } else {
+        final downloads = await getDownloadsDirectory();
+        chosen = (downloads ?? await getApplicationDocumentsDirectory()).path;
+      }
+    }
+    return chosen;
+  }
+
+  void _onStatusChanged(ConnectionInfo info) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _connectionInfo = info);
+    });
+    if (info.status == ConnectionStatus.connected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Connected to ${info.deviceName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      });
+    } else if (info.status == ConnectionStatus.disconnected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Disconnected from ${info.deviceName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      });
+    } else if (info.status == ConnectionStatus.failed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Connection failed: ${info.error ?? "Unknown error"}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
+            backgroundColor: Colors.red,
+          ),
+        );
+      });
+    }
+  }
+
+  void _scrollToBottom() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+    final message = DeviceMessage(type: 'text', content: text, senderName: widget.myDeviceName);
+    final success = await _connectionService.sendMessage(message);
+    if (success) {
+      setState(() {
+        _messages.add(message);
+        _messageController.clear();
+      });
+      _scrollToBottom();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to send message', style: TextStyle(color: AppColors.white)), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _disconnect() async {
+    await _connectionService.disconnect();
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _openFile(String path, String name) async {
+    try {
+      if (path.toLowerCase().endsWith('.apk')) {
+        if (Theme.of(context).platform == TargetPlatform.android) {
+          final status = await Permission.requestInstallPackages.request();
+          if (!status.isGranted) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Install permission denied', style: TextStyle(color: AppColors.white))));
+            }
+            return;
+          }
+        }
+      }
+      final result = await OpenFilex.open(path);
+      if (result.type != ResultType.done && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Open failed (${result.message})', style: const TextStyle(color: AppColors.white))),
+        );
+      }
+    } catch (e) {
+      try {
+        final parent = io.File(path).parent.path;
+        await OpenFilex.open(parent);
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Open failed: $e', style: const TextStyle(color: AppColors.white))),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveAs(String sourcePath, String originalName) async {
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+    if (isAndroid) {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage permission denied', style: TextStyle(color: AppColors.white))));
+        }
+        return;
+      }
+    }
+    String? targetDir;
+    try {
+      if (isAndroid || !isIOS) {
+        targetDir = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose destination folder');
+      }
+    } catch (_) {}
+    if (isIOS && (targetDir == null || targetDir.isEmpty)) {
+      await Share.shareXFiles([XFile(sourcePath)], text: originalName);
+      return;
+    }
+    if (targetDir == null || targetDir.isEmpty) {
+      if (isAndroid || isIOS) {
+        final docs = await getApplicationDocumentsDirectory();
+        targetDir = docs.path;
+      } else {
+        final downloads = await getDownloadsDirectory();
+        targetDir = (downloads ?? await getApplicationDocumentsDirectory()).path;
+      }
+    }
+    final safeName = originalName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    String destPath = '$targetDir/$safeName';
+    int dup = 1;
+    while (await io.File(destPath).exists()) {
+      final dot = safeName.lastIndexOf('.');
+      if (dot > 0) {
+        final base = safeName.substring(0, dot);
+        final ext = safeName.substring(dot);
+        destPath = '$targetDir/${base}($dup)$ext';
+      } else {
+        destPath = '$targetDir/${safeName}($dup)';
+      }
+      dup++;
+    }
+    try {
+      await io.File(sourcePath).copy(destPath);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved to: $destPath', style: const TextStyle(color: AppColors.white))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e', style: const TextStyle(color: AppColors.white))),
+        );
+      }
+    }
+  }
+
+  void _checkPendingFileOffers() {
+    // Delay to ensure build complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final pendingOffers = _connectionService.pendingOffers;
+      for (final entry in pendingOffers.entries) {
+        final transferId = entry.key;
+        final offer = entry.value;
+        final offerMessage = DeviceMessage(
+          type: 'file_offer',
+          content: offer.fileName,
+          senderName: _connectionService.deviceName,
+          timestamp: DateTime.now(),
+          metadata: {
+            'transferId': transferId,
+            'size': offer.fileSize,
+            'mime': offer.mimeType,
+          },
+        );
+        _handleIncomingOffer(offerMessage);
+      }
+    });
+  }
+
+  String _statusText() {
+    if (_isConnecting || _connectionInfo?.status == ConnectionStatus.connecting) {
+      return 'Connecting...';
+    } else if (_connectionInfo?.status == ConnectionStatus.connected) {
+      return '${widget.ipAddress}:${widget.port} • Connected';
+    } else if (_connectionInfo?.status == ConnectionStatus.failed) {
+      return 'Connection Failed';
+    } else if (_connectionInfo?.status == ConnectionStatus.disconnected) {
+      return 'Disconnected';
+    }
+    return widget.ipAddress;
+  }
+
+  // Legacy alias no longer used after top bar extraction; removed.
+
+  void _showReceivedFilesSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      builder: (_) => ReceivedFilesSheet(
+        files: _receivedFiles,
+        onOpen: (path, name) => _openFile(path, name),
+        onReveal: (dirPath, _) async {
+          try {
+            await OpenFilex.open(io.File(dirPath).path);
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Reveal failed: $e', style: const TextStyle(color: AppColors.white))),
+              );
+            }
+          }
+        },
+        onSaveAs: (path, name) => _saveAs(path, name),
+      ),
+    );
+  }
+
+  void _showAllConnectedDevices() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final connections = widget.connectionManager.activeConnections.entries.toList();
+        if (connections.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Center(child: Text('No connections')),
+          );
+        }
+        return Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Connected Devices (${connections.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.description),
+                      tooltip: 'View connection log',
+                      onPressed: () async {
+                        final logPath = await ConnectionLogger.instance.getLogPath();
+                        final logs = await ConnectionLogger.instance.readLogs();
+                        if (!context.mounted) return;
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Connection Log'),
+                            content: SingleChildScrollView(
+                              child: SelectableText(
+                                logs,
+                                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () async {
+                                  if (logPath != null) {
+                                    await Share.shareXFiles([XFile(logPath)], text: 'CPFT Connection Log');
+                                  }
+                                },
+                                child: const Text('Share'),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  await ConnectionLogger.instance.clearLogs();
+                                  Navigator.pop(ctx);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Log cleared')));
+                                  }
+                                },
+                                child: const Text('Clear'),
+                              ),
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: connections.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final deviceId = connections[index].key;
+                    final connection = connections[index].value;
+                    final status = connection.currentConnection?.status;
+                    final isCurrentDevice = deviceId == widget.deviceName || deviceId == (widget.initialDeviceId ?? widget.deviceName);
+                    String statusText;
+                    Color statusColor;
+                    IconData statusIcon;
+                    if (status == ConnectionStatus.connected) {
+                      statusText = 'Connected';
+                      statusColor = AppColors.green;
+                      statusIcon = Icons.wifi;
+                    } else if (status == ConnectionStatus.connecting) {
+                      statusText = 'Connecting...';
+                      statusColor = Colors.blue;
+                      statusIcon = Icons.sync;
+                    } else if (status == ConnectionStatus.disconnected) {
+                      statusText = 'Disconnected';
+                      statusColor = Colors.orange;
+                      statusIcon = Icons.wifi_off;
+                    } else if (status == ConnectionStatus.failed) {
+                      statusText = 'Failed';
+                      statusColor = AppColors.red;
+                      statusIcon = Icons.error_outline;
+                    } else {
+                      statusText = 'Unknown';
+                      statusColor = AppColors.greyDark;
+                      statusIcon = Icons.help_outline;
+                    }
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                      leading: CircleAvatar(backgroundColor: statusColor, child: Icon(statusIcon, color: Colors.white)),
+                      title: Row(children: [
+                        Expanded(
+                          child: Text(deviceId, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        if (isCurrentDevice)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                            child: const Text('Current', style: TextStyle(fontSize: 10, color: Colors.blue)),
+                          ),
+                      ]),
+                      subtitle: Text(statusText, style: TextStyle(color: statusColor)),
+                      trailing: !isCurrentDevice && status == ConnectionStatus.connected
+                          ? IconButton(
+                              icon: const Icon(Icons.chat_bubble_outline),
+                              tooltip: 'Switch to this chat',
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ConnectionScreenRefactored(
+                                      deviceName: deviceId,
+                                      ipAddress: connection.currentConnection?.ipAddress ?? '',
+                                      port: p2pPort,
+                                      myDeviceName: widget.myDeviceName,
+                                      connectionManager: widget.connectionManager,
+                                      initialDeviceId: deviceId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : null,
+                      onTap: !isCurrentDevice && status == ConnectionStatus.connected
+                          ? () {
+                              Navigator.pop(ctx);
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ConnectionScreenRefactored(
+                                    deviceName: deviceId,
+                                    ipAddress: connection.currentConnection?.ipAddress ?? '',
+                                    port: p2pPort,
+                                    myDeviceName: widget.myDeviceName,
+                                    connectionManager: widget.connectionManager,
+                                    initialDeviceId: deviceId,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Removed old inline UI builders: replaced with dedicated widgets for top bar & tagline.
+
+  // Removed inline message input builder, replaced by MessageInputBar widget.
+
+  @override
+  Widget build(BuildContext context) {
+    final isConnected = _connectionInfo?.status == ConnectionStatus.connected;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)], stops: [0.0, 1.0]),
+        ),
+        child: SafeArea(
+          child: Column(children: [
+            ChatTopBar(
+              deviceName: _connectionService.deviceName,
+              statusText: _statusText(),
+              receivedFilesCount: _receivedFiles.length,
+              connectionsCount: widget.connectionManager.activeConnections.length,
+              onBack: () => Navigator.of(context).pop(),
+              onShowReceivedFiles: _showReceivedFilesSheet,
+              onShowDevices: _showAllConnectedDevices,
+              onDisconnect: isConnected ? _disconnect : null,
+              connectionManager: widget.connectionManager,
+              isConnected: isConnected,
+            ),
+            if (_isConnecting || _connectionInfo?.status == ConnectionStatus.connecting)
+              ConnectingBanner(deviceName: _connectionService.deviceName),
+            if (_connectionInfo?.status == ConnectionStatus.failed)
+              ErrorBanner(error: _connectionInfo?.error, onRetry: _connectToDevice),
+            Expanded(
+              child: (() {
+                final totalItems = _messages.length + _incomingProgress.length + _outgoingProgress.length;
+                if (totalItems == 0) {
+                  return Center(
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text('No messages yet', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                      const SizedBox(height: 8),
+                      Text('Send a message to start the conversation', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                    ]),
+                  );
+                }
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: totalItems,
+                  itemBuilder: (context, index) {
+                    if (index < _messages.length) {
+                      final msg = _messages[index];
+                      final isMine = msg.senderName == widget.myDeviceName;
+                      if (msg.type == 'file_complete') {
+                        final savedPath = msg.metadata?['path'] as String?;
+                        return CompletedFileCard(message: msg, isMine: isMine, savedPath: savedPath, onOpen: (p, n) => _openFile(p, n));
+                      }
+                      if (msg.type == 'file_offer') {
+                        return const SizedBox.shrink();
+                      }
+                      return MessageBubble(message: msg, isMine: isMine);
+                    }
+                    final extra = index - _messages.length;
+                    final incomingKeys = _incomingProgress.keys.toList();
+                    if (extra < incomingKeys.length) {
+                      final tId = incomingKeys[extra];
+                      return TransferProgressTile(
+                        progress: _incomingProgress[tId]!,
+                        onCancel: () {
+                          _connectionService.cancelTransfer(tId);
+                          setState(() {
+                            _incomingProgress.remove(tId);
+                            _outgoingProgress.remove(tId);
+                          });
+                        },
+                        onResume: () async {
+                          if (_incomingProgress.containsKey(tId)) {
+                            await _connectionService.resumeIncoming(tId);
+                          } else if (_outgoingProgress.containsKey(tId)) {
+                            await _connectionService.requestResume(tId);
+                          }
+                        },
+                      );
+                    }
+                    final outExtra = extra - incomingKeys.length;
+                    final outKeys = _outgoingProgress.keys.toList();
+                    if (outExtra < outKeys.length) {
+                      final tId = outKeys[outExtra];
+                      return TransferProgressTile(
+                        progress: _outgoingProgress[tId]!,
+                        onCancel: () {
+                          _connectionService.cancelTransfer(tId);
+                          setState(() {
+                            _incomingProgress.remove(tId);
+                            _outgoingProgress.remove(tId);
+                          });
+                        },
+                        onResume: () async {
+                          if (_incomingProgress.containsKey(tId)) {
+                            await _connectionService.resumeIncoming(tId);
+                          } else if (_outgoingProgress.containsKey(tId)) {
+                            await _connectionService.requestResume(tId);
+                          }
+                        },
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                );
+              })(),
+            ),
+            if (isConnected)
+              FileTaglineBar(
+                onTapMain: () => _connectionService.pickAndSendFile(),
+                onTapFab: () => _connectionService.pickAndSendFile(),
+                pulseController: _fileIconPulse!,
+                fileIcons: _fileIcons,
+                fileIconIndex: _fileIconIndex,
+                slideFromLeft: _slideFromLeft,
+              ),
+            MessageInputBar(
+              controller: _messageController,
+              focusNode: _inputFocus,
+              onSend: _sendMessage,
+              enabled: isConnected,
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}

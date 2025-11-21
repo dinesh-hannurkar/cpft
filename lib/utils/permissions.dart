@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cpft/core/logging/app_logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 
@@ -16,8 +17,8 @@ class AppPermissions {
     // First check if location services are enabled on the device
     final serviceEnabled = await isLocationServiceEnabled();
     if (!serviceEnabled) {
-      print('Location services are disabled on device. User must enable in Settings.');
-      print('Please enable Location in device Settings.');
+      AppLogger.w('Location services disabled on device. User must enable in Settings.', tag: 'Permissions');
+      AppLogger.w('Prompt user: Enable Location in device Settings.', tag: 'Permissions');
       return false;
     }
     
@@ -25,15 +26,15 @@ class AppPermissions {
     final locationStatus = await Permission.location.status;
     
     if (!locationStatus.isGranted) {
-      print('Location permission not granted. Requesting...');
+      AppLogger.d('Location permission not granted. Requesting...', tag: 'Permissions');
       final requestResult = await Permission.location.request();
       
       if (!requestResult.isGranted) {
-        print('Location permission denied. WiFi name detection will not work.');
-        print('This permission is REQUIRED to detect WiFi network name on Android 10+');
+        AppLogger.w('Location permission denied. WiFi name detection will not work.', tag: 'Permissions');
+        AppLogger.w('Permission REQUIRED for WiFi SSID on Android 10+', tag: 'Permissions');
         return false;
       }
-      print('Location permission granted');
+      AppLogger.i('Location permission granted', tag: 'Permissions');
     }
     
     return true;
@@ -43,59 +44,59 @@ class AppPermissions {
     // First check if location services are enabled on the device
     final serviceEnabled = await isLocationServiceEnabled();
     if (!serviceEnabled) {
-      print('Location services are disabled on device. User must enable in Settings.');
-      print('Please enable Location Services in Settings > Privacy & Security > Location Services');
+      AppLogger.w('iOS: Location services disabled. User must enable in Settings.', tag: 'Permissions');
+      AppLogger.w('Instruction: Settings > Privacy & Security > Location Services', tag: 'Permissions');
       return false;
     }
     
     // On iOS, we need location permission for WiFi information access
     final locationStatus = await Permission.locationWhenInUse.status;
-    print('iOS Location permission current status: $locationStatus');
+    AppLogger.d('iOS Location permission status: $locationStatus', tag: 'Permissions');
 
     if (locationStatus.isGranted) {
-      print('Location permission already granted');
+      AppLogger.i('iOS location permission already granted', tag: 'Permissions');
       return true;
     }
 
     if (locationStatus.isPermanentlyDenied) {
-      print('Location permission permanently denied. User must enable in Settings.');
-      print('Please go to: Settings > Privacy & Security > Location Services > [App Name] > Allow');
+      AppLogger.w('iOS location permission permanently denied.', tag: 'Permissions');
+      AppLogger.w('Guide: Settings > Privacy & Security > Location Services > [App] > Allow', tag: 'Permissions');
       // Don't try to request again, just inform user
       return false;
     }
 
     // Try to request permission
     final requestResult = await Permission.locationWhenInUse.request();
-    print('iOS Location permission request result: $requestResult');
+    AppLogger.d('iOS location permission request result: $requestResult', tag: 'Permissions');
 
     if (requestResult.isGranted) {
-      print('Location permission granted successfully');
+      AppLogger.i('iOS location permission granted', tag: 'Permissions');
       return true;
     } else {
-      print('Location permission denied or restricted');
+      AppLogger.w('iOS location permission denied or restricted', tag: 'Permissions');
       return false;
     }
   }
 
   static Future<void> openLocationSettings() async {
-    print('Opening app settings for location permission...');
+    AppLogger.d('Opening app settings for location permission', tag: 'Permissions');
     await openAppSettings();
   }
 
   static Future<void> openSystemLocationSettings() async {
     if (Platform.isAndroid) {
-      print('Opening Android system location settings...');
+      AppLogger.d('Opening Android system location settings', tag: 'Permissions');
       try {
         // Use MethodChannel to open Android location settings
         const platform = MethodChannel('cpft/settings');
         await platform.invokeMethod('openLocationSettings');
       } catch (e) {
-        print('Error opening location settings: $e');
+        AppLogger.w('Error opening Android system location settings: $e', tag: 'Permissions', error: e);
         // Fallback to app settings
         await openAppSettings();
       }
     } else if (Platform.isIOS) {
-      print('Opening iOS location settings...');
+      AppLogger.d('Opening iOS location settings', tag: 'Permissions');
       // On iOS, openAppSettings goes to app-specific settings where user can see location permission
       await openAppSettings();
     } else {

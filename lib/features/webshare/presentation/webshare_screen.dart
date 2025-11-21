@@ -295,7 +295,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.10),
+                      color: Colors.black.withValues(alpha: 0.10),
                       blurRadius: 10,
                       offset: const Offset(0, 3),
                     ),
@@ -415,7 +415,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -598,9 +598,9 @@ class _WebShareScreenState extends State<WebShareScreen>
       textColor: AppColors.primary,
       borderColor: active
           ? AppColors.white
-          : AppColors.greyDark.withOpacity(0),
+          : AppColors.greyDark.withValues(alpha: 0),
       shadowColor: active
-          ? AppColors.primary.withOpacity(0.1)
+          ? AppColors.primary.withValues(alpha: 0.1)
           : Colors.transparent,
       icon: mode ? Icons.north_east : Icons.south_east,
       width: 145,
@@ -798,9 +798,9 @@ class _WebShareScreenState extends State<WebShareScreen>
       child: InkWell(
         onTap: null, // No action for uploading files
         borderRadius: BorderRadius.circular(16),
-        splashColor: Colors.blue.withOpacity(0.08),
-        highlightColor: Colors.blue.withOpacity(0.04),
-        hoverColor: Colors.blue.withOpacity(0.03),
+        splashColor: Colors.blue.withValues(alpha: 0.08),
+        highlightColor: Colors.blue.withValues(alpha: 0.04),
+        hoverColor: Colors.blue.withValues(alpha: 0.03),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -808,7 +808,7 @@ class _WebShareScreenState extends State<WebShareScreen>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -930,9 +930,9 @@ class _WebShareScreenState extends State<WebShareScreen>
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        splashColor: Colors.blue.withOpacity(0.08),
-        highlightColor: Colors.blue.withOpacity(0.04),
-        hoverColor: Colors.blue.withOpacity(0.03),
+        splashColor: Colors.blue.withValues(alpha: 0.08),
+        highlightColor: Colors.blue.withValues(alpha: 0.04),
+        hoverColor: Colors.blue.withValues(alpha: 0.03),
         mouseCursor: onTap != null
             ? SystemMouseCursors.click
             : SystemMouseCursors.basic,
@@ -944,7 +944,7 @@ class _WebShareScreenState extends State<WebShareScreen>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),

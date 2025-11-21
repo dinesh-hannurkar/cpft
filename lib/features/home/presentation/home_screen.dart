@@ -18,7 +18,7 @@ import 'package:cpft/features/home/presentation/widgets/home_app_bar.dart';
 import 'package:cpft/features/home/presentation/widgets/connected_devices_sheet.dart';
 import 'package:cpft/features/home/presentation/widgets/incoming_request_dialog.dart';
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
-import 'package:cpft/features/chat/presentation/connection_screen.dart';
+import 'package:cpft/features/chat/presentation/connection_screen_refactored.dart';
 import 'package:cpft/features/webshare/presentation/webshare_screen.dart';
 import 'package:cpft/features/chat/services/connection_service.dart';
 
@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ConnectionScreen(
+              builder: (_) => ConnectionScreenRefactored(
                 deviceName: deviceName,
                 ipAddress: service.currentConnection?.ipAddress ?? '',
                 port: DiscoveryService.p2pPort,
@@ -513,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ConnectionScreen(
+        builder: (context) => ConnectionScreenRefactored(
           deviceName: deviceId,
           ipAddress: '',
           port: DiscoveryService.p2pPort,

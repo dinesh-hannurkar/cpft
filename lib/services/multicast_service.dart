@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cpft/core/logging/app_logger.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,16 +39,13 @@ class MulticastService {
     this.multicastGroup = defaultMulticastGroup,
     this.port = defaultPort,
   }) {
-    debugPrint('╔═══════════════════════════════════════════════════════════╗');
-    debugPrint('║ MulticastService CONSTRUCTOR called!                      ║');
-    debugPrint('║ Alias: $alias                                            ║');
-    debugPrint('╚═══════════════════════════════════════════════════════════╝');
+    AppLogger.d('MulticastService CONSTRUCTOR called! Alias: $alias', tag: 'Multicast');
   }
 
   /// Add a listener for discovered devices
   void addDiscoveryListener(Function(String deviceName, String ipAddress, int port) listener) {
     _discoveryListeners.add(listener);
-    debugPrint('[MulticastService] Added discovery listener, total: ${_discoveryListeners.length}');
+    AppLogger.d('Added discovery listener, total: ${_discoveryListeners.length}', tag: 'Multicast');
   }
 
   /// Remove a discovery listener
@@ -60,28 +58,19 @@ class MulticastService {
 
   /// Start listening for multicast announcements
   Future<void> startListening() async {
-    debugPrint('[MulticastService] ========================================');
-    debugPrint('[MulticastService] 🚀🚀🚀 startListening() ENTRY 🚀🚀🚀');
-    debugPrint('[MulticastService] _isListening state: $_isListening');
-    debugPrint('[MulticastService] ========================================');
+    AppLogger.d('startListening() ENTRY, _isListening=$_isListening', tag: 'Multicast');
     
     if (_isListening) {
-      debugPrint('[MulticastService] ❌ Already listening - EXITING EARLY');
-      debugPrint('[MulticastService] This should NOT happen on first launch!');
+      AppLogger.w('Already listening - EXITING EARLY (should not happen first launch)', tag: 'Multicast');
       return;
     }
 
-    debugPrint('[MulticastService] ✅ Proceeding with initialization...');
-    debugPrint('[MulticastService] Platform: ${Platform.operatingSystem}');
+    AppLogger.d('Proceeding with initialization on ${Platform.operatingSystem}', tag: 'Multicast');
 
     try {
       // Platform-specific handling
-      if (Platform.isAndroid) {
-        debugPrint('[MulticastService] Android detected - using special multicast configuration');
-      }
-      if (Platform.isIOS) {
-        debugPrint('[MulticastService] iOS detected - raw multicast mode');
-      }
+      if (Platform.isAndroid) AppLogger.d('Android detected - special multicast configuration', tag: 'Multicast');
+      if (Platform.isIOS) AppLogger.d('iOS detected - raw multicast mode', tag: 'Multicast');
 
       // CRITICAL: Get network interfaces
       var interfaces = await NetworkInterface.list(
@@ -89,29 +78,25 @@ class MulticastService {
         type: InternetAddressType.IPv4,
       );
 
-      debugPrint('[MulticastService] Raw interface list (${interfaces.length} found):');
+      AppLogger.d('Raw interface list (${interfaces.length} found):', tag: 'Multicast');
       for (var interface in interfaces) {
-        debugPrint('[MulticastService]   ${interface.name}: ${interface.addresses.map((a) => '${a.address}').join(', ')}');
+        AppLogger.v('  ${interface.name}: ${interface.addresses.map((a) => a.address).join(', ')}', tag: 'Multicast');
       }
 
       if (interfaces.isEmpty) {
-        debugPrint('[MulticastService] ❌ No network interfaces found at all!');
-        debugPrint('[MulticastService] This could mean:');
-        debugPrint('[MulticastService]   - No network connection');
-        debugPrint('[MulticastService]   - Network permissions not granted');
-        debugPrint('[MulticastService]   - Device is in airplane mode');
+        AppLogger.w('No network interfaces found. Possible causes: no network, no permissions, airplane mode.', tag: 'Multicast');
         
         // Try with loopback included as last resort
-        debugPrint('[MulticastService] Trying with loopback interfaces included...');
+        AppLogger.d('Trying with loopback interfaces included...', tag: 'Multicast');
         final interfacesWithLoopback = await NetworkInterface.list(
           includeLoopback: true,
           type: InternetAddressType.IPv4,
         );
         
         if (interfacesWithLoopback.isNotEmpty) {
-          debugPrint('[MulticastService] Found ${interfacesWithLoopback.length} interfaces with loopback:');
+          AppLogger.d('Found ${interfacesWithLoopback.length} interfaces with loopback:', tag: 'Multicast');
           for (var interface in interfacesWithLoopback) {
-            debugPrint('[MulticastService]   ${interface.name}: ${interface.addresses.map((a) => '${a.address}').join(', ')}');
+            AppLogger.v('  ${interface.name}: ${interface.addresses.map((a) => a.address).join(', ')}', tag: 'Multicast');
           }
           // Use loopback interfaces as fallback
           interfaces = interfacesWithLoopback.where((i) => 
@@ -119,14 +104,12 @@ class MulticastService {
           ).toList();
         }
         
-        if (interfaces.isEmpty) {
-          throw Exception('No network interfaces found. Please check your network connection and app permissions.');
-        }
+        if (interfaces.isEmpty) throw Exception('No network interfaces found. Check network and permissions.');
       }
 
-      debugPrint('[MulticastService] Available interfaces:');
+      AppLogger.d('Available interfaces:', tag: 'Multicast');
       for (var interface in interfaces) {
-        debugPrint('  ${interface.name}: ${interface.addresses.map((a) => a.address).join(", ")}');
+        AppLogger.v('  ${interface.name}: ${interface.addresses.map((a) => a.address).join(", ")}', tag: 'Multicast');
         
         // Detect VPN/cellular interfaces (iOS specific) - More accurate detection
         if (Platform.isIOS) {
@@ -147,7 +130,7 @@ class MulticastService {
                   addr.address.startsWith('192.168.') // VPN can use private ranges
                 )) {
               isVpnInterface = true;
-              debugPrint('[MulticastService] Detected VPN interface: ${interface.name}');
+              AppLogger.w('Detected VPN interface: ${interface.name}', tag: 'Multicast');
             }
           }
           

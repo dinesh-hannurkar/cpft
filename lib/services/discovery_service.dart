@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cpft/core/logging/app_logger.dart';
 import 'package:cpft/features/webshare/services/web_server.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
@@ -103,24 +104,24 @@ class DiscoveryService {
   /// Initialize and start all services
   Future<void> initialize() async {
     if (_isInitialized) {
-      print('[DiscoveryService] Already initialized');
+      AppLogger.d('[DiscoveryService] Already initialized');
       return;
     }
 
-    print('[DiscoveryService] Initializing...');
-    print('[DiscoveryService] Alias: $alias');
-    print('[DiscoveryService] Port: $port');
-    print('[DiscoveryService] Fingerprint: $fingerprint');
-    print('[DiscoveryService] Device Model: $deviceModel');
+    AppLogger.i('[DiscoveryService] Initializing...');
+    AppLogger.d('[DiscoveryService] Alias: $alias');
+    AppLogger.d('[DiscoveryService] Port: $port');
+    AppLogger.d('[DiscoveryService] Fingerprint: $fingerprint');
+    AppLogger.d('[DiscoveryService] Device Model: $deviceModel');
 
     try {
       // Acquire multicast lock on Android
       if (Platform.isAndroid) {
-        print('[DiscoveryService] Acquiring Android multicast lock...');
+        AppLogger.d('[DiscoveryService] Acquiring Android multicast lock...');
         final lockAcquired = await MulticastPlatformHelper.acquireMulticastLock();
         if (!lockAcquired) {
-          print('[DiscoveryService] Warning: Failed to acquire multicast lock');
-          print('[DiscoveryService] Multicast discovery may not work properly');
+          AppLogger.w('[DiscoveryService] Warning: Failed to acquire multicast lock');
+          AppLogger.w('[DiscoveryService] Multicast discovery may not work properly');
         }
       }
 
@@ -133,7 +134,7 @@ class DiscoveryService {
           deviceModel: deviceModel,
         );
       } else {
-        print('[DiscoveryService] Reusing existing HttpDiscoveryClient instance');
+        AppLogger.d('[DiscoveryService] Reusing existing HttpDiscoveryClient instance');
       }
 
       // Initialize and start HTTP server
@@ -147,18 +148,18 @@ class DiscoveryService {
       await _httpServer!.start();
 
       // Initialize ConnectionManager for handling P2P connections
-      print('[DiscoveryService] Initializing ConnectionManager');
+      AppLogger.d('[DiscoveryService] Initializing ConnectionManager');
       if (_sharedConnectionManager == null) {
         _sharedConnectionManager = ConnectionManager();
         _sharedConnectionManager!.initialize(alias);
       } else {
-        print('[DiscoveryService] Reusing existing ConnectionManager (preserving active connections)');
+        AppLogger.d('[DiscoveryService] Reusing existing ConnectionManager (preserving active connections)');
         // Ensure it has the correct alias in case of restart
         _sharedConnectionManager!.initialize(alias);
       }
 
       // Initialize and start P2P incoming connection listener
-      print('[DiscoveryService] Starting P2P connection listener on port $p2pPort');
+      AppLogger.d('[DiscoveryService] Starting P2P connection listener on port $p2pPort');
       _incomingConnectionService ??= IncomingConnectionService(
         port: p2pPort,
         deviceName: alias,
@@ -177,20 +178,20 @@ class DiscoveryService {
         _multicastService!.addDiscoveryListener(_onMulticastDiscovery);
         await _multicastService!.startListening();
       } catch (e) {
-        print('[DiscoveryService] ⚠️  Multicast service failed to start: $e');
-        print('[DiscoveryService] This usually means no network connection is available');
-        print('[DiscoveryService] App will continue but discovery may be limited');
+        AppLogger.w('[DiscoveryService] Multicast service failed to start: $e');
+        AppLogger.w('[DiscoveryService] This usually means no network connection is available');
+        AppLogger.w('[DiscoveryService] App will continue but discovery may be limited');
         _multicastService = null;
       }
 
       // iOS real devices: Use Bonjour/mDNS instead of multicast
       if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
-        print('[DiscoveryService] iOS detected - starting Bonjour service');
-        print('[DiscoveryService] ⚠️  IMPORTANT: iOS requires Local Network permission');
-        print('[DiscoveryService] If discovery doesn\'t work:');
-        print('[DiscoveryService]   1. Go to iPhone Settings → Privacy → Local Network');
-        print('[DiscoveryService]   2. Find "cpft" and toggle it ON');
-        print('[DiscoveryService]   3. Restart the app');
+        AppLogger.i('[DiscoveryService] iOS detected - starting Bonjour service');
+        AppLogger.w('[DiscoveryService] IMPORTANT: iOS requires Local Network permission');
+        AppLogger.w('[DiscoveryService] If discovery doesn\'t work:');
+        AppLogger.w('[DiscoveryService]   1. Go to iPhone Settings → Privacy → Local Network');
+        AppLogger.w('[DiscoveryService]   2. Find "cpft" and toggle it ON');
+        AppLogger.w('[DiscoveryService]   3. Restart the app');
         
         try {
           _bonjourService = BonjourService(
@@ -202,14 +203,14 @@ class DiscoveryService {
           _bonjourService!.addDiscoveryListener(_onBonjourDiscovery);
           await _bonjourService!.start();
         } catch (e) {
-          print('[DiscoveryService] ⚠️  Bonjour failed to start: $e');
-          print('[DiscoveryService] This usually means Local Network permission is denied');
+          AppLogger.w('[DiscoveryService] Bonjour failed to start: $e');
+          AppLogger.w('[DiscoveryService] This usually means Local Network permission is denied');
         }
       }
       
       // macOS: Also use Bonjour for local network discovery
       if (Platform.isMacOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
-        print('[DiscoveryService] macOS detected - starting Bonjour service');
+        AppLogger.i('[DiscoveryService] macOS detected - starting Bonjour service', tag: 'Discovery');
         
         try {
           _bonjourService = BonjourService(
@@ -221,13 +222,12 @@ class DiscoveryService {
           _bonjourService!.addDiscoveryListener(_onBonjourDiscovery);
           await _bonjourService!.start();
         } catch (e) {
-          print('[DiscoveryService] ⚠️  Bonjour failed to start on macOS: $e');
+          AppLogger.w('Bonjour failed to start on macOS: $e', tag: 'Discovery', error: e);
         }
       }
 
       _isInitialized = true;
-      print('[DiscoveryService] Initialization complete!');
-      print('[DiscoveryService] Listening for devices...');
+      AppLogger.i('Initialization complete. Listening for devices...', tag: 'Discovery');
       // Signal readiness to any awaiters
       _readyCompleter ??= Completer<void>();
       if (!(_readyCompleter!.isCompleted)) {
@@ -246,17 +246,17 @@ class DiscoveryService {
       // Initialize foreground service on Android (but don't start yet)
       // Service will start only when a connection is established
       if (Platform.isAndroid) {
-        print('[DiscoveryService] Initializing Android foreground service...');
+        AppLogger.d('Initializing Android foreground service...', tag: 'Discovery');
         try {
           await BackgroundService.initialize();
-          print('[DiscoveryService] ✅ Foreground service initialized (will start on connection)');
+          AppLogger.i('Foreground service initialized (will start on connection)', tag: 'Discovery');
         } catch (e) {
-          print('[DiscoveryService] ❌ Error initializing foreground service: $e');
+          AppLogger.w('Error initializing foreground service: $e', tag: 'Discovery', error: e);
         }
       }
     } catch (e) {
-      print('[DiscoveryService] ⚠️  Some discovery services failed to initialize: $e');
-      print('[DiscoveryService] App will continue with limited functionality');
+      AppLogger.w('Some discovery services failed to initialize: $e', tag: 'Discovery', error: e);
+      AppLogger.w('Continuing with limited functionality', tag: 'Discovery');
       // Don't rethrow - allow app to continue even if discovery has issues
     }
   }
@@ -265,8 +265,8 @@ class DiscoveryService {
   void _onIncomingConnection(Socket socket, String remoteName) async {
     final ip = socket.remoteAddress.address;
     final port = socket.remotePort;
-    print('[DiscoveryService] 📞 Incoming P2P connection from $remoteName');
-    print('[DiscoveryService] Remote address: $ip:$port');
+    AppLogger.d('Incoming P2P connection from $remoteName', tag: 'Discovery');
+    AppLogger.v('Remote address: $ip:$port', tag: 'Discovery');
 
     // Determine display name (try match discovered devices by IP)
     String displayName = remoteName;
@@ -281,7 +281,7 @@ class DiscoveryService {
 
     // If no listeners yet, queue the request to avoid losing the prompt
     if (_incomingRequestListeners.isEmpty) {
-      print('[DiscoveryService] ⚠️  No UI listeners for incoming requests yet. Queuing request from $displayName');
+      AppLogger.w('No UI listeners yet. Queuing incoming request from $displayName', tag: 'Discovery');
       _queuedIncoming.add(_QueuedIncoming(displayName: displayName, ip: ip, socket: socket, receivedAt: DateTime.now()));
       return;
     }
@@ -293,12 +293,12 @@ class DiscoveryService {
   void _dispatchIncomingToUi({required String displayName, required String ip, required Socket socket}) {
     // Build accept/decline closures
     Future<void> accept() async {
-      print('[DiscoveryService] ✅ Accepting incoming connection from $displayName');
+      AppLogger.i('Accepting incoming connection from $displayName', tag: 'Discovery');
       await _sharedConnectionManager!.handleIncomingConnection(socket, displayName);
     }
 
     Future<void> decline() async {
-      print('[DiscoveryService] ❌ Declining incoming connection from $displayName');
+      AppLogger.d('Declining incoming connection from $displayName', tag: 'Discovery');
       try {
         // Send explicit rejection message so remote can fail fast instead of waiting for handshake timeout
         final rejectPayload = {
@@ -319,11 +319,11 @@ class DiscoveryService {
       // Safety: ensure our incoming listener remains active after a decline
       try {
         if (!_incomingConnectionService!.isListening) {
-          print('[DiscoveryService] 🔁 Incoming service not listening after decline. Restarting listener...');
+          AppLogger.w('Incoming service not listening after decline. Restarting listener...', tag: 'Discovery');
           await _incomingConnectionService!.startListening();
         }
       } catch (e) {
-        print('[DiscoveryService] ⚠️ Failed to ensure incoming listening after decline: $e');
+        AppLogger.w('Failed to ensure incoming listening after decline: $e', tag: 'Discovery', error: e);
         // As a last resort, restart discovery services to recover the stack
         try { await restartDiscovery(); } catch (_) {}
       }
@@ -334,7 +334,7 @@ class DiscoveryService {
       try {
         listener(displayName, ip, p2pPort, accept, decline);
       } catch (e) {
-        print('[DiscoveryService] Error notifying incoming request listener: $e');
+        AppLogger.w('Error notifying incoming request listener: $e', tag: 'Discovery', error: e);
       }
     }
   }
@@ -351,11 +351,11 @@ class DiscoveryService {
 
     for (final q in draining) {
       if (q.receivedAt.isBefore(cutoff)) {
-        print('[DiscoveryService] 🗑️  Dropping stale queued incoming from ${q.displayName}');
+        AppLogger.d('Dropping stale queued incoming from ${q.displayName}', tag: 'Discovery');
         try { q.socket.close(); } catch (_) {}
         continue;
       }
-      print('[DiscoveryService] 📬 Dispatching queued incoming from ${q.displayName}');
+      AppLogger.d('Dispatching queued incoming from ${q.displayName}', tag: 'Discovery');
       _dispatchIncomingToUi(displayName: q.displayName, ip: q.ip, socket: q.socket);
     }
   }

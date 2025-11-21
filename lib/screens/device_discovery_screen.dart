@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cpft/core/logging/app_logger.dart';
 import 'dart:io';
 
 import 'package:cpft/features/webshare/presentation/web_file_manager_screen.dart';
@@ -10,7 +11,7 @@ import '../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../shared/widgets/app_confirm_dialog.dart';
 
 import '../services/discovery_service.dart';
-import '../features/chat/presentation/connection_screen.dart';
+import '../features/chat/presentation/connection_screen_refactored.dart';
 import 'package:file_picker/file_picker.dart';
 
 class DeviceDiscoveryScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   late DiscoveryService _discoveryService;
   bool _isInitialized = false;
   bool _isRefreshing = false;
-  Map<String, String> _discoveredDevices = {};
+  final Map<String, String> _discoveredDevices = {};
   // Track pending incoming prompts to avoid duplicates
   final Set<String> _pendingIncoming = {};
   // Track web uploads in progress
@@ -50,7 +51,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   }
 
   void _onWebUploadProgress(String filename, int received, int total) {
-    print('[UI] 📊 Upload progress: $filename - $received/$total bytes (${(received / total * 100).toStringAsFixed(1)}%)');
+    AppLogger.v('[DeviceDiscovery] Upload progress: $filename - $received/$total bytes (${(received / total * 100).toStringAsFixed(1)}%)', tag: 'DiscoveryUI');
     if (!mounted) return;
     
     setState(() {
@@ -103,7 +104,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       await accept();
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ConnectionScreen(
+          builder: (_) => ConnectionScreenRefactored(
             deviceName: deviceName,
             ipAddress: ipAddress,
             port: port,
@@ -127,7 +128,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     });
 
     try {
-      print('[UI] 🔄 Refresh triggered - clearing devices and re-scanning...');
+      AppLogger.d('Refresh triggered - clearing devices and scanning', tag: 'DiscoveryUI');
       
       // Clear the discovery service's device list
       _discoveryService.clearDevices();
@@ -142,7 +143,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       // for devices to be re-discovered from the ongoing Bonjour discovery
       // and incoming multicast messages
       if (Platform.isIOS) {
-        print('[UI] 📱 iOS: Waiting for Bonjour re-discovery...');
+        AppLogger.d('iOS: Waiting for Bonjour re-discovery...', tag: 'DiscoveryUI');
         // Give Bonjour time to trigger discovery events
         await Future.delayed(const Duration(milliseconds: 1500));
       } else {
@@ -150,9 +151,9 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         await Future.delayed(const Duration(milliseconds: 800));
       }
       
-      print('[UI] ✅ Refresh complete - found ${_discoveredDevices.length} devices');
+      AppLogger.i('Refresh complete - found ${_discoveredDevices.length} devices', tag: 'DiscoveryUI');
     } catch (e) {
-      print('[UI] ❌ Refresh error: $e');
+      AppLogger.w('Refresh error: $e', tag: 'DiscoveryUI', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Refresh failed: $e', style: const TextStyle(color: Colors.white))),
@@ -327,7 +328,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         ),
       );
     } catch (e) {
-      print('[UI] Error showing web link: $e');
+      AppLogger.w('Error showing web link: $e', tag: 'DiscoveryUI', error: e);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -396,7 +397,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         ),
       );
     } catch (e) {
-      print('[UI] Error sharing file to web: $e');
+      AppLogger.w('Error sharing file to web: $e', tag: 'DiscoveryUI', error: e);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -696,7 +697,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -783,10 +784,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: deviceInfo['color'].withOpacity(0.15),
+                  color: deviceInfo['color'].withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(26),
                   border: Border.all(
-                    color: deviceInfo['color'].withOpacity(0.3),
+                    color: deviceInfo['color'].withValues(alpha: 0.3),
                     width: 2,
                   ),
                 ),
@@ -822,10 +823,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: deviceInfo['color'].withOpacity(0.15),
+                            color: deviceInfo['color'].withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: deviceInfo['color'].withOpacity(0.3),
+                              color: deviceInfo['color'].withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
@@ -901,7 +902,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   
   /// Parse device name to extract platform and display information
   Map<String, dynamic> _parseDeviceName(String deviceName) {
-    print('[UI] 🔍 Parsing device name: "$deviceName"');
+    AppLogger.v('Parsing device name: "$deviceName"', tag: 'DiscoveryUI');
     
     IconData icon = Icons.devices;
     Color color = Colors.blue;
@@ -911,17 +912,17 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     
     // Extract device ID if present (last 4 digits after last hyphen)
     final parts = deviceName.split('-');
-    print('[UI] 📊 Split into ${parts.length} parts: $parts');
+    AppLogger.v('Split into ${parts.length} parts: $parts', tag: 'DiscoveryUI');
     
     if (parts.length > 1 && parts.last.length == 4 && int.tryParse(parts.last) != null) {
       deviceId = parts.last;
-      print('[UI] ✅ Extracted device ID: $deviceId');
+      AppLogger.d('Extracted device ID: $deviceId', tag: 'DiscoveryUI');
       // Rebuild device name without the ID for display
       final nameWithoutId = parts.sublist(0, parts.length - 1).join('-');
       deviceName = nameWithoutId;
-      print('[UI] 📝 Device name without ID: "$deviceName"');
+      AppLogger.v('Device name without ID: "$deviceName"', tag: 'DiscoveryUI');
     } else {
-      print('[UI] ⚠️  No valid device ID found (last part: "${parts.last}", length: ${parts.last.length})');
+      AppLogger.w('No valid device ID found (last: "${parts.last}" len=${parts.last.length})', tag: 'DiscoveryUI');
     }
     
     if (deviceName.startsWith('iPhone-')) {
@@ -980,7 +981,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   }
 
   void _onDeviceSelected(String deviceName, String ipAddress) {
-    print('[UI] 🔌 Device selected: $deviceName at $ipAddress');
+    AppLogger.d('Device selected: $deviceName at $ipAddress', tag: 'DiscoveryUI');
     
     // Get connection manager from discovery service
     final connectionManager = _discoveryService.connectionManager;
@@ -997,12 +998,12 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     // Check if already connected to this device
     final existingConnection = connectionManager.getConnection(deviceName);
     if (existingConnection != null && existingConnection.isConnected) {
-      print('[UI] Already connected to $deviceName, navigating to existing chat');
+      AppLogger.d('Already connected to $deviceName, navigating to existing chat', tag: 'DiscoveryUI');
       // Navigate to existing connection without creating new one
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ConnectionScreen(
+          builder: (context) => ConnectionScreenRefactored(
             deviceName: deviceName,
             ipAddress: ipAddress,
             port: 53318,
@@ -1019,7 +1020,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ConnectionScreen(
+        builder: (context) => ConnectionScreenRefactored(
           deviceName: deviceName,
           ipAddress: ipAddress,
           port: 53318, // Use P2P port
