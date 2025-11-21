@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
@@ -56,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _localIp;
   // Listener to refresh UI when connections change
   Function(String, ConnectionService, bool)? _connectionListener;
+  Timer? _networkCheckTimer;
 
   @override
   void initState() {
@@ -68,7 +70,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _initializeLocalIp();
   // Listen for incoming connection requests to show confirmation popup
   widget.discoveryService.addIncomingRequestListener(_onIncomingRequest);
-    _initializeNetworkName();
+    _initializeNetworkName().then((_) {
+      // Pause radar if starting with no network
+      if (_networkName == 'Not Connected') {
+        controller.pauseRadar();
+      }
+    });
+    _startNetworkStatusCheck();
     
     // Attach connection manager listener if available to refresh connected device count
     final cm = widget.discoveryService.connectionManager;
@@ -126,6 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _networkCheckTimer?.cancel();
     // Remove incoming listener
     widget.discoveryService.removeIncomingRequestListener(_onIncomingRequest);
     if (_connectionListener != null) {
@@ -180,6 +189,35 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _startNetworkStatusCheck() {
+    // Check network status every 5 seconds
+    _networkCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      final oldNetworkName = _networkName;
+      await _initializeNetworkName();
+      
+      final isNowDisconnected = _networkName == 'Not Connected';
+      final wasDisconnected = oldNetworkName == 'Not Connected';
+      
+      // If network disconnected, clear discovered devices and pause radar
+      if (isNowDisconnected && !wasDisconnected) {
+        print('[HomeScreen] Network disconnected - clearing discovered devices and pausing radar');
+        widget.discoveryService.clearDevices();
+        controller.pauseRadar();
+        if (mounted) {
+          setState(() {});
+        }
+      }
+      // If network reconnected, resume radar
+      else if (!isNowDisconnected && wasDisconnected) {
+        print('[HomeScreen] Network reconnected - resuming radar');
+        controller.resumeRadar();
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    });
+  }
+
   Future<void> _initializeNetworkName() async {
     print("=== _initializeNetworkName called ===");
     // Request permissions first
@@ -198,23 +236,37 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // Get network name (WiFi name or IP-based fallback)
-    final networkName = await NetworkUtils.getWifiName();
-    print(
-      networkName != null
-          ? 'Network name obtained: $networkName'
-          : 'No network name obtained',
-    );
-    if (mounted) {
-      setState(() {
-        _networkName = networkName;
-      });
+    try {
+      final networkName = await NetworkUtils.getWifiName();
+      print(
+        networkName != null
+            ? 'Network name obtained: $networkName'
+            : 'No network name obtained',
+      );
+      if (mounted) {
+        setState(() {
+          _networkName = networkName;
+        });
+      }
+    } catch (e) {
+      print('Error getting network name: $e');
+      if (mounted) {
+        setState(() {
+          _networkName = 'Not Connected';
+        });
+      }
     }
   }
 
   Future<void> _initializeLocalIp() async {
-    _localIp = await NetworkUtils.getLanIPv4();
-    if (mounted) {
-      setState(() {});
+    try {
+      _localIp = await NetworkUtils.getLanIPv4();
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error getting local IP: $e');
+      // Leave _localIp as null if error occurs
     }
   }
 
@@ -223,7 +275,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final devices = controller.devices.values.where((d) => d.ip != _localIp).toList();
+        // Only show devices if we have a network connection
+        final hasNetwork = _networkName != null && _networkName != 'Not Connected';
+        final devices = hasNetwork 
+            ? controller.devices.values.where((d) => d.ip != _localIp).toList()
+            : <DeviceInfo>[];
         final dots = <Widget>[];
         // Track all used positions to prevent any overlaps
         final List<DevicePosition> usedPositions = [];

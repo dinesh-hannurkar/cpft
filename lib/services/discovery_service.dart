@@ -167,14 +167,21 @@ class DiscoveryService {
       await _incomingConnectionService!.startListening();
 
       // Initialize and start multicast listener
-      _multicastService ??= MulticastService(
-        alias: alias,
-        fingerprint: fingerprint,
-        port: port,
-        deviceModel: deviceModel,
-      );
-      _multicastService!.addDiscoveryListener(_onMulticastDiscovery);
-      await _multicastService!.startListening();
+      try {
+        _multicastService ??= MulticastService(
+          alias: alias,
+          fingerprint: fingerprint,
+          port: port,
+          deviceModel: deviceModel,
+        );
+        _multicastService!.addDiscoveryListener(_onMulticastDiscovery);
+        await _multicastService!.startListening();
+      } catch (e) {
+        print('[DiscoveryService] ⚠️  Multicast service failed to start: $e');
+        print('[DiscoveryService] This usually means no network connection is available');
+        print('[DiscoveryService] App will continue but discovery may be limited');
+        _multicastService = null;
+      }
 
       // iOS real devices: Use Bonjour/mDNS instead of multicast
       if (Platform.isIOS && !Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -248,8 +255,9 @@ class DiscoveryService {
         }
       }
     } catch (e) {
-      print('[DiscoveryService] Initialization failed: $e');
-      rethrow;
+      print('[DiscoveryService] ⚠️  Some discovery services failed to initialize: $e');
+      print('[DiscoveryService] App will continue with limited functionality');
+      // Don't rethrow - allow app to continue even if discovery has issues
     }
   }
 
@@ -434,7 +442,11 @@ class DiscoveryService {
     }
 
     print('[DiscoveryService] Sending announcement...');
-    await _multicastService!.sendAnnouncement();
+    if (_multicastService != null) {
+      await _multicastService!.sendAnnouncement();
+    } else {
+      print('[DiscoveryService] Multicast service not available');
+    }
     
     // On iOS/macOS, also trigger Bonjour refresh
     if ((Platform.isIOS || Platform.isMacOS) && _bonjourService != null) {
@@ -569,10 +581,10 @@ class DiscoveryService {
       // Check if HTTP server is running
       final serverHealthy = _httpServer?.isRunning ?? false;
       // Check if incoming P2P listener is running
-      final incomingHealthy = _incomingConnectionService!.isListening;
+      final incomingHealthy = _incomingConnectionService?.isListening ?? false;
       
-      // Check if multicast service is listening
-      // (We can't easily check this, so we'll assume it's working if no errors)
+      // Check if multicast service is available and listening
+      final multicastHealthy = _multicastService != null;
       
       // Check if we've discovered any devices recently
       final now = DateTime.now();
@@ -580,7 +592,7 @@ class DiscoveryService {
         (device) => now.difference(device.lastSeen) < const Duration(minutes: 1)
       ).length;
       
-      print('[DiscoveryService] Health check: HttpServer=$serverHealthy, IncomingListener=$incomingHealthy, RecentDevices=$recentDevices');
+      print('[DiscoveryService] Health check: HttpServer=$serverHealthy, IncomingListener=$incomingHealthy, Multicast=$multicastHealthy, RecentDevices=$recentDevices');
       
       // If HTTP server failed, perform full restart
       if (!serverHealthy) {

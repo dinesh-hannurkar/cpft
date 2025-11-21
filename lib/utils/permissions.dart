@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart';
 
 class AppPermissions {
   static Future<bool> requestNetworkPermissions() async {
@@ -12,28 +13,41 @@ class AppPermissions {
   }
 
   static Future<bool> _requestAndroidPermissions() async {
-    // Android WiFi SSID access requires location (fine or coarse depending on API level)
-    final fine = await Permission.location.status;
-    if (!fine.isGranted) {
-      final req = await Permission.location.request();
-      if (!req.isGranted) {
-        print('Android fine location denied; SSID and discovery may be limited.');
+    // First check if location services are enabled on the device
+    final serviceEnabled = await isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      print('Location services are disabled on device. User must enable in Settings.');
+      print('Please enable Location in device Settings.');
+      return false;
+    }
+    
+    // Android WiFi SSID access requires location (fine location for Android 10+)
+    final locationStatus = await Permission.location.status;
+    
+    if (!locationStatus.isGranted) {
+      print('Location permission not granted. Requesting...');
+      final requestResult = await Permission.location.request();
+      
+      if (!requestResult.isGranted) {
+        print('Location permission denied. WiFi name detection will not work.');
+        print('This permission is REQUIRED to detect WiFi network name on Android 10+');
         return false;
       }
+      print('Location permission granted');
     }
-
-    // Coarse (for older patterns) - permission_handler maps both
-    final coarse = await Permission.locationWhenInUse.status; // may mirror fine
-    if (!coarse.isGranted) {
-      final req2 = await Permission.locationWhenInUse.request();
-      if (!req2.isGranted) {
-        print('Android coarse/when-in-use location denied; continuing with fine only.');
-      }
-    }
+    
     return true;
   }
 
   static Future<bool> _requestIOSPermissions() async {
+    // First check if location services are enabled on the device
+    final serviceEnabled = await isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      print('Location services are disabled on device. User must enable in Settings.');
+      print('Please enable Location Services in Settings > Privacy & Security > Location Services');
+      return false;
+    }
+    
     // On iOS, we need location permission for WiFi information access
     final locationStatus = await Permission.locationWhenInUse.status;
     print('iOS Location permission current status: $locationStatus');
@@ -68,8 +82,35 @@ class AppPermissions {
     await openAppSettings();
   }
 
+  static Future<void> openSystemLocationSettings() async {
+    if (Platform.isAndroid) {
+      print('Opening Android system location settings...');
+      try {
+        // Use MethodChannel to open Android location settings
+        const platform = MethodChannel('cpft/settings');
+        await platform.invokeMethod('openLocationSettings');
+      } catch (e) {
+        print('Error opening location settings: $e');
+        // Fallback to app settings
+        await openAppSettings();
+      }
+    } else if (Platform.isIOS) {
+      print('Opening iOS location settings...');
+      // On iOS, openAppSettings goes to app-specific settings where user can see location permission
+      await openAppSettings();
+    } else {
+      await openAppSettings();
+    }
+  }
+
   static Future<bool> checkLocationPermission() async {
     final status = await Permission.locationWhenInUse.status;
     return status.isGranted;
+  }
+
+  /// Check if location services are enabled on the device
+  static Future<bool> isLocationServiceEnabled() async {
+    final serviceStatus = await Permission.location.serviceStatus;
+    return serviceStatus.isEnabled;
   }
 }

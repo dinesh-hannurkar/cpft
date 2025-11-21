@@ -33,25 +33,10 @@ class NetworkUtils {
         }
       }
 
-      // Fall back to other interfaces if no WiFi found
-      for (final iface in otherInterfaces) {
-        for (final addr in iface.addresses) {
-          if (!addr.isLoopback && _isValidLanAddress(addr.address)) {
-            print('[NetworkUtils] Using interface ${iface.name}: ${addr.address}');
-            return addr.address;
-          }
-        }
-      }
-
-      // Last resort: any non-loopback address
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          if (!addr.isLoopback) {
-            print('[NetworkUtils] Using fallback interface ${iface.name}: ${addr.address}');
-            return addr.address;
-          }
-        }
-      }
+      // Don't fall back to other interfaces (mobile data) - return null instead
+      // This ensures we only show as connected when on actual WiFi/LAN
+      print('[NetworkUtils] No WiFi interface with valid LAN address found');
+      return null;
     } catch (e) {
       print('[NetworkUtils] Error getting LAN IPv4: $e');
     }
@@ -71,19 +56,16 @@ class NetworkUtils {
       // 192.168.x.x (most common)
       // 172.16.x.x to 172.31.x.x
       // 10.x.x.x
-      // 169.254.x.x (link-local/APIPA - but we'll allow it as fallback)
 
       if (first == 192 && second == 168) return true; // 192.168.x.x
       if (first == 172 && second >= 16 && second <= 31) return true; // 172.16-31.x.x
       if (first == 10) return true; // 10.x.x.x
-      if (first == 169 && second == 254) return true; // 169.254.x.x (link-local)
 
-      // Reject common mobile/carrier IP ranges that start with:
+      // Reject everything else including:
       // 100.x.x.x (carrier-grade NAT)
-      // 25.x.x.x, 26.x.x.x, etc. (various carrier ranges)
-      if (first == 100) return false; // Carrier-grade NAT
-
-      return false; // Unknown range, be conservative
+      // 169.254.x.x (link-local - indicates no DHCP)
+      // Any other range is likely mobile/carrier network
+      return false;
     } catch (_) {
       return false;
     }
@@ -92,6 +74,14 @@ class NetworkUtils {
   /// Get the current WiFi SSID (network name).
   static Future<String?> getWifiName() async {
     try {
+      // First check if we have a valid WiFi/LAN IP
+      // This ensures we're not on mobile data
+      final lanIp = await getLanIPv4();
+      if (lanIp == null) {
+        print('No valid LAN IP found - not on WiFi');
+        return 'Not Connected';
+      }
+
       // On Android 10+ location permission (fine + precise) is required for SSID
       if (Platform.isAndroid) {
         final status = await Permission.location.status;
@@ -122,6 +112,6 @@ class NetworkUtils {
       final ip = await getLanIPv4();
       if (ip != null) return 'Local ($ip)';
     } catch (_) {}
-    return 'Connected';
+    return 'Not Connected';
   }
 }

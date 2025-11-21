@@ -8,10 +8,12 @@ class HomeController extends ChangeNotifier {
 
   Timer? _radarTimer;
   double _sweepAngle = 0;
+  bool _isPaused = false;
 
   // Exposed state
   double get sweepAngle => _sweepAngle;
   Map<String, DeviceInfo> get devices => discoveryService.discoveredDevices;
+  bool get isPaused => _isPaused;
 
   HomeController({required this.discoveryService, required this.myDeviceName});
 
@@ -24,8 +26,10 @@ class HomeController extends ChangeNotifier {
     });
 
     _radarTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
-      _sweepAngle += 0.010; // ~25% slower sweep
-      if (_sweepAngle > 6.28318530718) _sweepAngle -= 6.28318530718; // 2*pi wrap
+      if (!_isPaused) {
+        _sweepAngle += 0.010; // ~25% slower sweep
+        if (_sweepAngle > 6.28318530718) _sweepAngle -= 6.28318530718; // 2*pi wrap
+      }
       notifyListeners();
     });
   }
@@ -41,5 +45,21 @@ class HomeController extends ChangeNotifier {
     // This will trigger the cleanup timer in DiscoveryService
     // For immediate effect, we could call notifyListeners after a delay
     // but the sweep timer will handle UI updates
+  }
+
+  /// Pause radar sweep
+  void pauseRadar() {
+    if (!_isPaused) {
+      _isPaused = true;
+      notifyListeners();
+    }
+  }
+
+  /// Resume radar sweep
+  void resumeRadar() {
+    if (_isPaused) {
+      _isPaused = false;
+      notifyListeners();
+    }
   }
 }

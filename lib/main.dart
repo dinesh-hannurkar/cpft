@@ -171,20 +171,33 @@ class PermissionWrapper extends StatefulWidget {
   State<PermissionWrapper> createState() => _PermissionWrapperState();
 }
 
-class _PermissionWrapperState extends State<PermissionWrapper> {
+class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindingObserver {
   bool _permissionsGranted = false;
   bool _isCheckingPermissions = true;
+  bool _locationServiceDisabled = false;
   String? _deviceName;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initialize();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // When app resumes from background (e.g., returning from Settings), re-check permissions
+    if (state == AppLifecycleState.resumed && (!_permissionsGranted || _locationServiceDisabled)) {
+      print('[PermissionWrapper] App resumed - re-checking permissions');
+      _checkPermissions();
+    }
   }
 
   Future<void> _initialize() async {
@@ -212,7 +225,19 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
   Future<void> _checkPermissions() async {
     setState(() {
       _isCheckingPermissions = true;
+      _locationServiceDisabled = false;
     });
+
+    // Check if location services are enabled
+    final serviceEnabled = await AppPermissions.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        _locationServiceDisabled = true;
+        _permissionsGranted = false;
+        _isCheckingPermissions = false;
+      });
+      return;
+    }
 
     final granted = await AppPermissions.requestNetworkPermissions();
     print("=== Permissions granted: $granted ===");
@@ -255,36 +280,66 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
     }
 
   if (!_permissionsGranted) {
+      final isServiceDisabled = _locationServiceDisabled;
       return Scaffold(
         resizeToAvoidBottomInset: false,
+        backgroundColor: Colors.white,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.warning, size: 64, color: Colors.orange),
-                const SizedBox(height: 16),
-                const Text(
-                  'Permissions Required',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                Icon(
+                  isServiceDisabled ? Icons.location_off : Icons.location_on,
+                  size: 64,
+                  color: Colors.orange,
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'This app needs network permissions to discover devices on your local network.',
+                Text(
+                  isServiceDisabled
+                      ? 'Location Services Disabled'
+                      : 'Location Permission Required',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isServiceDisabled
+                      ? 'Please enable Location Services in your device settings to use this app. WiFi network detection requires location services to be turned on.'
+                      : Platform.isAndroid
+                          ? 'On Android 10+, location permission is required to detect your WiFi network name. This helps you confirm you\'re connected to the right network for file transfers.'
+                          : 'Location permission is needed to detect your WiFi network name and discover nearby devices on your local network.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
                 ),
+                if (!isServiceDisabled) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Note: Your location data is never collected or shared. This permission only allows the app to read your WiFi name.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.black54),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: _checkPermissions,
-                  child: const Text('Grant Permissions'),
+                  onPressed: isServiceDisabled
+                      ? AppPermissions.openSystemLocationSettings
+                      : _checkPermissions,
+                  child: Text(isServiceDisabled
+                      ? 'Open Location Settings'
+                      : 'Grant Permission'),
                 ),
-                const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: AppPermissions.openLocationSettings,
-                        child: const Text('Open Settings'),
-                      ),
+                if (!isServiceDisabled) ...[
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: AppPermissions.openLocationSettings,
+                    child: const Text('Open Settings'),
+                  ),
+                ],
               ],
             ),
           ),
