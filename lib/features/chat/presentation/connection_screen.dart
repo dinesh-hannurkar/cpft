@@ -266,7 +266,7 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                     
                     if (status == ConnectionStatus.connected) {
                       statusText = 'Connected';
-                      statusColor = Colors.green;
+                      statusColor = AppColors.green;
                       statusIcon = Icons.wifi;
                     } else if (status == ConnectionStatus.connecting) {
                       statusText = 'Connecting...';
@@ -278,11 +278,11 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                       statusIcon = Icons.wifi_off;
                     } else if (status == ConnectionStatus.failed) {
                       statusText = 'Failed';
-                      statusColor = Colors.red;
+                      statusColor = AppColors.red;
                       statusIcon = Icons.error_outline;
                     } else {
                       statusText = 'Unknown';
-                      statusColor = Colors.grey;
+                      statusColor = AppColors.greyDark;
                       statusIcon = Icons.help_outline;
                     }
                     
@@ -1970,68 +1970,6 @@ class _ConnectionScreenState extends State<ConnectionScreen>
                   ],
                 ),
                 SizedBox(height: 6),
-                // if (savedPath != null && isMyMessage) ...[
-                //   const SizedBox(height: 6),
-                //   Wrap(
-                //     alignment: WrapAlignment.start,
-                //     spacing: 8,
-                //     runSpacing: 0,
-                //     children: [
-                //       TextButton.icon(
-                //         onPressed: () async {
-                //           try {
-                //             final parent = savedPath.contains('/')
-                //                 ? savedPath.substring(0, savedPath.lastIndexOf('/'))
-                //                 : savedPath;
-                //             await OpenFilex.open(parent);
-                //           } catch (_) {
-                //             await OpenFilex.open(savedPath);
-                //           }
-                //         },
-                //         icon: const Icon(Icons.folder_open, size: 16),
-                //         label: const Text('Reveal'),
-                //         style: TextButton.styleFrom(
-                //           foregroundColor: Colors.blue.shade700,
-                //           padding: const EdgeInsets.symmetric(horizontal: 10),
-                //           minimumSize: const Size(0, 34),
-                //           shape: RoundedRectangleBorder(
-                //             borderRadius: BorderRadius.circular(8),
-                //           ),
-                //         ),
-                //       ),
-                //       TextButton.icon(
-                //         onPressed: () async {
-                //           await _saveAs(savedPath, name);
-                //         },
-                //         icon: const Icon(Icons.save_alt, size: 16),
-                //         label: const Text('Save As'),
-                //         style: TextButton.styleFrom(
-                //           foregroundColor: Colors.blue.shade700,
-                //           padding: const EdgeInsets.symmetric(horizontal: 10),
-                //           minimumSize: const Size(0, 34),
-                //           shape: RoundedRectangleBorder(
-                //             borderRadius: BorderRadius.circular(8),
-                //           ),
-                //         ),
-                //       ),
-                //     ],
-                //   ),
-                // ],
-                // Padding(
-                //   padding: const EdgeInsets.only(top: 4.0),
-                //   child: Row(
-                //     children: [
-                //       const Spacer(),
-                //       Text(
-                //         _formatTime(message.timestamp),
-                //         style: const TextStyle(
-                //           color: Colors.black38,
-                //           fontSize: 10,
-                //         ),
-                //       ),
-                //     ],
-                //   ),
-                // ),
               ],
             ),
           ),
