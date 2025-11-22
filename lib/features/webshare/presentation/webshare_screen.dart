@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:async';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:flutter/rendering.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_action_button.dart';
 import '../../../core/constants/app_colors.dart';
@@ -471,37 +471,31 @@ class _WebShareScreenState extends State<WebShareScreen>
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: AppSizes.sm),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          Column(
                             children: [
-                              GestureDetector(
-                                onTap: () {},
-                                child: Text(
-                                  _serverUrl ?? 'Loading...',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w600,
-                                        decoration: TextDecoration.underline,
-                                      ),
+                              if (_serverUrl != null)
+                                QrImageView(
+                                  data: _serverUrl!,
+                                  size: 150.0,
                                 ),
+                              const SizedBox(height: AppSizes.sm),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {},
+                                    child: Text(
+                                      _serverUrl ?? 'Loading...',
+                                      style: Theme.of(context).textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w600,
+                                            decoration: TextDecoration.underline,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              // const SizedBox(width: AppSizes.sm),
-                              // AppActionButton(
-                              //   text: 'Copy',
-                              //   onPressed: () {
-                              //     if (_serverUrl != null) {
-                              //       Clipboard.setData(ClipboardData(text: _serverUrl!));
-                              //       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied URL to clipboard')));
-                              //     }
-                              //   },
-                              //   backgroundColor: AppColors.primary,
-                              //   textColor: AppColors.white,
-                              //   borderColor: AppColors.primary,
-                              //   shadowColor: AppColors.primary.withOpacity(0.12),
-                              //   width: 100,
-                              //   height: 38,
-                              // ),
                             ],
                           ),
                           const SizedBox(height: AppSizes.sm),

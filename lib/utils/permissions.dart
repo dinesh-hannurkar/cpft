@@ -79,8 +79,16 @@ class AppPermissions {
   }
 
   static Future<void> openLocationSettings() async {
-    AppLogger.d('Opening app settings for location permission', tag: 'Permissions');
-    await openAppSettings();
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      AppLogger.d('Location settings not applicable on desktop platforms', tag: 'Permissions');
+      return;
+    }
+    try {
+      AppLogger.d('Opening app settings for location permission', tag: 'Permissions');
+      await openAppSettings();
+    } catch (e) {
+      AppLogger.w('Error opening location settings: $e', tag: 'Permissions', error: e);
+    }
   }
 
   static Future<void> openSystemLocationSettings() async {
@@ -93,25 +101,51 @@ class AppPermissions {
       } catch (e) {
         AppLogger.w('Error opening Android system location settings: $e', tag: 'Permissions', error: e);
         // Fallback to app settings
-        await openAppSettings();
+        try {
+          await openAppSettings();
+        } catch (e2) {
+          AppLogger.w('Error opening app settings fallback: $e2', tag: 'Permissions', error: e2);
+        }
       }
     } else if (Platform.isIOS) {
       AppLogger.d('Opening iOS location settings', tag: 'Permissions');
       // On iOS, openAppSettings goes to app-specific settings where user can see location permission
-      await openAppSettings();
+      try {
+        await openAppSettings();
+      } catch (e) {
+        AppLogger.w('Error opening iOS settings: $e', tag: 'Permissions', error: e);
+      }
     } else {
-      await openAppSettings();
+      AppLogger.d('Location settings not applicable on desktop platforms', tag: 'Permissions');
     }
   }
 
   static Future<bool> checkLocationPermission() async {
-    final status = await Permission.locationWhenInUse.status;
-    return status.isGranted;
+    // macOS doesn't support location permission checks
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      return true;
+    }
+    try {
+      final status = await Permission.locationWhenInUse.status;
+      return status.isGranted;
+    } catch (e) {
+      AppLogger.w('Error checking location permission: $e', tag: 'Permissions', error: e);
+      return true; // Assume granted on platforms that don't support it
+    }
   }
 
   /// Check if location services are enabled on the device
   static Future<bool> isLocationServiceEnabled() async {
-    final serviceStatus = await Permission.location.serviceStatus;
-    return serviceStatus.isEnabled;
+    // macOS and other desktop platforms don't need location service checks
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      return true;
+    }
+    try {
+      final serviceStatus = await Permission.location.serviceStatus;
+      return serviceStatus.isEnabled;
+    } catch (e) {
+      AppLogger.w('Error checking location service status: $e', tag: 'Permissions', error: e);
+      return true; // Assume enabled on platforms that don't support it
+    }
   }
 }
