@@ -9,7 +9,7 @@ import 'package:mime/mime.dart';
 /// Web server for browser-based file transfers
 class WebServer {
   HttpServer? _server;
-  int _port = 8080;
+  int _port = 80;
   final String deviceName;
   final List<WebSocket> _connectedClients = [];
   
@@ -41,7 +41,7 @@ class WebServer {
   });
 
   /// Check if the web server port is already in use
-  static Future<bool> isPortInUse({int port = 8080}) async {
+  static Future<bool> isPortInUse({int port = 80}) async {
     try {
       final socket = await Socket.connect('127.0.0.1', port, timeout: const Duration(milliseconds: 500));
       await socket.close();
@@ -52,7 +52,7 @@ class WebServer {
   }
 
   /// Force stop any web server running on the specified port
-  static Future<bool> forceStop({int port = 8080}) async {
+  static Future<bool> forceStop({int port = 80}) async {
     debugPrint('[WebServer] Attempting to force stop servers on port $port');
     
     bool stoppedAny = false;
@@ -76,7 +76,7 @@ class WebServer {
   int get connectedClientsCount => _connectedClients.length;
   
   /// Start the web server
-  Future<bool> start({int port = 8080}) async {
+  Future<bool> start({int port = 80}) async {
     if (_server != null) {
       debugPrint('[WebServer] Already running');
       return true;
@@ -88,6 +88,7 @@ class WebServer {
       // Prefer dual-stack (IPv6 with IPv4-mapped) when available
       try {
         _server = await HttpServer.bind(InternetAddress.anyIPv6, _port, v6Only: false);
+        
         debugPrint('[WebServer] ✅ Started (dual-stack) on port $_port');
       } catch (e) {
         // Fallback to IPv4 only

@@ -183,7 +183,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     try {
       // Start web server if not running
       if (!_discoveryService.isWebServerRunning) {
-        final success = await _discoveryService.startWebServer(port: 8080);
+        final success = await _discoveryService.startWebServer(port: 80);
         if (!success) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(

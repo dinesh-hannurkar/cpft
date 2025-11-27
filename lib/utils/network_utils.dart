@@ -16,8 +16,8 @@ class NetworkUtils {
 
       for (final iface in interfaces) {
         final name = iface.name.toLowerCase();
-        // Common WiFi interface names
-        if (name.startsWith('wlan') || name.startsWith('en') || name.startsWith('eth')) {
+        // Common WiFi interface names, including hotspot (ap0 on Android)
+        if (name.startsWith('wlan') || name.startsWith('en') || name.startsWith('eth') || name.startsWith('ap')) {
           wifiInterfaces.add(iface);
         } else {
           otherInterfaces.add(iface);

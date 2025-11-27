@@ -15,11 +15,13 @@ import '../services/web_server.dart';
 /// Main screen for web share functionality
 class WebShareScreen extends StatefulWidget {
   final String deviceName;
+  final String? customServiceName;
   final dynamic discoveryService; // TODO: Import proper type
 
   const WebShareScreen({
     super.key,
     required this.deviceName,
+    this.customServiceName,
     this.discoveryService,
   });
 
@@ -59,6 +61,7 @@ class _WebShareScreenState extends State<WebShareScreen>
     super.initState();
     _webShareService = WebShareService(
       deviceName: widget.deviceName,
+      customServiceName: widget.customServiceName,
       onFileUploadProgress: (filename, received, total) {
         if (!mounted) return;
         debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
@@ -115,6 +118,7 @@ class _WebShareScreenState extends State<WebShareScreen>
         // Create a dummy WebServer instance that reports as running
         _webShareService = WebShareService(
           deviceName: widget.deviceName,
+          customServiceName: widget.customServiceName,
           onFileUploadProgress: (filename, received, total) {
             if (!mounted) return;
             debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
@@ -154,6 +158,7 @@ class _WebShareScreenState extends State<WebShareScreen>
         // Port is free, proceed with normal initialization
         _webShareService = WebShareService(
           deviceName: widget.deviceName,
+          customServiceName: widget.customServiceName,
           onFileUploadProgress: (filename, received, total) {
             if (!mounted) return;
             debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
@@ -194,7 +199,9 @@ class _WebShareScreenState extends State<WebShareScreen>
   Future<void> _toggleWebServer() async {
     if (_webShareService.isRunning) {
       await _webShareService.stopWebServer();
-      setState(() => _serverUrl = null);
+      setState(() {
+        _serverUrl = null;
+      });
     } else {
       setState(() => _isStarting = true);
       final success = await _webShareService.startWebServer();
@@ -202,7 +209,9 @@ class _WebShareScreenState extends State<WebShareScreen>
 
       if (success && mounted) {
         final url = await _webShareService.getServerUrl();
-        setState(() => _serverUrl = url);
+        setState(() {
+          _serverUrl = url;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Web Share started. Access: $url', style: const TextStyle(color: Colors.white)),
@@ -235,6 +244,28 @@ class _WebShareScreenState extends State<WebShareScreen>
         SnackBar(content: Text('Shared file: ${result.files.first.name}', style: const TextStyle(color: Colors.white))),
       );
     }
+  }
+
+  // Test method to discover HTTP services
+  Future<void> _testDiscoverServices() async {
+    debugPrint('[WebShareScreen] 🔍 Testing service discovery...');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Discovering services... Check debug logs', style: TextStyle(color: Colors.white))),
+    );
+    
+    final services = await _webShareService.discoverHttpServices();
+    
+    debugPrint('[WebShareScreen] 📡 Discovery complete. Found ${services.length} services');
+    for (var service in services) {
+      debugPrint('[WebShareScreen] Service: ${service['instance']}');
+      debugPrint('[WebShareScreen]   - URL: ${service['url']}');
+      debugPrint('[WebShareScreen]   - IP URL: ${service['ipUrl']}');
+    }
+    
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Found ${services.length} services. Check logs for details', style: const TextStyle(color: Colors.white))),
+    );
   }
 
   Widget _buildFileTaglineBar() {
@@ -438,6 +469,14 @@ class _WebShareScreenState extends State<WebShareScreen>
                             ),
                       ),
                       const Spacer(),
+                      // Debug: Test discovery button
+                      IconButton(
+                        onPressed: _testDiscoverServices,
+                        icon: const Icon(Icons.search, size: 20),
+                        tooltip: 'Test Service Discovery',
+                        color: AppColors.secondary,
+                      ),
+                      const SizedBox(width: AppSizes.sm),
                       if (!_webShareService.isRunning)
                         TextButton(
                           onPressed: _isStarting ? null : _toggleWebServer,
@@ -462,7 +501,9 @@ class _WebShareScreenState extends State<WebShareScreen>
                       child: Column(
                         children: [
                           Text(
-                            'Open this link on any device to start sharing.',
+                            _serverUrl?.contains('localhost') == true
+                              ? 'Web share started (local access only - no network connection)'
+                              : 'Open this link on any device to start sharing.',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: AppColors.greyDark,
@@ -473,27 +514,143 @@ class _WebShareScreenState extends State<WebShareScreen>
                           const SizedBox(height: AppSizes.sm),
                           Column(
                             children: [
-                              if (_serverUrl != null)
-                                QrImageView(
-                                  data: _serverUrl!,
-                                  size: 150.0,
+                              // Show QR code with reachable URL (hostname if available, IP for Android fallback)
+                              if (_webShareService.isRunning)
+                                Builder(
+                                  builder: (context) {
+                                    // Check if hostname is valid and doesn't contain underscore
+                                    // Android generates hostnames with underscores (e.g., Android_CPH2FXOW)
+                                    // which don't work well in browsers, so use IP instead
+                                    final hostname = _webShareService.actualHostname;
+                                    final hasValidHostname = hostname != null && 
+                                                            hostname.isNotEmpty &&
+                                                            !hostname.contains('.') &&
+                                                            !hostname.contains('_'); // Reject hostnames with underscores
+                                    
+                                    final qrUrl = hasValidHostname
+                                        ? 'http://$hostname.local:${_webShareService.port}'
+                                        : 'http://${_webShareService.localIP ?? 'localhost'}:${_webShareService.port}';
+                                    
+                                    return QrImageView(
+                                      data: qrUrl,
+                                      size: 150.0,
+                                    );
+                                  },
                                 ),
                               const SizedBox(height: AppSizes.sm),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                              
+                              // Display both URLs prominently
+                              Column(
                                 children: [
-                                  GestureDetector(
-                                    onTap: () {},
-                                    child: Text(
-                                      _serverUrl ?? 'Loading...',
-                                      style: Theme.of(context).textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: AppColors.primary,
-                                            fontWeight: FontWeight.w600,
-                                            decoration: TextDecoration.underline,
-                                          ),
+                                  // Primary: Device hostname URL (always shown in QR code)
+                                  if (_webShareService.isRunning) ...[
+                                    Text(
+                                      'QR Code Link:',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppColors.greyDark,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(height: 4),
+                                    Builder(
+                                      builder: (context) {
+                                        // Show same URL as QR code
+                                        final hostname = _webShareService.actualHostname;
+                                        final hasValidHostname = hostname != null && 
+                                                                hostname.isNotEmpty &&
+                                                                !hostname.contains('.') &&
+                                                                !hostname.contains('_');
+                                        
+                                        final displayUrl = hasValidHostname
+                                            ? 'http://$hostname.local:${_webShareService.port}'
+                                            : 'http://${_webShareService.localIP ?? 'localhost'}:${_webShareService.port}';
+                                        
+                                        return GestureDetector(
+                                          onTap: () {},
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.secondary.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(
+                                              displayUrl,
+                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                color: AppColors.secondary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                  
+                                  // Secondary: IP/Localhost URL (for reference)
+                                  if (_serverUrl != null) ...[
+                                    const SizedBox(height: AppSizes.sm),
+                                    Text(
+                                      _serverUrl!.contains('localhost') 
+                                        ? 'Local Access Link (reference):'
+                                        : 'IP Address Link (reference):',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppColors.greyDark,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    GestureDetector(
+                                      onTap: () {},
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: _serverUrl!.contains('localhost')
+                                            ? AppColors.greyLight.withValues(alpha: 0.1)
+                                            : AppColors.primary.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: _serverUrl!.contains('localhost')
+                                              ? AppColors.greyLight.withValues(alpha: 0.3)
+                                              : AppColors.primary.withValues(alpha: 0.3)
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Text(
+                                              _serverUrl!,
+                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                color: _serverUrl!.contains('localhost')
+                                                  ? AppColors.greyDark
+                                                  : AppColors.primary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                            if (_serverUrl!.contains('localhost')) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Connect to WiFi for network access',
+                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: AppColors.greyDark,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  
+                                  // Loading state
+                                  if (!_webShareService.isRunning)
+                                    Text(
+                                      'Loading...',
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    ),
                                 ],
                               ),
                             ],

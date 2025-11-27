@@ -3,8 +3,9 @@
 <plist version="1.0">
 <dict>
 	<!-- Entitlements for iOS -->
-	<!-- Note: com.apple.developer.networking.multicast is macOS-only -->
 	<key>com.apple.developer.networking.wifi-info</key>
 	<true/>
+	<!-- <key>com.apple.developer.networking.multicast</key>
+	<true/> -->
 </dict>
 </plist>

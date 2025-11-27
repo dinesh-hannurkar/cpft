@@ -730,7 +730,7 @@ class DiscoveryService {
   }
 
   /// Start web server for browser-based file transfers
-  Future<bool> startWebServer({int port = 8080}) async {
+  Future<bool> startWebServer({int port = 80}) async {
     if (_webServer != null && _webServer!.isRunning) {
       print('[DiscoveryService] Web server already running');
       return true;

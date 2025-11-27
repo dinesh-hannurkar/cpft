@@ -51,6 +51,7 @@
 	<string>This app needs location access to identify your WiFi network name.</string>
 	<key>NSBonjourServices</key>
 	<array>
+		<string>_http._tcp</string>
 		<string>_cpft._tcp</string>
 		<string>_cpft._udp</string>
 	</array>
