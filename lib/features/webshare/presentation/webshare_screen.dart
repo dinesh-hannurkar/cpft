@@ -1,14 +1,20 @@
+import 'package:cpft/features/webshare/presentation/widgets/qr_image_section.dart';
+import 'package:cpft/features/webshare/presentation/widgets/qr_link_chip.dart';
+import 'package:cpft/features/webshare/presentation/widgets/received_file_item.dart';
+import 'package:cpft/features/webshare/presentation/widgets/upload_progress.dart';
+import 'package:cpft/features/webshare/presentation/widgets/uploading_file_item.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_action_button.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
+import '../../../utils/network_utils.dart';
+import '../../../features/home/presentation/widgets/network_banner.dart';
 import '../services/webshare_service.dart';
 import '../services/web_server.dart';
 
@@ -16,7 +22,7 @@ import '../services/web_server.dart';
 class WebShareScreen extends StatefulWidget {
   final String deviceName;
   final String? customServiceName;
-  final dynamic discoveryService; // TODO: Import proper type
+  final dynamic discoveryService;
 
   const WebShareScreen({
     super.key,
@@ -32,12 +38,12 @@ class WebShareScreen extends StatefulWidget {
 class _WebShareScreenState extends State<WebShareScreen>
     with TickerProviderStateMixin {
   late WebShareService _webShareService;
-  bool _isStarting = false;
   String? _serverUrl;
   bool _sendMode = true; // true = Send, false = Receive
+  String? _networkName;
 
   // Track files currently being uploaded
-  final Map<String, _UploadProgress> _uploadProgress = {};
+  final Map<String, UploadProgress> _uploadProgress = {};
 
   // Floating button icon cycle
   final List<IconData> _fileIcons = const [
@@ -64,9 +70,11 @@ class _WebShareScreenState extends State<WebShareScreen>
       customServiceName: widget.customServiceName,
       onFileUploadProgress: (filename, received, total) {
         if (!mounted) return;
-        debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
+        debugPrint(
+          '[WebShareScreen] Upload progress: $filename - $received/$total bytes',
+        );
         setState(() {
-          _uploadProgress[filename] = _UploadProgress(
+          _uploadProgress[filename] = UploadProgress(
             filename: filename,
             received: received,
             total: total,
@@ -88,7 +96,12 @@ class _WebShareScreenState extends State<WebShareScreen>
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('File received: $filename', style: const TextStyle(color: Colors.white))),
+          SnackBar(
+            content: Text(
+              'File received: $filename',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
         );
       },
     );
@@ -114,20 +127,25 @@ class _WebShareScreenState extends State<WebShareScreen>
       final portInUse = await WebServer.isPortInUse();
       if (portInUse) {
         // Port is in use, assume server is running externally
-        debugPrint('[WebShareScreen] Port 8080 already in use, assuming server is running');
+        debugPrint(
+          '[WebShareScreen] Port 8080 already in use, assuming server is running',
+        );
         // Create a dummy WebServer instance that reports as running
         _webShareService = WebShareService(
           deviceName: widget.deviceName,
           customServiceName: widget.customServiceName,
           onFileUploadProgress: (filename, received, total) {
             if (!mounted) return;
-            debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
+            debugPrint(
+              '[WebShareScreen] Upload progress: $filename - $received/$total bytes',
+            );
             setState(() {
-              _uploadProgress[filename] = _UploadProgress(
+              _uploadProgress[filename] = UploadProgress(
                 filename: filename,
                 received: received,
                 total: total,
-                startedAt: _uploadProgress[filename]?.startedAt ?? DateTime.now(),
+                startedAt:
+                    _uploadProgress[filename]?.startedAt ?? DateTime.now(),
               );
             });
           },
@@ -145,7 +163,12 @@ class _WebShareScreenState extends State<WebShareScreen>
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('File received: $filename', style: const TextStyle(color: Colors.white))),
+              SnackBar(
+                content: Text(
+                  'File received: $filename',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
             );
           },
         );
@@ -161,13 +184,16 @@ class _WebShareScreenState extends State<WebShareScreen>
           customServiceName: widget.customServiceName,
           onFileUploadProgress: (filename, received, total) {
             if (!mounted) return;
-            debugPrint('[WebShareScreen] Upload progress: $filename - $received/$total bytes');
+            debugPrint(
+              '[WebShareScreen] Upload progress: $filename - $received/$total bytes',
+            );
             setState(() {
-              _uploadProgress[filename] = _UploadProgress(
+              _uploadProgress[filename] = UploadProgress(
                 filename: filename,
                 received: received,
                 total: total,
-                startedAt: _uploadProgress[filename]?.startedAt ?? DateTime.now(),
+                startedAt:
+                    _uploadProgress[filename]?.startedAt ?? DateTime.now(),
               );
             });
           },
@@ -185,7 +211,12 @@ class _WebShareScreenState extends State<WebShareScreen>
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('File received: $filename', style: const TextStyle(color: Colors.white))),
+              SnackBar(
+                content: Text(
+                  'File received: $filename',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
             );
           },
         );
@@ -194,6 +225,26 @@ class _WebShareScreenState extends State<WebShareScreen>
         _toggleWebServer();
       }
     });
+
+    // Initialize network name
+    _initializeNetworkName();
+  }
+
+  Future<void> _initializeNetworkName() async {
+    try {
+      final networkName = await NetworkUtils.getWifiName();
+      if (mounted) {
+        setState(() {
+          _networkName = networkName;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _networkName = 'Not Connected';
+        });
+      }
+    }
   }
 
   Future<void> _toggleWebServer() async {
@@ -203,9 +254,7 @@ class _WebShareScreenState extends State<WebShareScreen>
         _serverUrl = null;
       });
     } else {
-      setState(() => _isStarting = true);
       final success = await _webShareService.startWebServer();
-      setState(() => _isStarting = false);
 
       if (success && mounted) {
         final url = await _webShareService.getServerUrl();
@@ -214,7 +263,10 @@ class _WebShareScreenState extends State<WebShareScreen>
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Web Share started. Access: $url', style: const TextStyle(color: Colors.white)),
+            content: Text(
+              'Web Share started. Access: $url',
+              style: const TextStyle(color: Colors.white),
+            ),
             action: SnackBarAction(
               label: 'Copy',
               onPressed: () {
@@ -225,7 +277,12 @@ class _WebShareScreenState extends State<WebShareScreen>
         );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to start Web Share', style: TextStyle(color: Colors.white))),
+          const SnackBar(
+            content: Text(
+              'Failed to start Web Share',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
         );
       }
     }
@@ -241,7 +298,12 @@ class _WebShareScreenState extends State<WebShareScreen>
     if (!mounted) return;
     if (id != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Shared file: ${result.files.first.name}', style: const TextStyle(color: Colors.white))),
+        SnackBar(
+          content: Text(
+            'Shared file: ${result.files.first.name}',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
       );
     }
   }
@@ -250,21 +312,33 @@ class _WebShareScreenState extends State<WebShareScreen>
   Future<void> _testDiscoverServices() async {
     debugPrint('[WebShareScreen] 🔍 Testing service discovery...');
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Discovering services... Check debug logs', style: TextStyle(color: Colors.white))),
+      const SnackBar(
+        content: Text(
+          'Discovering services... Check debug logs',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
     );
-    
+
     final services = await _webShareService.discoverHttpServices();
-    
-    debugPrint('[WebShareScreen] 📡 Discovery complete. Found ${services.length} services');
+
+    debugPrint(
+      '[WebShareScreen] 📡 Discovery complete. Found ${services.length} services',
+    );
     for (var service in services) {
       debugPrint('[WebShareScreen] Service: ${service['instance']}');
       debugPrint('[WebShareScreen]   - URL: ${service['url']}');
       debugPrint('[WebShareScreen]   - IP URL: ${service['ipUrl']}');
     }
-    
+
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Found ${services.length} services. Check logs for details', style: const TextStyle(color: Colors.white))),
+      SnackBar(
+        content: Text(
+          'Found ${services.length} services. Check logs for details',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 
@@ -476,20 +550,6 @@ class _WebShareScreenState extends State<WebShareScreen>
                         tooltip: 'Test Service Discovery',
                         color: AppColors.secondary,
                       ),
-                      const SizedBox(width: AppSizes.sm),
-                      if (!_webShareService.isRunning)
-                        TextButton(
-                          onPressed: _isStarting ? null : _toggleWebServer,
-                          child: _isStarting
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('Start'),
-                        ),
                     ],
                   ),
                 ),
@@ -502,8 +562,8 @@ class _WebShareScreenState extends State<WebShareScreen>
                         children: [
                           Text(
                             _serverUrl?.contains('localhost') == true
-                              ? 'Web share started (local access only - no network connection)'
-                              : 'Open this link on any device to start sharing.',
+                                ? 'Web share started (local access only - no network connection)'
+                                : 'Open this link on any device to start sharing.',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: AppColors.greyDark,
@@ -512,149 +572,67 @@ class _WebShareScreenState extends State<WebShareScreen>
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: AppSizes.sm),
-                          Column(
-                            children: [
-                              // Show QR code with reachable URL (hostname if available, IP for Android fallback)
-                              if (_webShareService.isRunning)
-                                Builder(
-                                  builder: (context) {
-                                    // Check if hostname is valid and doesn't contain underscore
-                                    // Android generates hostnames with underscores (e.g., Android_CPH2FXOW)
-                                    // which don't work well in browsers, so use IP instead
-                                    final hostname = _webShareService.actualHostname;
-                                    final hasValidHostname = hostname != null && 
-                                                            hostname.isNotEmpty &&
-                                                            !hostname.contains('.') &&
-                                                            !hostname.contains('_'); // Reject hostnames with underscores
-                                    
-                                    final qrUrl = hasValidHostname
-                                        ? 'http://$hostname.local:${_webShareService.port}'
-                                        : 'http://${_webShareService.localIP ?? 'localhost'}:${_webShareService.port}';
-                                    
-                                    return QrImageView(
-                                      data: qrUrl,
-                                      size: 150.0,
-                                    );
-                                  },
-                                ),
-                              const SizedBox(height: AppSizes.sm),
-                              
-                              // Display both URLs prominently
-                              Column(
-                                children: [
-                                  // Primary: Device hostname URL (always shown in QR code)
-                                  if (_webShareService.isRunning) ...[
-                                    Text(
-                                      'QR Code Link:',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: AppColors.greyDark,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Builder(
-                                      builder: (context) {
-                                        // Show same URL as QR code
-                                        final hostname = _webShareService.actualHostname;
-                                        final hasValidHostname = hostname != null && 
-                                                                hostname.isNotEmpty &&
-                                                                !hostname.contains('.') &&
-                                                                !hostname.contains('_');
-                                        
-                                        final displayUrl = hasValidHostname
-                                            ? 'http://$hostname.local:${_webShareService.port}'
-                                            : 'http://${_webShareService.localIP ?? 'localhost'}:${_webShareService.port}';
-                                        
-                                        return GestureDetector(
-                                          onTap: () {},
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.secondary.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                          // QR (with loading until hostname)
+                          Builder(
+                            builder: (context) {
+                              final hostname = _webShareService.actualHostname;
+                              if (hostname == null || hostname.isEmpty) {
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 150,
+                                      height: 150,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.05,
                                             ),
-                                            child: Text(
-                                              displayUrl,
-                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                color: AppColors.secondary,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
                                           ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                  
-                                  // Secondary: IP/Localhost URL (for reference)
-                                  if (_serverUrl != null) ...[
-                                    const SizedBox(height: AppSizes.sm),
-                                    Text(
-                                      _serverUrl!.contains('localhost') 
-                                        ? 'Local Access Link (reference):'
-                                        : 'IP Address Link (reference):',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: AppColors.greyDark,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    GestureDetector(
-                                      onTap: () {},
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: _serverUrl!.contains('localhost')
-                                            ? AppColors.greyLight.withValues(alpha: 0.1)
-                                            : AppColors.primary.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: _serverUrl!.contains('localhost')
-                                              ? AppColors.greyLight.withValues(alpha: 0.3)
-                                              : AppColors.primary.withValues(alpha: 0.3)
-                                          ),
+                                        ],
+                                        border: Border.all(
+                                          color: Colors.blue.shade50,
                                         ),
-                                        child: Column(
-                                          children: [
-                                            Text(
-                                              _serverUrl!,
-                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                color: _serverUrl!.contains('localhost')
-                                                  ? AppColors.greyDark
-                                                  : AppColors.primary,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            if (_serverUrl!.contains('localhost')) ...[
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                'Connect to WiFi for network access',
-                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                  color: AppColors.greyDark,
-                                                  fontWeight: FontWeight.w400,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ],
-                                          ],
+                                      ),
+                                      child: const SizedBox(
+                                        width: 28,
+                                        height: 28,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
                                         ),
                                       ),
                                     ),
-                                  ],
-                                  
-                                  // Loading state
-                                  if (!_webShareService.isRunning)
+                                    const SizedBox(height: 8),
                                     Text(
-                                      'Loading...',
-                                      style: Theme.of(context).textTheme.bodyMedium,
+                                      'Preparing QR link...',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: AppColors.greyDark,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                      textAlign: TextAlign.center,
                                     ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                );
+                              }
+                              return QrImageSection(
+                                webShareService: _webShareService,
+                              );
+                            },
                           ),
+                          const SizedBox(height: AppSizes.sm),
+                          // Hostname link chip (shows loading until hostname)
+                          QrLinkChip(webShareService: _webShareService),
+                          // Network connection status
+                          NetworkBanner(networkName: _networkName),
                           const SizedBox(height: AppSizes.sm),
                           ValueListenableBuilder<int>(
                             valueListenable: _webShareService.connectedClients,
@@ -669,7 +647,6 @@ class _WebShareScreenState extends State<WebShareScreen>
                     ),
                   ),
                   const SizedBox(height: AppSizes.md),
-                  // Mode toggle
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -717,7 +694,6 @@ class _WebShareScreenState extends State<WebShareScreen>
                       icon: Icons.stop_circle,
                     ),
                   ),
-                  // const SizedBox(height: AppSizes.md),
                 ] else ...[
                   Expanded(
                     child: Center(
@@ -798,16 +774,20 @@ class _WebShareScreenState extends State<WebShareScreen>
       builder: (_, receivedFiles, __) {
         final allItems = [
           // Add uploading files first
-          ..._uploadProgress.values.map((progress) => _UploadingFileItem(progress)),
+          ..._uploadProgress.values.map(
+            (progress) => UploadingFileItem(progress),
+          ),
           // Then add received files
-          ...receivedFiles.map((file) => _ReceivedFileItem(file)),
+          ...receivedFiles.map((file) => ReceivedFileItem(file)),
         ];
 
         if (allItems.isEmpty) {
           return Center(
             child: Text(
               'No files received yet. Upload from browser.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.greyLight),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.greyLight),
               textAlign: TextAlign.center,
             ),
           );
@@ -818,9 +798,9 @@ class _WebShareScreenState extends State<WebShareScreen>
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (_, i) {
             final item = allItems[i];
-            if (item is _UploadingFileItem) {
+            if (item is UploadingFileItem) {
               return _buildUploadingFileCard(item.progress);
-            } else if (item is _ReceivedFileItem) {
+            } else if (item is ReceivedFileItem) {
               final receivedFile = item.file;
               return _buildFileCard(
                 receivedFile.filename,
@@ -833,9 +813,18 @@ class _WebShareScreenState extends State<WebShareScreen>
                 },
                 onAction: (context) async {
                   final box = context.findRenderObject() as RenderBox?;
-                  final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                  final position =
+                      box?.localToGlobal(Offset.zero) ?? Offset.zero;
                   final size = box?.size ?? Size.zero;
-                  await Share.shareXFiles([XFile(receivedFile.path)], sharePositionOrigin: Rect.fromLTWH(position.dx, position.dy, size.width, size.height));
+                  await Share.shareXFiles(
+                    [XFile(receivedFile.path)],
+                    sharePositionOrigin: Rect.fromLTWH(
+                      position.dx,
+                      position.dy,
+                      size.width,
+                      size.height,
+                    ),
+                  );
                 },
                 actionIcon: Icons.download,
               );
@@ -943,7 +932,7 @@ class _WebShareScreenState extends State<WebShareScreen>
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildUploadingFileCard(_UploadProgress progress) {
+  Widget _buildUploadingFileCard(UploadProgress progress) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -995,7 +984,9 @@ class _WebShareScreenState extends State<WebShareScreen>
                               ),
                               child: Text(
                                 progress.filename.contains('.')
-                                    ? _extensionTrim(progress.filename.split('.').last)
+                                    ? _extensionTrim(
+                                        progress.filename.split('.').last,
+                                      )
                                     : 'FILE',
                                 style: const TextStyle(
                                   fontSize: 10,
@@ -1047,10 +1038,14 @@ class _WebShareScreenState extends State<WebShareScreen>
                             ),
                             const SizedBox(height: 6),
                             LinearProgressIndicator(
-                              value: progress.isIndeterminate ? null : progress.progress,
+                              value: progress.isIndeterminate
+                                  ? null
+                                  : progress.progress,
                               backgroundColor: Colors.grey.shade200,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                progress.isIndeterminate ? Colors.blue.shade400 : AppColors.primary,
+                                progress.isIndeterminate
+                                    ? Colors.blue.shade400
+                                    : AppColors.primary,
                               ),
                               minHeight: progress.isIndeterminate ? 6 : 4,
                             ),
@@ -1182,7 +1177,9 @@ class _WebShareScreenState extends State<WebShareScreen>
                       builder: (buttonContext) => IconButton(
                         icon: Icon(
                           actionIcon ?? Icons.delete_forever,
-                          color: actionIcon == Icons.download ? AppColors.primary : const Color(0xFFD32F2F),
+                          color: actionIcon == Icons.download
+                              ? AppColors.primary
+                              : const Color(0xFFD32F2F),
                           size: 22,
                         ),
                         onPressed: () => onAction.call(buttonContext),
@@ -1201,36 +1198,9 @@ class _WebShareScreenState extends State<WebShareScreen>
   void dispose() {
     _fileIconPulse?.dispose();
     _fileIconTimer?.cancel();
+    _webShareService.dispose();
     super.dispose();
   }
 }
 
-class _UploadProgress {
-  final String filename;
-  final int received;
-  final int total;
-  final DateTime startedAt;
-
-  _UploadProgress({
-    required this.filename,
-    required this.received,
-    required this.total,
-    required this.startedAt,
-  });
-
-  double? get progress => total > 0 ? received / total : null;
-  bool get isIndeterminate => total <= 0;
-  bool get isComplete => received >= total && total > 0;
-}
-
-abstract class _FileListItem {}
-
-class _UploadingFileItem extends _FileListItem {
-  final _UploadProgress progress;
-  _UploadingFileItem(this.progress);
-}
-
-class _ReceivedFileItem extends _FileListItem {
-  final ReceivedFile file;
-  _ReceivedFileItem(this.file);
-}
+abstract class FileListItem {}

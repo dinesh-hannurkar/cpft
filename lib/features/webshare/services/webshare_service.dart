@@ -33,6 +33,7 @@ class WebShareService {
       ValueNotifier<List<SharedFile>>([]);
   final ValueNotifier<List<ReceivedFile>> receivedFiles =
       ValueNotifier<List<ReceivedFile>>([]);
+  final ValueNotifier<String?> actualHostnameNotifier = ValueNotifier<String?>(null);
 
   // Callbacks for integration with app
   final Function(String filename, int bytesReceived, int totalBytes)?
@@ -50,7 +51,7 @@ class WebShareService {
       _webServer?.isRunning ?? false || _externalServerRunning;
   int get port => _webServer?.port ?? 80;
   bool get isAdvertising => _isAdvertising;
-  String? get actualHostname => _actualHostname;
+  String? get actualHostname => actualHostnameNotifier.value;
   String? get localIP => _localIP;
 
   /// Mark that an external web server is running
@@ -356,6 +357,14 @@ class WebShareService {
         debugPrint(
           '[WebShareService] 💡 Connect to WiFi network for other devices to discover this service',
         );
+        // Set fallback hostname even without network IP
+        final fallbackHostname = deviceName
+            .replaceAll(' ', '-')
+            .replaceAll(RegExp(r'[^a-zA-Z0-9\-]'), '')
+            .toLowerCase();
+        _actualHostname = fallbackHostname;
+        actualHostnameNotifier.value = fallbackHostname;
+        debugPrint('[WebShareService] Set fallback hostname: $fallbackHostname');
         // Don't return - allow web server to run even without advertising
         return;
       }
@@ -433,6 +442,7 @@ class WebShareService {
 
         // Store for QR code and external access
         _actualHostname = actualHostname;
+        actualHostnameNotifier.value = actualHostname;
 
         debugPrint('[WebShareService] Creating NSD registration...');
         _nsdRegistration = await register(
@@ -473,6 +483,7 @@ class WebShareService {
             
             if (srvHostname != null && srvHostname.isNotEmpty) {
               _actualHostname = srvHostname;
+              actualHostnameNotifier.value = srvHostname;
               debugPrint('[WebShareService] ✅ SRV hostname resolved: $_actualHostname.local');
               debugPrint('[WebShareService] 🎯 This is the ACTUAL reachable hostname!');
             } else {
@@ -511,6 +522,7 @@ class WebShareService {
                 
                 if (_actualHostname != hostname) {
                   _actualHostname = hostname;
+                  actualHostnameNotifier.value = hostname;
                   debugPrint('[WebShareService] ✅ Updated hostname from NSD: $_actualHostname');
                   hostnameFound = true;
                 }
@@ -647,6 +659,7 @@ class WebShareService {
 
               if (_actualHostname != hostWithoutSuffix) {
                 _actualHostname = hostWithoutSuffix;
+                actualHostnameNotifier.value = hostWithoutSuffix;
                 debugPrint(
                   '[WebShareService] 🎯 Updated actual hostname for QR code: $_actualHostname',
                 );
