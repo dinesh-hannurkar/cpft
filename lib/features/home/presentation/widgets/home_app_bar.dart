@@ -12,6 +12,7 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isRestartingServices;
   final VoidCallback onRefresh;
   final VoidCallback onShowConnectedDevices;
+  final VoidCallback onQrScan;
 
   const HomeAppBar({
     super.key,
@@ -20,6 +21,7 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isRestartingServices,
     required this.onRefresh,
     required this.onShowConnectedDevices,
+    required this.onQrScan,
   });
 
   @override
@@ -57,6 +59,8 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    _buildQrScanButton(),
+                    const SizedBox(width: AppSizes.sm),
                     _buildRefreshButton(context),
                     const SizedBox(width: AppSizes.sm),
                     _buildConnectedDevicesButton(),
@@ -73,6 +77,18 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildQrScanButton() {
+    return IconButton(
+      icon: Icon(
+        Icons.qr_code_scanner,
+        color: AppColors.primary,
+        size: AppSizes.iconMd,
+      ),
+      onPressed: onQrScan,
+      tooltip: 'Scan QR Code',
     );
   }
 

@@ -1,5 +1,5 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+platform :ios, '15.5.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -49,6 +49,10 @@ post_install do |installer|
       defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']
       unless defs.include? 'PERMISSION_LOCATION=1'
         defs << 'PERMISSION_LOCATION=1'
+      end
+      # Allow camera access for QR scanning
+      unless defs.include? 'PERMISSION_CAMERA=1'
+        defs << 'PERMISSION_CAMERA=1'
       end
       # Example toggles (kept off):
       # defs << 'PERMISSION_LOCATION_ALWAYS=0'

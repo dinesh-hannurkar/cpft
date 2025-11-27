@@ -14,12 +14,15 @@ import 'package:cpft/features/home/presentation/widgets/radar_view.dart';
 import 'package:cpft/features/home/presentation/widgets/device_dot.dart';
 import 'package:cpft/features/home/presentation/widgets/network_banner.dart';
 import 'package:cpft/features/home/presentation/widgets/link_share_button.dart';
+import 'package:cpft/features/home/presentation/widgets/hotspot_button.dart';
 import 'package:cpft/features/home/presentation/widgets/home_app_bar.dart';
 import 'package:cpft/features/home/presentation/widgets/connected_devices_sheet.dart';
 import 'package:cpft/features/home/presentation/widgets/incoming_request_dialog.dart';
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:cpft/features/chat/presentation/connection_screen_refactored.dart';
 import 'package:cpft/features/webshare/presentation/webshare_screen.dart';
+import 'package:cpft/features/qr_scanner/presentation/qr_scanner_screen.dart';
+import 'package:cpft/features/hotspot/presentation/hotspot_screen.dart';
 import 'package:cpft/features/chat/services/connection_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -36,7 +39,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late HomeController controller;
   String? _networkName;
   bool _isRestartingServices = false;
@@ -48,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeController();
     _setupConnectionListener();
     _initializeLocalIp();
@@ -130,7 +134,25 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
     controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // On resume, refresh network state immediately to restore banner/UI.
+      _initializeLocalIp();
+      _initializeNetworkName().then((_) {
+        final hasNetwork = _networkName != null && _networkName != 'Not Connected';
+        if (hasNetwork) {
+          controller.resumeRadar();
+        } else {
+          controller.pauseRadar();
+        }
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   Future<void> _onIncomingRequest(
@@ -173,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           content: Text(
             'You rejected the request from $deviceName',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white),
           ),
         ),
       );
@@ -254,6 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
             isRestartingServices: _isRestartingServices,
             onRefresh: _handleServiceRestart,
             onShowConnectedDevices: _showConnectedDevicesDialog,
+            onQrScan: _handleQrScan,
           ),
           body: Container(
             decoration: const BoxDecoration(
@@ -298,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: AppSizes.lg),
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSizes.lg),
-                    child: _buildLinkShareSection(),
+                    child: _buildShareOptionsSection(),
                   ),
                 ],
               ),
@@ -351,7 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           content: Text(
             'Preparing discovery...',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white),
           ),
           duration: const Duration(seconds: 1),
         ),
@@ -431,30 +454,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLinkShareSection() {
+  Widget _buildShareOptionsSection() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        LinkShareButton(
-          onPressed: () async {
-            if (!mounted) return;
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            LinkShareButton(
+              onPressed: () async {
+                if (!mounted) return;
 
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WebShareScreen(
-                  deviceName: widget.myDeviceName,
-                  discoveryService: widget.discoveryService,
-                ),
-              ),
-            );
-          },
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WebShareScreen(
+                      deviceName: widget.myDeviceName,
+                      discoveryService: widget.discoveryService,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: AppSizes.md),
+            HotspotButton(
+              onPressed: () async {
+                if (!mounted) return;
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HotspotScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         const SizedBox(height: AppSizes.md),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSizes.xl),
           child: Text(
-            'App not installed on other device? use link share',
+            'Share files via link or create a local hotspot for direct connection',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
@@ -462,6 +503,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _handleQrScan() async {
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const QrScannerScreen(),
+      ),
     );
   }
 

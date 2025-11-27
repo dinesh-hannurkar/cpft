@@ -36,6 +36,42 @@ class AppPermissions {
       }
       AppLogger.i('Location permission granted', tag: 'Permissions');
     }
+
+    // For Android, try to request nearby devices permission (required for WiFi hotspot on Android 12+)
+    // We'll attempt to request it regardless of API level, and handle any exceptions
+    try {
+      AppLogger.d('Attempting to request nearby devices permission for WiFi hotspot', tag: 'Permissions');
+      final nearbyDevicesStatus = await Permission.nearbyWifiDevices.status;
+      AppLogger.d('Nearby devices permission status: $nearbyDevicesStatus', tag: 'Permissions');
+
+      if (!nearbyDevicesStatus.isGranted) {
+        AppLogger.d('Nearby devices permission not granted. Requesting...', tag: 'Permissions');
+
+        // Force request the permission
+        final nearbyRequestResult = await Permission.nearbyWifiDevices.request();
+        AppLogger.d('Nearby devices permission request result: $nearbyRequestResult', tag: 'Permissions');
+
+        if (!nearbyRequestResult.isGranted) {
+          AppLogger.w('Nearby devices permission denied. WiFi hotspot may not work.', tag: 'Permissions');
+          AppLogger.w('Permission REQUIRED for WiFi hotspot on Android 12+', tag: 'Permissions');
+
+          // If permanently denied, guide user to settings
+          if (nearbyRequestResult.isPermanentlyDenied) {
+            AppLogger.w('Nearby devices permission permanently denied. Opening app settings...', tag: 'Permissions');
+            await openAppSettings();
+          }
+
+          return false;
+        }
+        AppLogger.i('Nearby devices permission granted', tag: 'Permissions');
+      } else {
+        AppLogger.i('Nearby devices permission already granted', tag: 'Permissions');
+      }
+    } catch (e) {
+      AppLogger.d('Nearby devices permission not available on this Android version (expected on Android < 12): $e', tag: 'Permissions');
+      // This is expected on Android versions < 12 where the permission doesn't exist
+      // Continue without the permission
+    }
     
     return true;
   }

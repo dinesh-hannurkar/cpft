@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import Foundation
+import NetworkExtension
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -29,6 +30,53 @@ import Foundation
         let serviceType = args["serviceType"] as? String ?? "_http._tcp"
         self?.resolveServiceHostname(serviceName: serviceName, serviceType: serviceType, result: result)
       } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    // WiFi connect channel (iOS: show system join dialog)
+    let wifiChannel = FlutterMethodChannel(name: "com.example.cpft/wifi",
+                                           binaryMessenger: controller.binaryMessenger)
+
+    wifiChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
+      switch call.method {
+      case "connectToWifi":
+        guard let args = call.arguments as? [String: Any],
+              let ssid = args["ssid"] as? String else {
+          result(FlutterError(code: "INVALID_ARGS", message: "ssid is required", details: nil))
+          return
+        }
+
+        let password = args["password"] as? String
+        let security = (args["security"] as? String)?.uppercased() ?? "WPA2"
+
+        // Build NEHotspotConfiguration
+        let configuration: NEHotspotConfiguration
+        if security == "NOPASS" || security == "OPEN" || password?.isEmpty == true {
+          configuration = NEHotspotConfiguration(ssid: ssid)
+        } else if security == "WEP" {
+          configuration = NEHotspotConfiguration(ssid: ssid, passphrase: password ?? "", isWEP: true)
+        } else {
+          configuration = NEHotspotConfiguration(ssid: ssid, passphrase: password ?? "", isWEP: false)
+        }
+
+        // Join once = false so the system may remember the network depending on policy
+        configuration.joinOnce = false
+
+        NEHotspotConfigurationManager.shared.apply(configuration) { error in
+          if let error = error as NSError? {
+            if error.domain == NEHotspotConfigurationErrorDomain,
+               error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue {
+              result(["status": "already_connected", "ssid": ssid])
+            } else {
+              result(FlutterError(code: "WIFI_CONNECT_ERROR", message: error.localizedDescription, details: nil))
+            }
+          } else {
+            result(["status": "connected", "ssid": ssid])
+          }
+        }
+
+      default:
         result(FlutterMethodNotImplemented)
       }
     }
