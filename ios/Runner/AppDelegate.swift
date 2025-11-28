@@ -76,6 +76,69 @@ import NetworkExtension
           }
         }
 
+      case "openWifiSettings":
+        // Best-effort: try to open system Settings close to Hotspot.
+        // Apple does not provide public APIs for deep-linking into Settings.
+        // The following URLs are undocumented and may stop working on future iOS versions
+        // and can be grounds for App Store rejection. We still attempt them as a convenience
+        // with safe fallbacks to the Settings app and app-specific settings.
+        NSLog("📱 openWifiSettings called")
+
+        let candidates: [String] = [
+          // Newer/undocumented variants
+          "App-Prefs:root=INTERNET_TETHERING",
+          "App-Prefs:root=General&path=INTERNET_TETHERING",
+          "App-Prefs:root=MOBILE_DATA_SETTINGS_ID",
+          "App-Prefs:root=WIFI",
+          "App-Prefs:",
+          // Legacy variants (may work on some devices)
+          "Prefs:root=INTERNET_TETHERING",
+          "Prefs:root=WIFI",
+          "Prefs:root=General"
+        ]
+
+        var opened = false
+        for raw in candidates {
+          if let url = URL(string: raw), UIApplication.shared.canOpenURL(url) {
+            NSLog("📱 Attempting to open: \(raw)")
+            UIApplication.shared.open(url, options: [:]) { success in
+              NSLog("📱 Open result for \(raw): \(success)")
+              result(success)
+            }
+            opened = true
+            break
+          } else {
+            NSLog("⚠️ Cannot open: \(raw)")
+          }
+        }
+
+        if !opened {
+          // Fallback 1: Try to open Settings root (may or may not work)
+          if let rootUrl = URL(string: "App-Prefs:"), UIApplication.shared.canOpenURL(rootUrl) {
+            NSLog("📱 Fallback to Settings root")
+            UIApplication.shared.open(rootUrl, options: [:]) { success in
+              NSLog("📱 Open result for Settings root: \(success)")
+              result(success)
+            }
+          } else if let legacyRoot = URL(string: "Prefs:"), UIApplication.shared.canOpenURL(legacyRoot) {
+            NSLog("📱 Fallback to legacy Settings root")
+            UIApplication.shared.open(legacyRoot, options: [:]) { success in
+              NSLog("📱 Open result for legacy Settings root: \(success)")
+              result(success)
+            }
+          } else if let appSettings = URL(string: UIApplication.openSettingsURLString) {
+            // Fallback 2: Open app-specific settings (always allowed)
+            NSLog("📱 Fallback to app settings")
+            UIApplication.shared.open(appSettings, options: [:]) { success in
+              NSLog("📱 Open result for app settings: \(success)")
+              result(success)
+            }
+          } else {
+            NSLog("❌ No valid Settings URL could be constructed")
+            result(false)
+          }
+        }
+
       default:
         result(FlutterMethodNotImplemented)
       }

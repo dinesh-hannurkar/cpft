@@ -692,7 +692,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(width: AppSizes.sm),
                           _buildConnectedDevicesButton(),
                           const SizedBox(width: AppSizes.sm),
-                          SettingsButton(
+                          AppIconButton(
+                            icon: Icons.settings,
                             onPressed: () {
                               /* TODO: navigate to settings */
                             },

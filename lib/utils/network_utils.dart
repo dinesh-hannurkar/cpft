@@ -4,6 +4,27 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NetworkUtils {
+  /// Returns true if the given IP looks like an iOS Personal Hotspot IP.
+  static bool _isIosHotspotIp(String ip) {
+    try {
+      final parts = ip.split('.');
+      if (parts.length != 4) return false;
+      final first = int.parse(parts[0]);
+      final second = int.parse(parts[1]);
+      final third = int.parse(parts[2]);
+
+      // Most common iOS hotspot subnet
+      if (first == 172 && second == 20 && third == 10) return true; // 172.20.10.x
+
+      // Some iOS variants use 10.0.x.x for hotspot. Heuristic: third octet small.
+      if (first == 10 && second == 0 && third <= 2) return true; // 10.0.0-2.x
+
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Try to find a LAN IPv4 address, prioritizing WiFi interfaces for web sharing.
   static Future<String?> getLanIPv4() async {
     try {
@@ -16,8 +37,13 @@ class NetworkUtils {
 
       for (final iface in interfaces) {
         final name = iface.name.toLowerCase();
-        // Common WiFi interface names, including hotspot (ap0 on Android)
-        if (name.startsWith('wlan') || name.startsWith('en') || name.startsWith('eth') || name.startsWith('ap')) {
+        // Common WiFi interface names, including hotspot (ap0 on Android) and
+        // iOS personal hotspot bridge interface (bridge100)
+        if (name.startsWith('wlan') ||
+            name.startsWith('en') ||
+            name.startsWith('eth') ||
+            name.startsWith('ap') ||
+            name.startsWith('bridge')) {
           wifiInterfaces.add(iface);
         } else {
           otherInterfaces.add(iface);
@@ -25,6 +51,18 @@ class NetworkUtils {
       }
 
       // First try WiFi interfaces
+      // If any address looks like iOS Personal Hotspot, prefer returning that immediately
+      for (final iface in wifiInterfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback && _isValidLanAddress(addr.address)) {
+            if (Platform.isIOS && _isIosHotspotIp(addr.address)) {
+              AppLogger.d('[NetworkUtils] Prefer iOS hotspot IP on ${iface.name}: ${addr.address}', tag: 'Network');
+              return addr.address;
+            }
+          }
+        }
+      }
+
       for (final iface in wifiInterfaces) {
         for (final addr in iface.addresses) {
           if (!addr.isLoopback && _isValidLanAddress(addr.address)) {
@@ -83,6 +121,15 @@ class NetworkUtils {
         return 'Not Connected';
       }
 
+      // On iOS, if we detect Personal Hotspot IP range, report accordingly
+      if (Platform.isIOS) {
+        final isHotspot = _isIosHotspotIp(lanIp);
+        if (isHotspot) {
+          AppLogger.d('Detected iOS Personal Hotspot - reporting as hotspot', tag: 'Network');
+          return 'Personal Hotspot';
+        }
+      }
+
       // On Android 10+ location permission (fine + precise) is required for SSID
       if (Platform.isAndroid) {
         final status = await Permission.location.status;
@@ -111,8 +158,31 @@ class NetworkUtils {
   static Future<String> _fallbackNetworkName() async {
     try {
       final ip = await getLanIPv4();
-      if (ip != null) return 'Local ($ip)';
+      if (ip != null) {
+        if (Platform.isIOS && _isIosHotspotIp(ip)) return 'Personal Hotspot';
+        return 'Local ($ip)';
+      }
     } catch (_) {}
     return 'Not Connected';
+  }
+
+  /// Check if the current network connection is an iOS Personal Hotspot
+  /// based on the IP address range (typically 172.20.10.x)
+  static Future<bool> isIosPersonalHotspot() async {
+    if (!Platform.isIOS) return false;
+    
+    try {
+      final ip = await getLanIPv4();
+      if (ip == null) return false;
+
+      final isHotspot = _isIosHotspotIp(ip);
+      if (isHotspot) {
+        AppLogger.d('[NetworkUtils] Detected iOS Personal Hotspot: $ip', tag: 'Network');
+      }
+      return isHotspot;
+    } catch (e) {
+      AppLogger.w('[NetworkUtils] Error checking iOS hotspot: $e', tag: 'Network', error: e);
+      return false;
+    }
   }
 }

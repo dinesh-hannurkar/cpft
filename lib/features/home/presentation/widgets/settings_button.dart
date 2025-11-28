@@ -1,9 +1,10 @@
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
-class SettingsButton extends StatelessWidget {
+class AppIconButton extends StatelessWidget {
   final VoidCallback onPressed;
-  const SettingsButton({super.key, required this.onPressed});
+  const AppIconButton({super.key, required this.onPressed, required this.icon});
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -17,12 +18,14 @@ class SettingsButton extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.white, width: 5),
           boxShadow: const [
-            BoxShadow(color: AppColors.secondary, blurRadius: 16, offset: Offset(0, 4)),
+            BoxShadow(
+              color: AppColors.secondary,
+              blurRadius: 16,
+              offset: Offset(0, 4),
+            ),
           ],
         ),
-        child: Center(
-          child: Icon(Icons.settings_outlined, color: AppColors.primary, size: 20),
-        ),
+        child: Center(child: Icon(icon, color: AppColors.primary, size: 20)),
       ),
     );
   }

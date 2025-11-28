@@ -145,6 +145,16 @@ class MainActivity : FlutterActivity() {
                         result.error("WIFI_INFO_ERROR", e.message, null)
                     }
                 }
+                "openWifiSettings" -> {
+                    try {
+                        val intent = Intent(Settings.ACTION_WIFI_SETTINGS)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("WIFI_SETTINGS_ERROR", e.message, null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -153,7 +163,11 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HOTSPOT_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startLocalOnlyHotspot" -> {
-                    startLocalOnlyHotspot(result)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startLocalOnlyHotspot(result)
+                    } else {
+                        result.error("UNSUPPORTED", "Local-only hotspot requires Android O+", null)
+                    }
                 }
                 "stopLocalOnlyHotspot" -> {
                     stopLocalOnlyHotspot(result)

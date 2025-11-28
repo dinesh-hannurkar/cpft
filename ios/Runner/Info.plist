@@ -57,5 +57,10 @@
 		<string>_cpft._tcp</string>
 		<string>_cpft._udp</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>App-Prefs</string>
+		<string>Prefs</string>
+	</array>
 </dict>
 </plist>

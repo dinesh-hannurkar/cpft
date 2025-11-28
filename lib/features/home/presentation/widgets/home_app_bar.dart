@@ -43,7 +43,6 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           height: AppSizes.appBarHeight,
           child: Stack(
-            alignment: Alignment.center,
             children: [
               Center(
                 child: Text(
@@ -55,22 +54,34 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
               Positioned(
+                left: 16,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: AppIconButton(
+                    icon: Icons.qr_code_scanner,
+                    onPressed: onQrScan,
+                  ),
+                ),
+              ),
+              Positioned(
                 right: 16,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildQrScanButton(),
-                    const SizedBox(width: AppSizes.sm),
-                    _buildRefreshButton(context),
-                    const SizedBox(width: AppSizes.sm),
-                    _buildConnectedDevicesButton(),
-                    const SizedBox(width: AppSizes.sm),
-                    SettingsButton(
-                      onPressed: () {
-                        /* TODO: navigate to settings */
-                      },
-                    ),
-                  ],
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildConnectedDevicesButton(),
+                      const SizedBox(width: AppSizes.sm),
+                      AppIconButton(
+                        icon: Icons.settings_outlined,
+                        onPressed: () {
+                          /* TODO: navigate to settings */
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -80,55 +91,18 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _buildQrScanButton() {
-    return IconButton(
-      icon: Icon(
-        Icons.qr_code_scanner,
-        color: AppColors.primary,
-        size: AppSizes.iconMd,
-      ),
-      onPressed: onQrScan,
-      tooltip: 'Scan QR Code',
-    );
-  }
-
-  Widget _buildRefreshButton(BuildContext context) {
-    return IconButton(
-      icon: isRestartingServices
-          ? SizedBox(
-              width: AppSizes.iconMd,
-              height: AppSizes.iconMd,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-              ),
-            )
-          : Icon(
-              Icons.refresh,
-              color: AppColors.primary,
-              size: AppSizes.iconMd,
-            ),
-      onPressed: isRestartingServices ? null : onRefresh,
-      tooltip: 'Restart All Services',
-    );
-  }
-
   Widget _buildConnectedDevicesButton() {
-    final connectedCount = connectionManager?.activeConnections.values
+    final connectedCount =
+        connectionManager?.activeConnections.values
             .where((service) => service.isConnected)
             .length ??
         0;
 
     return Badge(
       label: Text(connectedCount.toString()),
-      child: IconButton(
-        onPressed: connectedCount > 0 ? onShowConnectedDevices : null,
-        icon: Icon(
-          Icons.devices,
-          color: AppColors.primary,
-          size: AppSizes.iconMd,
-        ),
-        tooltip: 'Connected Devices ($connectedCount)',
+      child: AppIconButton(
+        onPressed: () => connectedCount > 0 ? onShowConnectedDevices() : null,
+        icon: Icons.devices,
       ),
     );
   }

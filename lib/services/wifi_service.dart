@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class WifiService {
@@ -56,4 +57,18 @@ class WifiService {
 
   /// Check if WiFi connection is supported on this platform
   static bool get isSupported => Platform.isAndroid || Platform.isIOS;
+
+  /// Open Wi-Fi settings (Android and iOS)
+  static Future<void> openWifiSettings() async {
+    try {
+      final result = await _channel.invokeMethod('openWifiSettings');
+      debugPrint('📱 openWifiSettings result: $result');
+    } on PlatformException catch (e) {
+      debugPrint('❌ openWifiSettings PlatformException: ${e.code} - ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('❌ openWifiSettings error: $e');
+      rethrow;
+    }
+  }
 }
