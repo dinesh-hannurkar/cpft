@@ -26,12 +26,14 @@ import 'package:cpft/features/chat/presentation/widgets/connecting_banner.dart';
 import 'package:cpft/features/chat/presentation/widgets/error_banner.dart';
 import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
+import 'package:cpft/features/home/presentation/widgets/connected_devices_sheet.dart';
+import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 
 import '../models/connection_state.dart';
 import '../services/connection_service.dart';
 import '../services/connection_manager.dart';
 
-class ConnectionScreenRefactored extends StatefulWidget {
+class ChatScreen extends StatefulWidget {
   final String deviceName;
   final String ipAddress;
   final int port;
@@ -39,7 +41,7 @@ class ConnectionScreenRefactored extends StatefulWidget {
   final ConnectionManager connectionManager;
   final String? initialDeviceId;
 
-  const ConnectionScreenRefactored({
+  const ChatScreen({
     super.key,
     required this.deviceName,
     required this.ipAddress,
@@ -50,11 +52,10 @@ class ConnectionScreenRefactored extends StatefulWidget {
   });
 
   @override
-  State<ConnectionScreenRefactored> createState() => _ConnectionScreenRefactoredState();
+  State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
-    with TickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   late ConnectionService _connectionService;
   final List<DeviceMessage> _messages = [];
   final Map<String, TransferProgress> _incomingProgress = {};
@@ -93,7 +94,9 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
     super.initState();
     // Use initialDeviceId if provided to stay consistent with existing screen logic
     final targetDeviceName = widget.initialDeviceId ?? widget.deviceName;
-    _connectionService = widget.connectionManager.getOrCreateConnection(targetDeviceName);
+    _connectionService = widget.connectionManager.getOrCreateConnection(
+      targetDeviceName,
+    );
 
     // Preload existing messages (history)
     _messages.addAll(_connectionService.messageHistory);
@@ -104,7 +107,8 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
     // Start connect if needed
     if (_connectionService.isConnected) {
       _connectionInfo = _connectionService.currentConnection;
-    } else if (_connectionService.currentConnection?.status == ConnectionStatus.connecting) {
+    } else if (_connectionService.currentConnection?.status ==
+        ConnectionStatus.connecting) {
       // Already connecting (incoming) – do not start outgoing connect
       _connectionInfo = _connectionService.currentConnection;
     } else {
@@ -112,7 +116,10 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
     }
 
     // Animation for file icon pulse + cycling
-    _fileIconPulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat(reverse: true);
+    _fileIconPulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
     _fileIconTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
       setState(() {
@@ -123,7 +130,9 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
 
     // Check pending offers after frame
     _inputFocus.addListener(() => setState(() {}));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPendingFileOffers());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkPendingFileOffers(),
+    );
   }
 
   @override
@@ -151,7 +160,9 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to connect to ${_connectionService.deviceName}'),
+          content: Text(
+            'Failed to connect to ${_connectionService.deviceName}',
+          ),
           backgroundColor: Colors.red,
           action: SnackBarAction(
             label: 'Retry',
@@ -180,7 +191,11 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
             final map = outgoing ? _outgoingProgress : _incomingProgress;
             map.putIfAbsent(
               tId,
-              () => TransferProgress(name: message.content, total: total, mime: mime),
+              () => TransferProgress(
+                name: message.content,
+                total: total,
+                mime: mime,
+              ),
             );
             map[tId]!.updateProgress(bytes.toDouble());
           });
@@ -190,7 +205,11 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
         final tId = message.metadata?['transferId'] as String?;
         final path = message.metadata?['path'] as String?;
         setState(() {
-          if (!_messages.any((m) => m.timestamp == message.timestamp && m.content == message.content)) {
+          if (!_messages.any(
+            (m) =>
+                m.timestamp == message.timestamp &&
+                m.content == message.content,
+          )) {
             _messages.add(message);
           }
           if (tId != null) {
@@ -198,14 +217,24 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
             _outgoingProgress.remove(tId);
           }
           if (path != null && path.isNotEmpty) {
-            _receivedFiles.add(ReceivedFile(name: message.content, path: path, timestamp: message.timestamp));
+            _receivedFiles.add(
+              ReceivedFile(
+                name: message.content,
+                path: path,
+                timestamp: message.timestamp,
+              ),
+            );
           }
         });
         _scrollToBottom();
         break;
       default:
         setState(() {
-          if (!_messages.any((m) => m.timestamp == message.timestamp && m.content == message.content)) {
+          if (!_messages.any(
+            (m) =>
+                m.timestamp == message.timestamp &&
+                m.content == message.content,
+          )) {
             _messages.add(message);
           }
         });
@@ -228,16 +257,22 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
 
     final size = (message.metadata?['size'] ?? payload?['fileSize']) as int?;
     final mime = (message.metadata?['mime'] ?? payload?['mimeType']) as String?;
-    final transferId = (message.metadata?['transferId'] ?? payload?['transferId']) as String?;
+    final transferId =
+        (message.metadata?['transferId'] ?? payload?['transferId']) as String?;
 
     if (transferId != null && _shownOfferDialogs.contains(transferId)) {
-      debugPrint('[ConnectionScreenRefactored] Duplicate offer dialog suppressed: $transferId');
+      debugPrint(
+        '[ConnectionScreenRefactored] Duplicate offer dialog suppressed: $transferId',
+      );
       return;
     }
 
     String name = message.content.trim();
     if (name.isEmpty) {
-      final dynamicName = message.metadata?['fileName'] ?? message.metadata?['name'] ?? payload?['fileName'];
+      final dynamicName =
+          message.metadata?['fileName'] ??
+          message.metadata?['name'] ??
+          payload?['fileName'];
       if (dynamicName is String && dynamicName.trim().isNotEmpty) {
         name = dynamicName;
       } else {
@@ -268,7 +303,10 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
                     borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(Icons.insert_drive_file, color: Colors.blue),
+                  child: const Icon(
+                    Icons.insert_drive_file,
+                    color: Colors.blue,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -279,12 +317,17 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             margin: const EdgeInsets.only(right: 6, top: 2),
                             decoration: BoxDecoration(
                               color: const Color(0xFFE3F2FD),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFBBDEFB)),
+                              border: Border.all(
+                                color: const Color(0xFFBBDEFB),
+                              ),
                             ),
                             child: Text(
                               extensionTrim(name.split('.').last),
@@ -314,7 +357,10 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             formatBytes(size),
-                            style: const TextStyle(color: Colors.black54, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       if (mime != null)
@@ -322,7 +368,10 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(
                             readableMime(mime),
-                            style: const TextStyle(color: Colors.black45, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.black45,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                     ],
@@ -334,7 +383,11 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
             if (size != null && size > 50 * 1024 * 1024)
               Row(
                 children: const [
-                  Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -355,14 +408,24 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
       final saveDir = await _chooseSaveDirEveryTime(context);
       await _connectionService.acceptFileOffer(transferId, saveDir: saveDir);
       setState(() {
-        _incomingProgress[transferId] = TransferProgress(name: name, total: size ?? 0, mime: mime);
+        _incomingProgress[transferId] = TransferProgress(
+          name: name,
+          total: size ?? 0,
+          mime: mime,
+        );
       });
       _shownOfferDialogs.remove(transferId);
     } else if (transferId != null) {
       await _connectionService.declineFileOffer(transferId);
       _shownOfferDialogs.remove(transferId);
       setState(() {
-        _messages.add(DeviceMessage(type: 'text', content: 'Declined file: $name', senderName: widget.myDeviceName));
+        _messages.add(
+          DeviceMessage(
+            type: 'text',
+            content: 'Declined file: $name',
+            senderName: widget.myDeviceName,
+          ),
+        );
       });
     }
   }
@@ -374,12 +437,15 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
           Theme.of(context).platform == TargetPlatform.linux ||
           Theme.of(context).platform == TargetPlatform.windows ||
           Theme.of(context).platform == TargetPlatform.android) {
-        final dir = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose a folder for received files');
+        final dir = await FilePicker.platform.getDirectoryPath(
+          dialogTitle: 'Choose a folder for received files',
+        );
         if (dir != null) chosen = dir;
       }
     } catch (_) {}
     if (chosen == null) {
-      if (Theme.of(context).platform == TargetPlatform.iOS || Theme.of(context).platform == TargetPlatform.android) {
+      if (Theme.of(context).platform == TargetPlatform.iOS ||
+          Theme.of(context).platform == TargetPlatform.android) {
         final docs = await getApplicationDocumentsDirectory();
         chosen = docs.path;
       } else {
@@ -401,7 +467,12 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Connected to ${info.deviceName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
+            content: Text(
+              'Connected to ${info.deviceName}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+            ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -412,7 +483,12 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Disconnected from ${info.deviceName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
+            content: Text(
+              'Disconnected from ${info.deviceName}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+            ),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 2),
           ),
@@ -423,7 +499,12 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Connection failed: ${info.error ?? "Unknown error"}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)),
+            content: Text(
+              'Connection failed: ${info.error ?? "Unknown error"}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -448,7 +529,11 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
-    final message = DeviceMessage(type: 'text', content: text, senderName: widget.myDeviceName);
+    final message = DeviceMessage(
+      type: 'text',
+      content: text,
+      senderName: widget.myDeviceName,
+    );
     final success = await _connectionService.sendMessage(message);
     if (success) {
       setState(() {
@@ -458,7 +543,13 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
       _scrollToBottom();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to send message', style: TextStyle(color: AppColors.white)), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text(
+            'Failed to send message',
+            style: TextStyle(color: AppColors.white),
+          ),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -475,7 +566,14 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
           final status = await Permission.requestInstallPackages.request();
           if (!status.isGranted) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Install permission denied', style: TextStyle(color: AppColors.white))));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Install permission denied',
+                    style: TextStyle(color: AppColors.white),
+                  ),
+                ),
+              );
             }
             return;
           }
@@ -484,7 +582,12 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
       final result = await OpenFilex.open(path);
       if (result.type != ResultType.done && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Open failed (${result.message})', style: const TextStyle(color: AppColors.white))),
+          SnackBar(
+            content: Text(
+              'Open failed (${result.message})',
+              style: const TextStyle(color: AppColors.white),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -494,7 +597,12 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
       } catch (_) {}
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Open failed: $e', style: const TextStyle(color: AppColors.white))),
+          SnackBar(
+            content: Text(
+              'Open failed: $e',
+              style: const TextStyle(color: AppColors.white),
+            ),
+          ),
         );
       }
     }
@@ -507,7 +615,14 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
       final status = await Permission.storage.request();
       if (!status.isGranted) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage permission denied', style: TextStyle(color: AppColors.white))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Storage permission denied',
+                style: TextStyle(color: AppColors.white),
+              ),
+            ),
+          );
         }
         return;
       }
@@ -515,7 +630,9 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
     String? targetDir;
     try {
       if (isAndroid || !isIOS) {
-        targetDir = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose destination folder');
+        targetDir = await FilePicker.platform.getDirectoryPath(
+          dialogTitle: 'Choose destination folder',
+        );
       }
     } catch (_) {}
     if (isIOS && (targetDir == null || targetDir.isEmpty)) {
@@ -528,7 +645,8 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
         targetDir = docs.path;
       } else {
         final downloads = await getDownloadsDirectory();
-        targetDir = (downloads ?? await getApplicationDocumentsDirectory()).path;
+        targetDir =
+            (downloads ?? await getApplicationDocumentsDirectory()).path;
       }
     }
     final safeName = originalName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
@@ -549,13 +667,23 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
       await io.File(sourcePath).copy(destPath);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved to: $destPath', style: const TextStyle(color: AppColors.white))),
+          SnackBar(
+            content: Text(
+              'Saved to: $destPath',
+              style: const TextStyle(color: AppColors.white),
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e', style: const TextStyle(color: AppColors.white))),
+          SnackBar(
+            content: Text(
+              'Save failed: $e',
+              style: const TextStyle(color: AppColors.white),
+            ),
+          ),
         );
       }
     }
@@ -586,10 +714,12 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
   }
 
   String _statusText() {
-    if (_isConnecting || _connectionInfo?.status == ConnectionStatus.connecting) {
+    if (_isConnecting ||
+        _connectionInfo?.status == ConnectionStatus.connecting) {
       return 'Connecting...';
     } else if (_connectionInfo?.status == ConnectionStatus.connected) {
-      return '${widget.ipAddress}:${widget.port} • Connected';
+      // return '${widget.ipAddress}:${widget.port} • Connected';
+      return 'Connected';
     } else if (_connectionInfo?.status == ConnectionStatus.failed) {
       return 'Connection Failed';
     } else if (_connectionInfo?.status == ConnectionStatus.disconnected) {
@@ -601,11 +731,13 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
   // Legacy alias no longer used after top bar extraction; removed.
 
   void _showReceivedFilesSheet() {
-    showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      showDragHandle: true,
-      builder: (_) => ReceivedFilesSheet(
+      title: 'Received Files',
+      subtitle: 'Files from this chat',
+      maxHeightFactor: 0.6,
+      contentPadding: const EdgeInsets.only(top: 16),
+      child: ReceivedFilesSheet(
         files: _receivedFiles,
         onOpen: (path, name) => _openFile(path, name),
         onReveal: (dirPath, _) async {
@@ -614,7 +746,12 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
           } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Reveal failed: $e', style: const TextStyle(color: AppColors.white))),
+                SnackBar(
+                  content: Text(
+                    'Reveal failed: $e',
+                    style: const TextStyle(color: AppColors.white),
+                  ),
+                ),
               );
             }
           }
@@ -625,174 +762,31 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
   }
 
   void _showAllConnectedDevices() {
-    showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final connections = widget.connectionManager.activeConnections.entries.toList();
-        if (connections.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Center(child: Text('No connections')),
+      title: 'Connected Devices',
+      subtitle: 'Switch to another chat',
+      maxHeightFactor: 0.6,
+      contentPadding: const EdgeInsets.only(top: 16),
+      child: ConnectedDevicesBottomSheet(
+        staticConnections: widget.connectionManager.activeConnections.entries.toList(),
+        currentDeviceId: widget.initialDeviceId ?? widget.deviceName,
+        onDeviceTap: (deviceId, [ipAddress, port]) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                deviceName: deviceId,
+                ipAddress: ipAddress ?? '',
+                port: port ?? 53318,
+                myDeviceName: widget.myDeviceName,
+                connectionManager: widget.connectionManager,
+                initialDeviceId: deviceId,
+              ),
+            ),
           );
-        }
-        return Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text('Connected Devices (${connections.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.description),
-                      tooltip: 'View connection log',
-                      onPressed: () async {
-                        final logPath = await ConnectionLogger.instance.getLogPath();
-                        final logs = await ConnectionLogger.instance.readLogs();
-                        if (!context.mounted) return;
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Connection Log'),
-                            content: SingleChildScrollView(
-                              child: SelectableText(
-                                logs,
-                                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () async {
-                                  if (logPath != null) {
-                                    await Share.shareXFiles([XFile(logPath)], text: 'CPFT Connection Log');
-                                  }
-                                },
-                                child: const Text('Share'),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  await ConnectionLogger.instance.clearLogs();
-                                  Navigator.pop(ctx);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Log cleared')));
-                                  }
-                                },
-                                child: const Text('Clear'),
-                              ),
-                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: connections.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final deviceId = connections[index].key;
-                    final connection = connections[index].value;
-                    final status = connection.currentConnection?.status;
-                    final isCurrentDevice = deviceId == widget.deviceName || deviceId == (widget.initialDeviceId ?? widget.deviceName);
-                    String statusText;
-                    Color statusColor;
-                    IconData statusIcon;
-                    if (status == ConnectionStatus.connected) {
-                      statusText = 'Connected';
-                      statusColor = AppColors.green;
-                      statusIcon = Icons.wifi;
-                    } else if (status == ConnectionStatus.connecting) {
-                      statusText = 'Connecting...';
-                      statusColor = Colors.blue;
-                      statusIcon = Icons.sync;
-                    } else if (status == ConnectionStatus.disconnected) {
-                      statusText = 'Disconnected';
-                      statusColor = Colors.orange;
-                      statusIcon = Icons.wifi_off;
-                    } else if (status == ConnectionStatus.failed) {
-                      statusText = 'Failed';
-                      statusColor = AppColors.red;
-                      statusIcon = Icons.error_outline;
-                    } else {
-                      statusText = 'Unknown';
-                      statusColor = AppColors.greyDark;
-                      statusIcon = Icons.help_outline;
-                    }
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                      leading: CircleAvatar(backgroundColor: statusColor, child: Icon(statusIcon, color: Colors.white)),
-                      title: Row(children: [
-                        Expanded(
-                          child: Text(deviceId, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                        if (isCurrentDevice)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                            child: const Text('Current', style: TextStyle(fontSize: 10, color: Colors.blue)),
-                          ),
-                      ]),
-                      subtitle: Text(statusText, style: TextStyle(color: statusColor)),
-                      trailing: !isCurrentDevice && status == ConnectionStatus.connected
-                          ? IconButton(
-                              icon: const Icon(Icons.chat_bubble_outline),
-                              tooltip: 'Switch to this chat',
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ConnectionScreenRefactored(
-                                      deviceName: deviceId,
-                                      ipAddress: connection.currentConnection?.ipAddress ?? '',
-                                      port: p2pPort,
-                                      myDeviceName: widget.myDeviceName,
-                                      connectionManager: widget.connectionManager,
-                                      initialDeviceId: deviceId,
-                                    ),
-                                  ),
-                                );
-                              },
-                            )
-                          : null,
-                      onTap: !isCurrentDevice && status == ConnectionStatus.connected
-                          ? () {
-                              Navigator.pop(ctx);
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ConnectionScreenRefactored(
-                                    deviceName: deviceId,
-                                    ipAddress: connection.currentConnection?.ipAddress ?? '',
-                                    port: p2pPort,
-                                    myDeviceName: widget.myDeviceName,
-                                    connectionManager: widget.connectionManager,
-                                    initialDeviceId: deviceId,
-                                  ),
-                                ),
-                              );
-                            }
-                          : null,
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+        },
+      ),
     );
   }
 
@@ -807,122 +801,164 @@ class _ConnectionScreenRefactoredState extends State<ConnectionScreenRefactored>
       backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)], stops: [0.0, 1.0]),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+            stops: [0.0, 1.0],
+          ),
         ),
         child: SafeArea(
-          child: Column(children: [
-            ChatTopBar(
-              deviceName: _connectionService.deviceName,
-              statusText: _statusText(),
-              receivedFilesCount: _receivedFiles.length,
-              connectionsCount: widget.connectionManager.activeConnections.length,
-              onBack: () => Navigator.of(context).pop(),
-              onShowReceivedFiles: _showReceivedFilesSheet,
-              onShowDevices: _showAllConnectedDevices,
-              onDisconnect: isConnected ? _disconnect : null,
-              connectionManager: widget.connectionManager,
-              isConnected: isConnected,
-            ),
-            if (_isConnecting || _connectionInfo?.status == ConnectionStatus.connecting)
-              ConnectingBanner(deviceName: _connectionService.deviceName),
-            if (_connectionInfo?.status == ConnectionStatus.failed)
-              ErrorBanner(error: _connectionInfo?.error, onRetry: _connectToDevice),
-            Expanded(
-              child: (() {
-                final totalItems = _messages.length + _incomingProgress.length + _outgoingProgress.length;
-                if (totalItems == 0) {
-                  return Center(
-                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text('No messages yet', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
-                      const SizedBox(height: 8),
-                      Text('Send a message to start the conversation', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                    ]),
-                  );
-                }
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: totalItems,
-                  itemBuilder: (context, index) {
-                    if (index < _messages.length) {
-                      final msg = _messages[index];
-                      final isMine = msg.senderName == widget.myDeviceName;
-                      if (msg.type == 'file_complete') {
-                        final savedPath = msg.metadata?['path'] as String?;
-                        return CompletedFileCard(message: msg, isMine: isMine, savedPath: savedPath, onOpen: (p, n) => _openFile(p, n));
-                      }
-                      if (msg.type == 'file_offer') {
-                        return const SizedBox.shrink();
-                      }
-                      return MessageBubble(message: msg, isMine: isMine);
-                    }
-                    final extra = index - _messages.length;
-                    final incomingKeys = _incomingProgress.keys.toList();
-                    if (extra < incomingKeys.length) {
-                      final tId = incomingKeys[extra];
-                      return TransferProgressTile(
-                        progress: _incomingProgress[tId]!,
-                        onCancel: () {
-                          _connectionService.cancelTransfer(tId);
-                          setState(() {
-                            _incomingProgress.remove(tId);
-                            _outgoingProgress.remove(tId);
-                          });
-                        },
-                        onResume: () async {
-                          if (_incomingProgress.containsKey(tId)) {
-                            await _connectionService.resumeIncoming(tId);
-                          } else if (_outgoingProgress.containsKey(tId)) {
-                            await _connectionService.requestResume(tId);
-                          }
-                        },
-                      );
-                    }
-                    final outExtra = extra - incomingKeys.length;
-                    final outKeys = _outgoingProgress.keys.toList();
-                    if (outExtra < outKeys.length) {
-                      final tId = outKeys[outExtra];
-                      return TransferProgressTile(
-                        progress: _outgoingProgress[tId]!,
-                        onCancel: () {
-                          _connectionService.cancelTransfer(tId);
-                          setState(() {
-                            _incomingProgress.remove(tId);
-                            _outgoingProgress.remove(tId);
-                          });
-                        },
-                        onResume: () async {
-                          if (_incomingProgress.containsKey(tId)) {
-                            await _connectionService.resumeIncoming(tId);
-                          } else if (_outgoingProgress.containsKey(tId)) {
-                            await _connectionService.requestResume(tId);
-                          }
-                        },
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                );
-              })(),
-            ),
-            if (isConnected)
-              FileTaglineBar(
-                onTapMain: () => _connectionService.pickAndSendFile(),
-                onTapFab: () => _connectionService.pickAndSendFile(),
-                pulseController: _fileIconPulse!,
-                fileIcons: _fileIcons,
-                fileIconIndex: _fileIconIndex,
-                slideFromLeft: _slideFromLeft,
+          child: Column(
+            children: [
+              ChatTopBar(
+                deviceName: _connectionService.deviceName,
+                statusText: _statusText(),
+                receivedFilesCount: _receivedFiles.length,
+                connectionsCount:
+                    widget.connectionManager.activeConnections.length,
+                onBack: () => Navigator.of(context).pop(),
+                onShowReceivedFiles: _showReceivedFilesSheet,
+                onShowDevices: _showAllConnectedDevices,
+                onDisconnect: isConnected ? _disconnect : null,
+                connectionManager: widget.connectionManager,
+                isConnected: isConnected,
               ),
-            MessageInputBar(
-              controller: _messageController,
-              focusNode: _inputFocus,
-              onSend: _sendMessage,
-              enabled: isConnected,
-            ),
-          ]),
+              if (_isConnecting ||
+                  _connectionInfo?.status == ConnectionStatus.connecting)
+                ConnectingBanner(deviceName: _connectionService.deviceName),
+              if (_connectionInfo?.status == ConnectionStatus.failed)
+                ErrorBanner(
+                  error: _connectionInfo?.error,
+                  onRetry: _connectToDevice,
+                ),
+              Expanded(
+                child: (() {
+                  final totalItems =
+                      _messages.length +
+                      _incomingProgress.length +
+                      _outgoingProgress.length;
+                  if (totalItems == 0) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No messages yet',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Send a message to start the conversation',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    itemCount: totalItems,
+                    itemBuilder: (context, index) {
+                      if (index < _messages.length) {
+                        final msg = _messages[index];
+                        final isMine = msg.senderName == widget.myDeviceName;
+                        if (msg.type == 'file_complete') {
+                          final savedPath = msg.metadata?['path'] as String?;
+                          return CompletedFileCard(
+                            message: msg,
+                            isMine: isMine,
+                            savedPath: savedPath,
+                            onOpen: (p, n) => _openFile(p, n),
+                          );
+                        }
+                        if (msg.type == 'file_offer') {
+                          return const SizedBox.shrink();
+                        }
+                        return MessageBubble(message: msg, isMine: isMine);
+                      }
+                      final extra = index - _messages.length;
+                      final incomingKeys = _incomingProgress.keys.toList();
+                      if (extra < incomingKeys.length) {
+                        final tId = incomingKeys[extra];
+                        return TransferProgressTile(
+                          progress: _incomingProgress[tId]!,
+                          onCancel: () {
+                            _connectionService.cancelTransfer(tId);
+                            setState(() {
+                              _incomingProgress.remove(tId);
+                              _outgoingProgress.remove(tId);
+                            });
+                          },
+                          onResume: () async {
+                            if (_incomingProgress.containsKey(tId)) {
+                              await _connectionService.resumeIncoming(tId);
+                            } else if (_outgoingProgress.containsKey(tId)) {
+                              await _connectionService.requestResume(tId);
+                            }
+                          },
+                        );
+                      }
+                      final outExtra = extra - incomingKeys.length;
+                      final outKeys = _outgoingProgress.keys.toList();
+                      if (outExtra < outKeys.length) {
+                        final tId = outKeys[outExtra];
+                        return TransferProgressTile(
+                          progress: _outgoingProgress[tId]!,
+                          onCancel: () {
+                            _connectionService.cancelTransfer(tId);
+                            setState(() {
+                              _incomingProgress.remove(tId);
+                              _outgoingProgress.remove(tId);
+                            });
+                          },
+                          onResume: () async {
+                            if (_incomingProgress.containsKey(tId)) {
+                              await _connectionService.resumeIncoming(tId);
+                            } else if (_outgoingProgress.containsKey(tId)) {
+                              await _connectionService.requestResume(tId);
+                            }
+                          },
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  );
+                })(),
+              ),
+              if (isConnected)
+                FileTaglineBar(
+                  onTapMain: () => _connectionService.pickAndSendFile(),
+                  onTapFab: () => _connectionService.pickAndSendFile(),
+                  pulseController: _fileIconPulse!,
+                  fileIcons: _fileIcons,
+                  fileIconIndex: _fileIconIndex,
+                  slideFromLeft: _slideFromLeft,
+                ),
+              MessageInputBar(
+                controller: _messageController,
+                focusNode: _inputFocus,
+                onSend: _sendMessage,
+                enabled: isConnected,
+              ),
+            ],
+          ),
         ),
       ),
     );

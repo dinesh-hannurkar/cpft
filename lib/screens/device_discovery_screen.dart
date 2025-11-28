@@ -11,7 +11,7 @@ import '../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../shared/widgets/app_confirm_dialog.dart';
 
 import '../services/discovery_service.dart';
-import '../features/chat/presentation/connection_screen_refactored.dart';
+import '../features/chat/presentation/chat_screen.dart';
 import 'package:file_picker/file_picker.dart';
 
 class DeviceDiscoveryScreen extends StatefulWidget {
@@ -104,7 +104,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       await accept();
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ConnectionScreenRefactored(
+          builder: (_) => ChatScreen(
             deviceName: deviceName,
             ipAddress: ipAddress,
             port: port,
@@ -1003,7 +1003,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ConnectionScreenRefactored(
+          builder: (context) => ChatScreen(
             deviceName: deviceName,
             ipAddress: ipAddress,
             port: 53318,
@@ -1020,7 +1020,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ConnectionScreenRefactored(
+        builder: (context) => ChatScreen(
           deviceName: deviceName,
           ipAddress: ipAddress,
           port: 53318, // Use P2P port

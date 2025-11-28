@@ -1,4 +1,4 @@
-import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
+import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cpft/core/constants/app_colors.dart';
@@ -62,7 +62,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(32),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.15),
@@ -106,7 +108,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 children: [
                                   Text(
                                     'Rename Device',
-                                    style: Theme.of(context).textTheme.titleLarge
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
                                         ?.copyWith(
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.darkPrimary,
@@ -115,7 +119,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   const SizedBox(height: 8),
                                   Text(
                                     'Choose a new name for your device',
-                                    style: Theme.of(context).textTheme.bodyMedium
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
                                         ?.copyWith(
                                           color: Colors.grey.shade600,
                                           fontWeight: FontWeight.w500,
@@ -208,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PrimaryAppBar(
-        leading: _BackButtonChip(onPressed: () => Navigator.pop(context)),
+        leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
         title: 'Settings',
         centerTitle: true,
       ),
@@ -311,12 +317,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           // ),
                           // const SizedBox(height: AppSizes.md),
                           _settingsTile(
-                          icon: Icons.info_outline_rounded,
-                          title: 'Version',
-                          subtitle: 'Installed app version',
-                          trailing: Text(
-                            _appVersion.isEmpty ? '-' : _appVersion,
-                          ),
+                            icon: Icons.info_outline_rounded,
+                            title: 'Version',
+                            subtitle: 'Installed app version',
+                            trailing: Text(
+                              _appVersion.isEmpty ? '-' : _appVersion,
+                            ),
                           ),
                           // _settingsTile(
                           //   icon: Icons.color_lens_outlined,
@@ -325,40 +331,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           //   onTap: () {},
                           // ),
                           _settingsTile(
-                          icon: Icons.help_outline_rounded,
-                          title: 'Help & Support',
-                          subtitle: 'Get help, FAQs, and contact support',
-                          onTap: () {},
+                            icon: Icons.help_outline_rounded,
+                            title: 'Help & Support',
+                            subtitle: 'Get help, FAQs, and contact support',
+                            onTap: () {},
                           ),
                           _settingsTile(
-                          icon: Icons.description_outlined,
-                          title: 'Terms of Use',
-                          subtitle: 'Read the terms and conditions',
-                          onTap: () {},
+                            icon: Icons.description_outlined,
+                            title: 'Terms of Use',
+                            subtitle: 'Read the terms and conditions',
+                            onTap: () {},
                           ),
                           _settingsTile(
-                          icon: Icons.privacy_tip_outlined,
-                          title: 'Privacy Policy',
-                          subtitle: 'Learn how your data is used',
-                          onTap: () {},
+                            icon: Icons.privacy_tip_outlined,
+                            title: 'Privacy Policy',
+                            subtitle: 'Learn how your data is used',
+                            onTap: () {},
                           ),
                           _settingsTile(
-                          icon: Icons.feedback_outlined,
-                          title: 'Send Feedback',
-                          subtitle: 'Report a bug or suggest a feature',
-                          onTap: () {},
+                            icon: Icons.feedback_outlined,
+                            title: 'Send Feedback',
+                            subtitle: 'Report a bug or suggest a feature',
+                            onTap: () {},
                           ),
                           _settingsTile(
-                          icon: Icons.star_rate_outlined,
-                          title: 'Rate Us',
-                          subtitle: 'Leave a rating in the store',
-                          onTap: () {},
+                            icon: Icons.star_rate_outlined,
+                            title: 'Rate Us',
+                            subtitle: 'Leave a rating in the store',
+                            onTap: () {},
                           ),
                           _settingsTile(
-                          icon: Icons.share_outlined,
-                          title: 'Share App',
-                          subtitle: 'Share CPFT with friends',
-                          onTap: () {},
+                            icon: Icons.share_outlined,
+                            title: 'Share App',
+                            subtitle: 'Share CPFT with friends',
+                            onTap: () {},
                           ),
                         ],
                       ),
@@ -417,15 +423,5 @@ class _SettingsScreenState extends State<SettingsScreen> {
         trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
       ),
     );
-  }
-}
-
-class _BackButtonChip extends StatelessWidget {
-  final VoidCallback onPressed;
-  const _BackButtonChip({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return AppIconButton(onPressed: onPressed, icon: Icons.arrow_back);
   }
 }

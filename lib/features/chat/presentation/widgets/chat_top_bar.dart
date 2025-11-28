@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
-import '../../models/received_file.dart';
-import '../connection_screen_refactored.dart'; // for p2pPort if needed (could move constant later)
+import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
+import 'package:cpft/shared/widgets/back_button_chip.dart';
+import 'package:cpft/shared/widgets/primary_app_bar.dart';
+import 'package:flutter/material.dart';
 import '../../services/connection_manager.dart';
-import '../../models/connection_state.dart';
 
-class ChatTopBar extends StatelessWidget {
+class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String deviceName;
   final String statusText;
   final int receivedFilesCount;
@@ -32,70 +33,78 @@ class ChatTopBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: Row(children: [
-        InkWell(
-          onTap: onBack,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.arrow_back, color: Colors.blue),
-          ),
+  Size get preferredSize => const Size.fromHeight(56);
+
+  List<Widget> _buildTrailingActions() {
+    final actions = <Widget>[];
+
+    if (receivedFilesCount > 0) {
+      actions.add(
+        AppIconButton(
+          // tooltip: 'Received files',
+          icon: Icons.folder_open,
+          onPressed: onShowReceivedFiles,
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Connected to $deviceName',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.blue,
-                ),
-              ),
-              Text(
-                statusText,
-                style: const TextStyle(fontSize: 11, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-        if (receivedFilesCount > 0)
-          IconButton(
-            tooltip: 'Received files',
-            icon: const Icon(Icons.folder_open),
-            onPressed: onShowReceivedFiles,
-          ),
-        IconButton(
-          tooltip: 'All connected devices',
-          icon: Badge(
-            label: Text('$connectionsCount'),
-            child: const Icon(Icons.devices),
-          ),
+      );
+    }
+
+    actions.add(
+      Badge(
+        label: Text('$connectionsCount'),
+        child: AppIconButton(
+          // tooltip: 'All connected devices',
+          icon: Icons.devices,
           onPressed: onShowDevices,
         ),
-        if (isConnected && onDisconnect != null)
-          IconButton(
-            tooltip: 'Disconnect',
-            icon: const Icon(Icons.close),
-            onPressed: onDisconnect,
+      ),
+    );
+
+    if (isConnected && onDisconnect != null) {
+      actions.add(
+        AppIconButton(
+          // tooltip: 'Disconnect',
+          icon: Icons.close,
+          onPressed: onDisconnect!,
+        ),
+      );
+    }
+
+    return actions;
+  }
+
+  Widget _buildTitleColumn(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: AppSizes.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            deviceName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
           ),
-      ]),
+          Text(
+            statusText,
+            style: const TextStyle(fontSize: 11, color: Colors.black54),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PrimaryAppBar(
+      leading: BackButtonChip(onPressed: onBack),
+      titleWidget: _buildTitleColumn(context),
+      centerTitle: false,
+      trailing: _buildTrailingActions(),
+      backgroundColor: Colors.transparent,
     );
   }
 }

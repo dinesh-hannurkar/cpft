@@ -6,7 +6,7 @@ import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
 import 'services/notification_service.dart';
 import 'features/home/presentation/home_screen.dart';
-import 'features/chat/presentation/connection_screen_refactored.dart';
+import 'features/chat/presentation/chat_screen.dart';
 import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
@@ -142,7 +142,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
         debugPrint('[HomeWrapper] Navigating to ConnectionScreenRefactored...');
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ConnectionScreenRefactored(
+            builder: (_) => ChatScreen(
               deviceName: deviceName,
               ipAddress: connection.currentConnection?.ipAddress ?? '',
               port: DiscoveryService.p2pPort,
@@ -420,7 +420,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
         debugPrint('[PermissionWrapper] Navigating to ConnectionScreenRefactored...');
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ConnectionScreenRefactored(
+            builder: (_) => ChatScreen(
               deviceName: deviceName,
               ipAddress: connection.currentConnection?.ipAddress ?? '',
               port: DiscoveryService.p2pPort,

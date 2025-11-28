@@ -23,7 +23,8 @@ import 'package:cpft/features/home/presentation/widgets/home_app_bar.dart';
 import 'package:cpft/features/home/presentation/widgets/connected_devices_sheet.dart';
 import 'package:cpft/features/home/presentation/widgets/incoming_request_dialog.dart';
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
-import 'package:cpft/features/chat/presentation/connection_screen_refactored.dart';
+import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
+import 'package:cpft/features/chat/presentation/chat_screen.dart';
 import 'package:cpft/features/webshare/presentation/webshare_screen.dart';
 import 'package:cpft/features/qr_scanner/presentation/qr_scanner_screen.dart';
 import 'package:cpft/features/chat/services/connection_service.dart';
@@ -108,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ConnectionScreenRefactored(
+              builder: (_) => ChatScreen(
                 deviceName: deviceName,
                 ipAddress: service.currentConnection?.ipAddress ?? '',
                 port: DiscoveryService.p2pPort,
@@ -1458,33 +1459,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (mounted) setState(() {});
 
-    showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      title: 'Connected Devices',
+      subtitle: 'Tap to open chat',
+      maxHeightFactor: 0.6,
+      contentPadding: const EdgeInsets.only(top: 16),
+      child: ConnectedDevicesBottomSheet(
+        connectionManager: connectionManager,
+        onDeviceTap: _navigateToDeviceChat,
       ),
-      builder: (context) {
-        return ConnectedDevicesBottomSheet(
-          connectionManager: connectionManager,
-          onDeviceTap: _navigateToDeviceChat,
-        );
-      },
     );
   }
 
-  void _navigateToDeviceChat(String deviceId) {
+  void _navigateToDeviceChat(String deviceId, [String? ipAddress, int? port]) {
     final connectionManager = widget.discoveryService.connectionManager;
     if (connectionManager == null) return;
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ConnectionScreenRefactored(
+        builder: (context) => ChatScreen(
           deviceName: deviceId,
-          ipAddress: '',
-          port: DiscoveryService.p2pPort,
+          ipAddress: ipAddress ?? '',
+          port: port ?? DiscoveryService.p2pPort,
           myDeviceName: widget.myDeviceName,
           connectionManager: connectionManager,
           initialDeviceId: deviceId,

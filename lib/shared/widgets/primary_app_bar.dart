@@ -5,6 +5,7 @@ import 'package:cpft/core/constants/app_sizes.dart';
 class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? leading;
   final String? title;
+  final Widget? titleWidget;
   final TextStyle? titleStyle;
   final List<Widget>? trailing;
   final bool centerTitle;
@@ -14,11 +15,12 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     this.leading,
     this.title,
+    this.titleWidget,
     this.titleStyle,
     this.trailing,
     this.centerTitle = true,
     this.backgroundColor,
-  });
+  }) : assert(title == null || titleWidget == null, 'Cannot provide both title and titleWidget');
 
   @override
   Size get preferredSize => Size.fromHeight(AppSizes.appBarHeight);
@@ -40,17 +42,21 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
         height: AppSizes.appBarHeight,
         child: Stack(
           children: [
-            if (title != null)
+            if (title != null || titleWidget != null)
               Align(
                 alignment: centerTitle ? Alignment.center : Alignment.centerLeft,
                 child: Padding(
-                  padding: EdgeInsets.only(left: centerTitle ? 0 : 16.0),
-                  child: Text(
-                    title!,
-                    style: (titleStyle ?? Theme.of(context).textTheme.headlineMedium)
-                        ?.apply(color: AppColors.primary),
-                    overflow: TextOverflow.ellipsis,
+                  padding: EdgeInsets.only(
+                    left: centerTitle ? 0 : 60.0,
+                    right: centerTitle ? 0 : 60.0,
                   ),
+                  child: titleWidget ??
+                      Text(
+                        title!,
+                        style: (titleStyle ?? Theme.of(context).textTheme.headlineMedium)
+                            ?.apply(color: AppColors.primary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                 ),
               ),
             if (leading != null)
