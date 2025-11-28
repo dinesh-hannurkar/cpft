@@ -37,6 +37,19 @@ class MainApp extends StatelessWidget {
         '/setup': (context) => const DeviceNameSetupScreen(),
         '/home': (context) => const HomeWrapper(),
       },
+      builder: (context, child) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+              stops: [0.0, 1.0],
+            ),
+          ),
+          child: child,
+        );
+      },
     );
   }
 }
@@ -284,7 +297,6 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
       final isServiceDisabled = _locationServiceDisabled;
       return Scaffold(
         resizeToAvoidBottomInset: false,
-        backgroundColor: Colors.white,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32.0),

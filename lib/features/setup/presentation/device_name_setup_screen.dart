@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../shared/widgets/primary_text_field.dart';
+import '../../../shared/widgets/primary_button.dart';
 
 class DeviceNameSetupScreen extends StatefulWidget {
   const DeviceNameSetupScreen({super.key});
@@ -134,108 +136,33 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
                   ),
                   const SizedBox(height: 48),
                   // Input field
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _nameController,
-                      enabled: !_isLoading,
-                      decoration: InputDecoration(
-                        hintText: 'Enter device name...',
-                        hintStyle: TextStyle(
-                          color: AppColors.greyLight,
-                          fontSize: 16,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: AppColors.primary,
-                            width: 2,
-                          ),
-                        ),
-                        prefixIcon: const Padding(
-                          padding: EdgeInsets.only(left: 20, right: 12),
-                          child: Icon(
-                            Icons.smartphone,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: AppColors.darkPrimary,
-                      ),
-                    ),
+                  PrimaryTextField(
+                    controller: _nameController,
+                    enabled: !_isLoading,
+                    hintText: 'Enter device name...',
+                    prefixIcon: Icons.person,
+                    autofocus: true,
                   ),
                   const SizedBox(height: 32),
                   // Buttons
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveDeviceName,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                        shadowColor: AppColors.primary.withValues(alpha: 0.3),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Text(
-                              'Continue',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                    ),
+                  PrimaryButton(
+                    text: 'Continue',
+                    onPressed: _saveDeviceName,
+                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: _isLoading ? null : _useGeneratedName,
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.greyDark,
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    child: const Text('Use auto-generated name'),
-                  ),
-                  const SizedBox(height: 24), // Extra space at bottom for keyboard
+                  // TextButton(
+                  //   onPressed: _isLoading ? null : _useGeneratedName,
+                  //   style: TextButton.styleFrom(
+                  //     foregroundColor: AppColors.greyDark,
+                  //     textStyle: const TextStyle(
+                  //       fontSize: 16,
+                  //       fontWeight: FontWeight.w500,
+                  //     ),
+                  //   ),
+                  //   child: const Text('Use auto-generated name'),
+                  // ),
+                  // const SizedBox(height: 24), // Extra space at bottom for keyboard
                 ],
               ),
             ),

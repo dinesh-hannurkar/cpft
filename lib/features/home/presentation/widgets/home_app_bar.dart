@@ -4,6 +4,7 @@ import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/features/chat/services/connection_manager.dart';
 import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
 import 'package:cpft/services/discovery_service.dart';
+import 'package:cpft/features/settings/presentation/settings_screen.dart';
 
 /// Custom AppBar for the home screen
 class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -77,7 +78,14 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                       AppIconButton(
                         icon: Icons.settings_outlined,
                         onPressed: () {
-                          /* TODO: navigate to settings */
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => SettingsScreen(
+                                currentDeviceName: discoveryService.alias,
+                                discoveryService: discoveryService,
+                              ),
+                            ),
+                          );
                         },
                       ),
                     ],
