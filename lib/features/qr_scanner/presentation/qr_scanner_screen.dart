@@ -1,9 +1,11 @@
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/services/wifi_service.dart';
+import 'package:flutter/foundation.dart';
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});
@@ -13,19 +15,50 @@ class QrScannerScreen extends StatefulWidget {
 }
 
 class _QrScannerScreenState extends State<QrScannerScreen> {
-  final MobileScannerController controller = MobileScannerController();
+  MobileScannerController? controller;
   bool _hasPermission = false;
   bool _isCheckingPermission = true;
+  bool _isProcessing = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _checkCameraPermission();
+    final platformStr = kIsWeb ? 'web' : defaultTargetPlatform.name;
+    debugPrint('QR Scanner: initState called, platform: $platformStr');
+    _initializeScanner();
+  }
+
+  Future<void> _initializeScanner() async {
+    try {
+      debugPrint('QR Scanner: Checking camera permission...');
+      await _checkCameraPermission();
+      
+      if (_hasPermission && mounted) {
+        debugPrint('QR Scanner: Permission granted, creating controller...');
+        setState(() {
+          controller = MobileScannerController(
+            detectionSpeed: DetectionSpeed.noDuplicates,
+            facing: CameraFacing.back,
+          );
+        });
+        debugPrint('QR Scanner: Controller created successfully');
+      } else {
+        debugPrint('QR Scanner: Permission not granted or widget unmounted');
+      }
+    } catch (e) {
+      debugPrint('QR Scanner: Error initializing scanner: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to initialize camera: $e';
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
-    controller.dispose();
+    controller?.dispose();
     super.dispose();
   }
 
@@ -33,6 +66,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     setState(() {
       _isCheckingPermission = true;
     });
+
+    // On web, camera permission is handled by the browser when accessing getUserMedia.
+    // Skip permission_handler and let MobileScanner trigger the prompt.
+    if (kIsWeb) {
+      setState(() {
+        _hasPermission = true;
+        _isCheckingPermission = false;
+      });
+      return;
+    }
 
     final status = await Permission.camera.status;
     if (status.isGranted) {
@@ -49,11 +92,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
       if (!result.isGranted) {
         if (result.isPermanentlyDenied) {
-          // Show dialog to open settings
           _showPermissionDialog();
         } else {
-          // Permission denied, go back
-          Navigator.of(context).pop();
+          if (mounted) Navigator.of(context).pop();
         }
       }
     } else {
@@ -139,6 +180,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         title: const Text(
@@ -150,106 +192,164 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.flashlight_on, color: Colors.white),
-            onPressed: () => controller.toggleTorch(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.cameraswitch, color: Colors.white),
-            onPressed: () => controller.switchCamera(),
-          ),
+          if (controller != null) ...[
+            IconButton(
+              icon: const Icon(Icons.flashlight_on, color: Colors.white),
+              onPressed: () => controller!.toggleTorch(),
+            ),
+            IconButton(
+              icon: const Icon(Icons.cameraswitch, color: Colors.white),
+              onPressed: () => controller!.switchCamera(),
+            ),
+          ],
         ],
       ),
-      body: Stack(
+      body: _errorMessage != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red, size: 64),
+                    const SizedBox(height: 16),
+                    Text(
+                      _errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _errorMessage = null;
+                          controller = null;
+                        });
+                        _initializeScanner();
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : controller == null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(color: Colors.white),
+                  const SizedBox(height: 16),
+                  Text(
+                    _isCheckingPermission
+                        ? 'Checking camera permission...'
+                        : 'Initializing camera...',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            )
+          : Stack(
         children: [
           MobileScanner(
-            controller: controller,
+            controller: controller!,
             onDetect: (capture) {
+              if (_isProcessing) {
+                debugPrint('QR Scanner: Already processing, ignoring detection');
+                return;
+              }
+              
+              debugPrint('QR Scanner: onDetect called with ${capture.barcodes.length} barcodes');
               final List<Barcode> barcodes = capture.barcodes;
               for (final barcode in barcodes) {
-                if (barcode.rawValue != null) {
+                debugPrint('QR Scanner: Barcode format=${barcode.format}, rawValue present=${barcode.rawValue != null}');
+                if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
+                  debugPrint('QR Scanner: Processing barcode: ${barcode.rawValue!.substring(0, barcode.rawValue!.length > 50 ? 50 : barcode.rawValue!.length)}');
+                  setState(() => _isProcessing = true);
                   _handleScannedCode(barcode.rawValue!);
                   break;
                 }
               }
             },
           ),
-          // Overlay with scan area
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.5),
-            ),
-            child: Center(
-              child: Container(
-                width: 250,
-                height: 250,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: AppColors.primary,
-                    width: 2,
+          // Overlay with scan area - ignores pointer to allow scanner to work
+          IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+              ),
+              child: Center(
+                child: Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: AppColors.primary,
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Stack(
-                  children: [
-                    // Corner brackets
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            top: BorderSide(color: AppColors.primary, width: 4),
-                            left: BorderSide(color: AppColors.primary, width: 4),
+                  child: Stack(
+                    children: [
+                      // Corner brackets
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: AppColors.primary, width: 4),
+                              left: BorderSide(color: AppColors.primary, width: 4),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            top: BorderSide(color: AppColors.primary, width: 4),
-                            right: BorderSide(color: AppColors.primary, width: 4),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: AppColors.primary, width: 4),
+                              right: BorderSide(color: AppColors.primary, width: 4),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: AppColors.primary, width: 4),
-                            left: BorderSide(color: AppColors.primary, width: 4),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: AppColors.primary, width: 4),
+                              left: BorderSide(color: AppColors.primary, width: 4),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: AppColors.primary, width: 4),
-                            right: BorderSide(color: AppColors.primary, width: 4),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: AppColors.primary, width: 4),
+                              right: BorderSide(color: AppColors.primary, width: 4),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -259,21 +359,56 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             bottom: 100,
             left: 0,
             right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(AppSizes.lg),
-              margin: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(AppSizes.md),
-              ),
-              child: const Text(
-                'Position the QR code within the frame to scan',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSizes.lg),
+                  margin: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(AppSizes.md),
+                  ),
+                  child: const Text(
+                    'Position the QR code within the frame to scan',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.green, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Camera Active - Point at QR Code',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -282,23 +417,26 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   void _handleScannedCode(String code) {
-    // Stop scanning
-    controller.stop();
+    debugPrint('QR Scanner: Handling scanned code, length: ${code.length}, content: ${code.substring(0, code.length > 100 ? 100 : code.length)}');
 
     // Parse WiFi QR code format: WIFI:S:<SSID>;T:<WPA|WEP|WPA2|nopass>;P:<password>;;
     if (code.startsWith('WIFI:')) {
+      debugPrint('QR Scanner: WiFi QR code detected');
       final wifiData = _parseWifiQrCode(code);
       if (wifiData != null) {
         // Auto-connect on both platforms without custom dialog
-        if (Theme.of(context).platform == TargetPlatform.iOS) {
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
           _autoConnectOnIOS(wifiData);
         } else {
           _autoConnectOnAndroid(wifiData);
         }
       } else {
+        _isProcessing = false;
         _showErrorDialog('Invalid WiFi QR code format');
       }
     } else {
+      debugPrint('QR Scanner: Not a WiFi QR code: ${code.substring(0, code.length > 50 ? 50 : code.length)}');
+      _isProcessing = false;
       _showErrorDialog('Not a WiFi QR code. Scanned: $code');
     }
   }
@@ -396,10 +534,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     return null;
   }
 
-  // Dialog-based connection flow removed; auto-connect is used instead.
-
-  // Removed legacy dialog/manual connection helpers in favor of auto-connect.
-
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -410,7 +544,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              controller.start(); // Resume scanning
+              // Reset processing flag to allow new scans
+              setState(() => _isProcessing = false);
             },
             child: const Text('Try Again'),
           ),

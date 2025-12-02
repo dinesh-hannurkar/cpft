@@ -60,7 +60,7 @@ class NetworkBanner extends StatelessWidget {
                 const Icon(Icons.wifi_tethering, color: Color(0xFF2962FF), size: 22),
                 const SizedBox(width: 8),
                 Text(
-                  '$name',
+                  name,
                   style: const TextStyle(color: Color(0xFF2962FF), fontWeight: FontWeight.w500, fontSize: 14),
                 ),
               ],

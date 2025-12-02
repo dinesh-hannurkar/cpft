@@ -48,7 +48,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     final currentStatus = _service.currentConnection?.status;
     if (currentStatus == ConnectionStatus.connected || 
         currentStatus == ConnectionStatus.connecting) {
-      debugPrint('[ConnectionFlowDialog] Already ${currentStatus}, skipping connect()');
+      debugPrint('[ConnectionFlowDialog] Already $currentStatus, skipping connect()');
       setState(() {
         _status = currentStatus!; // safe: we checked it's not null above
       });

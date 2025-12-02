@@ -11,7 +11,6 @@ import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
-import 'package:cpft/utils/connection_logger.dart';
 
 // Extracted models & utils & widgets
 import 'package:cpft/features/chat/models/transfer_progress.dart';
@@ -657,9 +656,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (dot > 0) {
         final base = safeName.substring(0, dot);
         final ext = safeName.substring(dot);
-        destPath = '$targetDir/${base}($dup)$ext';
+        destPath = '$targetDir/$base($dup)$ext';
       } else {
-        destPath = '$targetDir/${safeName}($dup)';
+        destPath = '$targetDir/$safeName($dup)';
       }
       dup++;
     }

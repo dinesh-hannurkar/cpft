@@ -34,7 +34,7 @@ class ConnectionService {
   final Map<String, _OutgoingTransfer> _outgoingTransfers = {};
 
   ConnectionService({required this.deviceName}) {
-    debugPrint('[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName (${hashCode})');
+    debugPrint('[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName ($hashCode)');
   }
 
   /// Get current connection info
@@ -444,11 +444,11 @@ class ConnectionService {
               // Use this.deviceName for both display and connection lookup
               // since it's the consistent identifier for this peer
               NotificationService().showFileTransferNotification(
-                senderDisplayName: this.deviceName, // Use peer's device name
+                senderDisplayName: deviceName, // Use peer's device name
                 fileName: offer.fileName,
                 fileSize: offer.fileSize,
                 transferId: offer.transferId,
-                deviceName: this.deviceName, // Connection lookup name
+                deviceName: deviceName, // Connection lookup name
               );
               
               _notifyMessageListeners(DeviceMessage(
@@ -1041,12 +1041,12 @@ class ConnectionService {
 
   /// Dispose the service
   Future<void> dispose() async {
-    debugPrint('[ConnectionService] 🗑️  DISPOSE called for ${_currentConnection?.deviceName ?? deviceName} (${hashCode})');
+    debugPrint('[ConnectionService] 🗑️  DISPOSE called for ${_currentConnection?.deviceName ?? deviceName} ($hashCode)');
     await disconnect();
     _errorResetTimer?.cancel();
     _messageListeners.clear();
     _statusListeners.clear();
-    debugPrint('[ConnectionService] 🗑️  DISPOSE completed for ${_currentConnection?.deviceName ?? deviceName} (${hashCode})');
+    debugPrint('[ConnectionService] 🗑️  DISPOSE completed for ${_currentConnection?.deviceName ?? deviceName} ($hashCode)');
   }
   
   // removed unused _formatFileSize helper

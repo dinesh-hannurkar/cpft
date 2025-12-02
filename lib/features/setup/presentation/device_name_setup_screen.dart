@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/widgets/primary_text_field.dart';
@@ -32,7 +33,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
       await prefs.setString('device_name', name);
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/home');
+        Navigator.of(context).pushReplacementNamed(kIsWeb ? '/webshare' : '/home');
       }
     } catch (e) {
       // Handle error
@@ -57,7 +58,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
       await prefs.setString('device_name', generatedName);
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/home');
+        Navigator.of(context).pushReplacementNamed(kIsWeb ? '/webshare' : '/home');
       }
     } catch (e) {
       if (mounted) {

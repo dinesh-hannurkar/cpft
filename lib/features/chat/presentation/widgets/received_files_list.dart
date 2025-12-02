@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io' as io;
 import 'package:open_filex/open_filex.dart';
 
 class ReceivedFilesList extends StatelessWidget {

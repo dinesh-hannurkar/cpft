@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'utils/permissions.dart';
@@ -9,6 +9,7 @@ import 'features/home/presentation/home_screen.dart';
 import 'features/chat/presentation/chat_screen.dart';
 import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
+import 'features/webshare/presentation/webshare_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 
 // Global navigator key for navigation from anywhere (e.g., notifications)
@@ -31,11 +32,17 @@ class MainApp extends StatelessWidget {
       title: 'CPFT',
       theme: AppTheme.lightTheme,
       navigatorKey: navigatorKey,
-      initialRoute: '/',
+      // On web, only show the WebShare (WebRTC) screen
+      initialRoute: kIsWeb ? '/webshare' : '/',
       routes: {
         '/': (context) => const PermissionWrapper(),
         '/setup': (context) => const DeviceNameSetupScreen(),
         '/home': (context) => const HomeWrapper(),
+        '/webshare': (context) => const WebShareScreen(
+          deviceName: 'Default Device', // You can make this configurable later
+          customServiceName: null,
+          discoveryService: null,
+        ),
       },
       builder: (context, child) {
         return Container(
@@ -96,9 +103,10 @@ class _HomeWrapperState extends State<HomeWrapper> {
   }
 
   void _initializeDiscoveryService(String deviceName) {
+    final platformName = kIsWeb ? 'web' : defaultTargetPlatform.name.toLowerCase();
     _discoveryService = DiscoveryService(
       alias: deviceName,
-      deviceModel: Platform.operatingSystem,
+      deviceModel: platformName,
       port: 53317,
     );
     // Store globally for notification handler
@@ -257,7 +265,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     AppLogger.d('Permissions granted: $granted', tag: 'PermWrap');
     
     // For iOS, also show Local Network permission instructions
-    if (Platform.isIOS) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       await LocalNetworkPermissionHelper.requestPermission();
     }
 
@@ -310,7 +318,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  isServiceDisabled
+                    isServiceDisabled
                       ? 'Location Services Disabled'
                       : 'Location Permission Required',
                   style: const TextStyle(
@@ -321,11 +329,11 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  isServiceDisabled
+                    isServiceDisabled
                       ? 'Please enable Location Services in your device settings to use this app. WiFi network detection requires location services to be turned on.'
-                      : Platform.isAndroid
-                          ? 'On Android 10+, location permission is required to detect your WiFi network name. This helps you confirm you\'re connected to the right network for file transfers.'
-                          : 'Location permission is needed to detect your WiFi network name and discover nearby devices on your local network.',
+                      : (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+                        ? 'On Android 10+, location permission is required to detect your WiFi network name. This helps you confirm you\'re connected to the right network for file transfers.'
+                        : 'Location permission is needed to detect your WiFi network name and discover nearby devices on your local network.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16, color: Colors.black87),
                 ),
@@ -363,9 +371,10 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     // If device name is set, show home screen
     if (_deviceName != null) {
       AppLogger.i('Creating HomeScreen with device name: $_deviceName', tag: 'PermWrap');
+      final platformName = kIsWeb ? 'web' : defaultTargetPlatform.name.toLowerCase();
       final discovery = DiscoveryService(
         alias: _deviceName!,
-        deviceModel: Platform.operatingSystem,
+        deviceModel: platformName,
         port: 53317,
       );
       // Store globally for notification handler

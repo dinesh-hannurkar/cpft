@@ -1,7 +1,8 @@
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
 
 class NetworkUtils {
   /// Returns true if the given IP looks like an iOS Personal Hotspot IP.
@@ -27,8 +28,12 @@ class NetworkUtils {
 
   /// Try to find a LAN IPv4 address, prioritizing WiFi interfaces for web sharing.
   static Future<String?> getLanIPv4() async {
+    if (kIsWeb) {
+      AppLogger.d('Web platform: skipping LAN IPv4 detection', tag: 'Network');
+      return null;
+    }
     try {
-      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLinkLocal: false);
+      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
 
       // Prioritize WiFi interfaces (typically named wlan0, wlan1, en0, en1, etc.)
       // over mobile data interfaces (typically named rmnet0, pdp_ip0, etc.)
@@ -55,7 +60,7 @@ class NetworkUtils {
       for (final iface in wifiInterfaces) {
         for (final addr in iface.addresses) {
           if (!addr.isLoopback && _isValidLanAddress(addr.address)) {
-            if (Platform.isIOS && _isIosHotspotIp(addr.address)) {
+            if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS && _isIosHotspotIp(addr.address)) {
               AppLogger.d('[NetworkUtils] Prefer iOS hotspot IP on ${iface.name}: ${addr.address}', tag: 'Network');
               return addr.address;
             }
@@ -112,6 +117,10 @@ class NetworkUtils {
 
   /// Get the current WiFi SSID (network name).
   static Future<String?> getWifiName() async {
+    if (kIsWeb) {
+      AppLogger.d('Web platform: WiFi name not available; returning generic label', tag: 'Network');
+      return 'Web Browser';
+    }
     try {
       // First check if we have a valid WiFi/LAN IP
       // This ensures we're not on mobile data
@@ -122,7 +131,7 @@ class NetworkUtils {
       }
 
       // On iOS, if we detect Personal Hotspot IP range, report accordingly
-      if (Platform.isIOS) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
         final isHotspot = _isIosHotspotIp(lanIp);
         if (isHotspot) {
           AppLogger.d('Detected iOS Personal Hotspot - reporting as hotspot', tag: 'Network');
@@ -131,7 +140,7 @@ class NetworkUtils {
       }
 
       // On Android 10+ location permission (fine + precise) is required for SSID
-      if (Platform.isAndroid) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         final status = await Permission.location.status;
         if (!status.isGranted) {
           final req = await Permission.location.request();
@@ -159,7 +168,7 @@ class NetworkUtils {
     try {
       final ip = await getLanIPv4();
       if (ip != null) {
-        if (Platform.isIOS && _isIosHotspotIp(ip)) return 'Personal Hotspot';
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS && _isIosHotspotIp(ip)) return 'Personal Hotspot';
         return 'Local ($ip)';
       }
     } catch (_) {}
@@ -169,7 +178,7 @@ class NetworkUtils {
   /// Check if the current network connection is an iOS Personal Hotspot
   /// based on the IP address range (typically 172.20.10.x)
   static Future<bool> isIosPersonalHotspot() async {
-    if (!Platform.isIOS) return false;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return false;
     
     try {
       final ip = await getLanIPv4();

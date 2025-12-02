@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:mime/mime.dart';
 
@@ -552,7 +551,7 @@ class WebServer {
       final stream = ioFile.openRead();
       int totalSent = 0;
 
-      await stream.listen(
+      stream.listen(
         (chunk) {
           request.response.add(chunk);
           totalSent += chunk.length;
@@ -593,7 +592,7 @@ class WebServer {
   String getWebLink(String ipAddress) {
     // Wrap IPv6 addresses in brackets per URL spec
     if (ipAddress.contains(':')) {
-      return 'http://[' + ipAddress + ']:$_port';
+      return 'http://[$ipAddress]:$_port';
     }
     return 'http://$ipAddress:$_port';
   }
@@ -1001,7 +1000,7 @@ class WebServer {
                     if (e.lengthComputable) {
                         const percentComplete = Math.round((e.loaded / e.total) * 100);
                         progressFill.style.width = percentComplete + '%';
-                        progressText.textContent = \`Uploading \${file.name}... \${percentComplete}%\`;
+                        progressText.textContent = `Uploading \${file.name}... \${percentComplete}%`;
                     }
                 });
                 
@@ -1020,7 +1019,7 @@ class WebServer {
                         }, 2000);
                         resolve();
                     } else {
-                        reject(new Error(\`Upload failed: \${xhr.status} \${xhr.statusText}\`));
+                        reject(new Error(`Upload failed: \${xhr.status} \${xhr.statusText}`));
                     }
                 });
                 
@@ -1136,7 +1135,7 @@ class WebServer {
                         
                         // Update progress
                         const percent = Math.round((received / total) * 100);
-                        button.innerHTML = \`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10L12 15L17 10" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15V3" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> \${percent}%\`;
+                        button.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10L12 15L17 10" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15V3" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> \${percent}%`;
                     }
                     
                     // Create blob from chunks
@@ -1172,7 +1171,7 @@ class WebServer {
             const item = document.createElement('div');
             item.className = 'file-item';
             item.style.animation = 'fadeIn 0.3s ease';
-            item.innerHTML = \`
+            item.innerHTML = `
                 <div class="file-info">
                     <div class="file-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20Z" fill="#1063AC"/></svg></div>
                     <div>
@@ -1184,7 +1183,7 @@ class WebServer {
                    
                     <button class="download-btn" style="background:#FDF1F1;color:#EA5455;min-width:40px" onclick="deleteUploadedFile('\${filename}', this)" title="Delete file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 6H5H21" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6M8 6V4C8 3.46957 8.21071 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11V17" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11V17" stroke="#EA5455" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                 </div>
-            \`;
+            `;
             uploadedFilesList.insertBefore(item, uploadedFilesList.firstChild);
         }
 

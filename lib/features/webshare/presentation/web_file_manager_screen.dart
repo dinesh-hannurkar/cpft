@@ -9,8 +9,7 @@ import '../../../services/discovery_service.dart';
 class WebFileManagerScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
 
-  const WebFileManagerScreen({Key? key, required this.discoveryService})
-    : super(key: key);
+  const WebFileManagerScreen({super.key, required this.discoveryService});
 
   @override
   State<WebFileManagerScreen> createState() => _WebFileManagerScreenState();
@@ -353,8 +352,9 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
+    if (bytes < 1024 * 1024 * 1024) {
       return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB';
   }
 

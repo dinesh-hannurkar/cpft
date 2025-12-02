@@ -28,7 +28,7 @@ class DeviceDiscoveryScreen extends StatefulWidget {
 
 class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   late DiscoveryService _discoveryService;
-  bool _isInitialized = false;
+  final bool _isInitialized = false;
   bool _isRefreshing = false;
   final Map<String, String> _discoveredDevices = {};
   // Track pending incoming prompts to avoid duplicates
@@ -682,7 +682,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

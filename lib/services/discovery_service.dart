@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cpft/core/logging/app_logger.dart';
 import 'package:cpft/features/webshare/services/web_server.dart';
 import 'package:crypto/crypto.dart';
@@ -58,7 +59,8 @@ class DiscoveryService {
   }
 
   String _generateFingerprint() {
-    final data = '$alias-${Platform.localHostname}-${DateTime.now().millisecondsSinceEpoch}';
+    final hostPart = kIsWeb ? 'web' : Platform.localHostname;
+    final data = '$alias-$hostPart-${DateTime.now().millisecondsSinceEpoch}';
     return md5.convert(utf8.encode(data)).toString().substring(0, 16);
   }
 
@@ -309,7 +311,7 @@ class DiscoveryService {
           'metadata': null,
         };
         try {
-          socket.add(utf8.encode(jsonEncode(rejectPayload) + '\n'));
+          socket.add(utf8.encode('${jsonEncode(rejectPayload)}\n'));
           await socket.flush();
         } catch (_) {}
         // Close socket afterwards

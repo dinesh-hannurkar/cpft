@@ -150,7 +150,7 @@ class _HotspotScreenState extends State<HotspotScreen> {
                     Switch(
                       value: hotspotInfo != null,
                       onChanged: (value) => value ? _startHotspot() : _stopHotspot(),
-                      activeColor: AppColors.primary,
+                      activeThumbColor: AppColors.primary,
                     ),
                   ],
                 ),

@@ -1,5 +1,4 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
 /// Types of notifications the app can send
@@ -129,8 +128,8 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
-    // Create notification channels for Android
-    if (Platform.isAndroid) {
+    // Create notification channels for Android (not on web)
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       await _createNotificationChannels();
     }
 
@@ -333,7 +332,13 @@ class NotificationService {
 
   /// Request notification permissions (iOS and macOS)
   Future<bool> requestPermissions() async {
-    if (!Platform.isIOS && !Platform.isMacOS) return true;
+    // Web: handled by browser, nothing to request here
+    if (kIsWeb) return true;
+
+    if (defaultTargetPlatform != TargetPlatform.iOS &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return true;
+    }
 
     final bool? granted = await _flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()

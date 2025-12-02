@@ -33,7 +33,9 @@ class WebShareService {
       ValueNotifier<List<SharedFile>>([]);
   final ValueNotifier<List<ReceivedFile>> receivedFiles =
       ValueNotifier<List<ReceivedFile>>([]);
-  final ValueNotifier<String?> actualHostnameNotifier = ValueNotifier<String?>(null);
+  final ValueNotifier<String?> actualHostnameNotifier = ValueNotifier<String?>(
+    null,
+  );
 
   // Callbacks for integration with app
   final Function(String filename, int bytesReceived, int totalBytes)?
@@ -364,13 +366,15 @@ class WebShareService {
             .toLowerCase();
         _actualHostname = fallbackHostname;
         actualHostnameNotifier.value = fallbackHostname;
-        debugPrint('[WebShareService] Set fallback hostname: $fallbackHostname');
+        debugPrint(
+          '[WebShareService] Set fallback hostname: $fallbackHostname',
+        );
         // Don't return - allow web server to run even without advertising
         return;
       }
 
       debugPrint('[WebShareService] ✅ Got local IP: $localIP');
-      
+
       // Store local IP for QR code (needed for Android)
       _localIP = localIP;
 
@@ -397,31 +401,39 @@ class WebShareService {
         // We can't control this - it's set by the OS
         // So we'll try to detect it and store it in TXT records
         String actualHostname;
-        
+
         if (Platform.isAndroid) {
           // On Android, get the actual hostname from native code
           // because Platform.localHostname and NSD don't provide the .local hostname
           try {
-            final androidHostname = await _hostnameChannel.invokeMethod<String>('getActualHostname');
+            final androidHostname = await _hostnameChannel.invokeMethod<String>(
+              'getActualHostname',
+            );
             if (androidHostname != null && androidHostname.isNotEmpty) {
               actualHostname = androidHostname;
-              debugPrint('[WebShareService] ✅ Got actual Android hostname: $actualHostname');
+              debugPrint(
+                '[WebShareService] ✅ Got actual Android hostname: $actualHostname',
+              );
             } else {
               throw Exception('Android hostname is null or empty');
             }
           } catch (e) {
-            debugPrint('[WebShareService] ⚠️ Failed to get Android hostname: $e');
+            debugPrint(
+              '[WebShareService] ⚠️ Failed to get Android hostname: $e',
+            );
             // Fallback to sanitized device name
             actualHostname = deviceName
                 .replaceAll(' ', '-')
                 .replaceAll(RegExp(r'[^a-zA-Z0-9\-]'), '')
                 .toLowerCase();
-            debugPrint('[WebShareService] Using fallback deviceName: $actualHostname');
+            debugPrint(
+              '[WebShareService] Using fallback deviceName: $actualHostname',
+            );
           }
         } else {
           // On iOS/macOS, Platform.localHostname works correctly
           final platformHost = Platform.localHostname.toLowerCase();
-          
+
           if (platformHost == 'localhost' || platformHost.isEmpty) {
             // Platform.localHostname failed, fallback to sanitized device name
             actualHostname = deviceName
@@ -468,49 +480,67 @@ class WebShareService {
         if (Platform.isAndroid) {
           // Android: Use multicast_dns SRV resolution
           // NSD on Android returns IP instead of hostname
-          debugPrint('[WebShareService] 🔍 Attempting to resolve actual hostname via SRV record...');
+          debugPrint(
+            '[WebShareService] 🔍 Attempting to resolve actual hostname via SRV record...',
+          );
           try {
-            final srvHostname = await MdnsSrvResolver.getOwnHostname(
-              serviceName: instanceName,
-              serviceType: '_http._tcp',
-            ).timeout(
-              Duration(seconds: 3),
-              onTimeout: () {
-                debugPrint('[WebShareService] ⏱️ SRV resolution timed out after 3s');
-                return null;
-              },
-            );
-            
+            final srvHostname =
+                await MdnsSrvResolver.getOwnHostname(
+                  serviceName: instanceName,
+                  serviceType: '_http._tcp',
+                ).timeout(
+                  Duration(seconds: 3),
+                  onTimeout: () {
+                    debugPrint(
+                      '[WebShareService] ⏱️ SRV resolution timed out after 3s',
+                    );
+                    return null;
+                  },
+                );
+
             if (srvHostname != null && srvHostname.isNotEmpty) {
               _actualHostname = srvHostname;
               actualHostnameNotifier.value = srvHostname;
-              debugPrint('[WebShareService] ✅ SRV hostname resolved: $_actualHostname.local');
-              debugPrint('[WebShareService] 🎯 This is the ACTUAL reachable hostname!');
+              debugPrint(
+                '[WebShareService] ✅ SRV hostname resolved: $_actualHostname.local',
+              );
+              debugPrint(
+                '[WebShareService] 🎯 This is the ACTUAL reachable hostname!',
+              );
             } else {
-              debugPrint('[WebShareService] ⚠️ Could not resolve SRV hostname, using fallback');
+              debugPrint(
+                '[WebShareService] ⚠️ Could not resolve SRV hostname, using fallback',
+              );
             }
           } catch (e) {
             debugPrint('[WebShareService] ⚠️ SRV resolution failed: $e');
-            debugPrint('[WebShareService] Using previously determined hostname: $_actualHostname');
+            debugPrint(
+              '[WebShareService] Using previously determined hostname: $_actualHostname',
+            );
           }
         } else {
           // iOS: Use NSD discovery to get the actual hostname
           // NSD on iOS correctly returns the .local hostname
-          debugPrint('[WebShareService] 🔍 Using NSD discovery to get actual hostname...');
+          debugPrint(
+            '[WebShareService] 🔍 Using NSD discovery to get actual hostname...',
+          );
           try {
             final discovery = await startDiscovery('_http._tcp');
             bool hostnameFound = false;
-            
+
             // Listen for our own service
             discovery.addServiceListener((nsdService, status) {
-              if (status == ServiceStatus.found && 
+              if (status == ServiceStatus.found &&
                   nsdService.name == instanceName &&
                   nsdService.host != null &&
                   nsdService.host!.isNotEmpty) {
-                
-                debugPrint('[WebShareService] 📡 Found our service via discovery: ${nsdService.name}');
-                debugPrint('[WebShareService]   - hostname: ${nsdService.host}');
-                
+                debugPrint(
+                  '[WebShareService] 📡 Found our service via discovery: ${nsdService.name}',
+                );
+                debugPrint(
+                  '[WebShareService]   - hostname: ${nsdService.host}',
+                );
+
                 // Extract hostname without trailing dot and .local suffix
                 String hostname = nsdService.host!;
                 if (hostname.endsWith('.')) {
@@ -519,30 +549,38 @@ class WebShareService {
                 if (hostname.endsWith('.local')) {
                   hostname = hostname.substring(0, hostname.length - 6);
                 }
-                
+
                 if (_actualHostname != hostname) {
                   _actualHostname = hostname;
                   actualHostnameNotifier.value = hostname;
-                  debugPrint('[WebShareService] ✅ Updated hostname from NSD: $_actualHostname');
+                  debugPrint(
+                    '[WebShareService] ✅ Updated hostname from NSD: $_actualHostname',
+                  );
                   hostnameFound = true;
                 }
               }
             });
-            
+
             // Wait up to 2 seconds for discovery
             await Future.delayed(Duration(seconds: 2));
-            
+
             // Stop discovery
             await stopDiscovery(discovery);
-            
+
             if (hostnameFound) {
-              debugPrint('[WebShareService] ✅ iOS hostname resolved via NSD discovery');
+              debugPrint(
+                '[WebShareService] ✅ iOS hostname resolved via NSD discovery',
+              );
             } else {
-              debugPrint('[WebShareService] ℹ️ Using Platform.localHostname as fallback');
+              debugPrint(
+                '[WebShareService] ℹ️ Using Platform.localHostname as fallback',
+              );
             }
           } catch (e) {
             debugPrint('[WebShareService] ⚠️ NSD discovery failed: $e');
-            debugPrint('[WebShareService] Using previously determined hostname: $_actualHostname');
+            debugPrint(
+              '[WebShareService] Using previously determined hostname: $_actualHostname',
+            );
           }
         }
 
@@ -615,7 +653,7 @@ class WebShareService {
   /// Discover HTTP services on the local network via mDNS
   Future<List<Map<String, dynamic>>> discoverHttpServices() async {
     debugPrint('[WebShareService] Starting HTTP service discovery...');
-    
+
     List<Map<String, dynamic>> services = [];
 
     try {
@@ -647,7 +685,9 @@ class WebShareService {
             // On Android, nsdService.host returns IP - canonicalHostName doesn't resolve .local
             // This is a known Android limitation - mDNS hostnames aren't accessible via standard APIs
             if (Platform.isAndroid) {
-              debugPrint('[WebShareService]   ℹ️ Using IP address (Android limitation): ${nsdService.host}');
+              debugPrint(
+                '[WebShareService]   ℹ️ Using IP address (Android limitation): ${nsdService.host}',
+              );
               ip = nsdService.host;
               _localIP = ip;
               resolvedHost = ip;
@@ -728,7 +768,7 @@ class WebShareService {
 
       // Stop discovery after 10 seconds
       await Future.delayed(Duration(seconds: 10));
-      
+
       try {
         await stopDiscovery(discovery);
         debugPrint('[WebShareService] Discovery stopped');
@@ -740,6 +780,34 @@ class WebShareService {
     }
 
     return services;
+  }
+
+  /// Add a file received via WebRTC to the received files list
+  void addWebRTCReceivedFile(String filename, String path, int sizeBytes) {
+    debugPrint('[WebShareService] Adding WebRTC received file: $filename');
+    receivedFiles.value = [
+      ReceivedFile(
+        filename: filename,
+        path: path,
+        sizeBytes: sizeBytes,
+        receivedAt: DateTime.now(),
+      ),
+      ...receivedFiles.value,
+    ];
+  }
+
+  /// Add a file sent via WebRTC to the shared files list
+  void addWebRTCSharedFile(String id, String filename, int sizeBytes) {
+    debugPrint('[WebShareService] Adding WebRTC shared file: $filename');
+    sharedFiles.value = [
+      SharedFile(
+        id: id,
+        filename: filename,
+        sizeBytes: sizeBytes,
+        sharedAt: DateTime.now(),
+      ),
+      ...sharedFiles.value,
+    ];
   }
 }
 

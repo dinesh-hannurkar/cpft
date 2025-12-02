@@ -1,13 +1,19 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter/services.dart';
 
 class AppPermissions {
   static Future<bool> requestNetworkPermissions() async {
-    if (Platform.isAndroid) {
+    // On web, runtime permissions are handled by the browser; skip app-level requests
+    if (kIsWeb) {
+      AppLogger.i('Web platform detected: skipping app-level permission checks', tag: 'Permissions');
+      return true;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
       return await _requestAndroidPermissions();
-    } else if (Platform.isIOS) {
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       return await _requestIOSPermissions();
     }
     return true; // Desktop platforms don't need special permissions
@@ -115,7 +121,14 @@ class AppPermissions {
   }
 
   static Future<void> openLocationSettings() async {
-    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    if (kIsWeb) {
+      AppLogger.d('Web: location settings not applicable', tag: 'Permissions');
+      return;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux) {
       AppLogger.d('Location settings not applicable on desktop platforms', tag: 'Permissions');
       return;
     }
@@ -128,7 +141,12 @@ class AppPermissions {
   }
 
   static Future<void> openSystemLocationSettings() async {
-    if (Platform.isAndroid) {
+    if (kIsWeb) {
+      AppLogger.d('Web: system location settings not applicable', tag: 'Permissions');
+      return;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
       AppLogger.d('Opening Android system location settings', tag: 'Permissions');
       try {
         // Use MethodChannel to open Android location settings
@@ -143,7 +161,7 @@ class AppPermissions {
           AppLogger.w('Error opening app settings fallback: $e2', tag: 'Permissions', error: e2);
         }
       }
-    } else if (Platform.isIOS) {
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       AppLogger.d('Opening iOS location settings', tag: 'Permissions');
       // On iOS, openAppSettings goes to app-specific settings where user can see location permission
       try {
@@ -157,8 +175,11 @@ class AppPermissions {
   }
 
   static Future<bool> checkLocationPermission() async {
-    // macOS doesn't support location permission checks
-    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    // Web and desktop: treat as granted/not applicable
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux) {
       return true;
     }
     try {
@@ -172,8 +193,11 @@ class AppPermissions {
 
   /// Check if location services are enabled on the device
   static Future<bool> isLocationServiceEnabled() async {
-    // macOS and other desktop platforms don't need location service checks
-    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    // Web and desktop platforms don't need location service checks
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux) {
       return true;
     }
     try {
