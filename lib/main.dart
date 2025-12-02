@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,6 +12,9 @@ import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
 import 'features/webshare/presentation/webshare_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
+import 'firebase_options.dart';
+import 'services/firebase_initializer.dart';
+import 'widgets/firebase_status_banner.dart';
 
 // Global navigator key for navigation from anywhere (e.g., notifications)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -19,7 +23,12 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 DiscoveryService? globalDiscoveryService;
 String? globalDeviceName;
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Initialize Firebase early and robustly; log but don't block UI on failure
+  try {
+    await FirebaseInitializer.ensure();
+  } catch (_) {}
   runApp(const MainApp());
 }
 
@@ -45,7 +54,7 @@ class MainApp extends StatelessWidget {
         ),
       },
       builder: (context, child) {
-        return Container(
+        final content = Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -55,6 +64,12 @@ class MainApp extends StatelessWidget {
             ),
           ),
           child: child,
+        );
+        return Stack(
+          children: [
+            content,
+            const Positioned(top: 0, right: 0, child: FirebaseStatusBanner()),
+          ],
         );
       },
     );

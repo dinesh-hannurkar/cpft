@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "962041178714",
+    "project_id": "cpft-bf8a0",
+    "storage_bucket": "cpft-bf8a0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:962041178714:android:720015f37599a0bbac4663",
+        "android_client_info": {
+          "package_name": "com.example.cpft"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCS8cJ9SwhG_hm0KfJkck1Puq13y3Ywq00"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

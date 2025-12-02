@@ -2298,6 +2298,19 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                   : Colors.orange,
             ),
             const SizedBox(height: 12),
+            // Signaling Backend Indicator
+            _buildStatusIndicator(
+              icon: Icons.cloud,
+              text: 'Signaling Backend',
+              status: widget.webrtcService.useFirestoreSignaling
+                ? 'Firestore (Firebase)'
+                : (widget.webrtcService.isLocalMode.value
+                  ? 'Local WebSocket'
+                  : 'Socket.IO Remote'),
+              isComplete: true,
+              color: Colors.indigo,
+            ),
+            const SizedBox(height: 12),
             // Discovery status (for join mode)
             if (_isDiscovering) ...[
               _buildStatusIndicator(
@@ -2324,7 +2337,7 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                   color: Colors.black87,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Enter room ID (e.g., "1234-192-p8081")',
+                  hintText: kIsWeb ? 'Enter room ID (e.g., "1234")' : 'Enter room ID (e.g., "1234-192-p8081")',
                   hintStyle: TextStyle(color: Colors.grey.shade400),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -2347,6 +2360,49 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                 ),
                 enabled: !_isConnecting,
                 onSubmitted: (_) => _connectToPeer(),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isConnecting
+                          ? null
+                          : () async {
+                              setState(() => _isConnecting = true);
+                              try {
+                                // Ensure Firestore (remote) signaling for web sharing
+                                widget.webrtcService.setSignalingMode(useLocal: false);
+                                widget.webrtcService.setHostMode(false);
+                                final id = await widget.webrtcService.createAutoRoomAndConnect(length: 4, alphanumeric: false);
+                                if (!mounted) return;
+                                setState(() {
+                                  _peerIdController.text = id;
+                                  _currentRoomId = id;
+                                  _hasJoinedRoom = true;
+                                  _isConnecting = false;
+                                });
+                              } catch (e) {
+                                if (!mounted) return;
+                                setState(() => _isConnecting = false);
+                                widget.onError(e.toString());
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to start web sharing: $e'),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
+                                );
+                              }
+                            },
+                      icon: const Icon(Icons.wifi_tethering, size: 20),
+                      label: const Text('Start Web Sharing (auto room)'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               ValueListenableBuilder<bool>(

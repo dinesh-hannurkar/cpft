@@ -918,7 +918,8 @@ class WebServer {
         // WebSocket connection for real-time updates
         let ws;
         try {
-            ws = new WebSocket('ws://' + window.location.host + '/ws');
+          const scheme = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+          ws = new WebSocket(scheme + window.location.host + '/ws');
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 console.log('WebSocket message:', data);

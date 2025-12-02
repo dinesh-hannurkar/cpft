@@ -1,3 +1,4 @@
+// ignore_for_file: unused_field
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
@@ -5,6 +6,10 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cpft/services/firebase_initializer.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cpft/features/webshare/services/firestore_signaling_service.dart';
 import 'package:cpft/features/webshare/services/local_websocket_signaling_server.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'package:cpft/services/notification_service.dart';
@@ -19,6 +24,17 @@ class WebRTCFileTransferService {
   RTCDataChannel? _dataChannel;
   IO.Socket? _socket;
   WsClient? _ws; // Local WebSocket signaling connection (cross-platform)
+  // Firestore signaling state
+  FirestoreSession? _firestoreSession;
+  StreamSubscription<Map<String, dynamic>?>? _fsOfferSub;
+  StreamSubscription<Map<String, dynamic>?>? _fsAnswerSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _fsIceSub;
+  bool _fsOfferHandled = false;
+  bool _fsAnswerHandled = false;
+  bool _fsRemoteDescriptionSet = false; // Track when remote SDP applied (Firestore path)
+  final List<RTCIceCandidate> _fsPendingRemoteCandidates = <RTCIceCandidate>[]; // Buffer ICE until remote SDP
+  String? _fsSessionId; // Session token to distinguish fresh rounds for reused room IDs
+  // FirestoreSession? _firestoreSession; // Firestore signaling session for cleanup
   String? _roomId;
   String? _mySocketId;
   String? _peerId; // Local WebSocket assigned id
@@ -31,6 +47,7 @@ class WebRTCFileTransferService {
   // Use hosted signaling server (Vercel)
   final String signalingServerUrl = 'https://webrtc-yesc.onrender.com';
   bool useLocalWebSocket = kIsWeb ? false : true; // Default true for native, false for web
+  bool useFirestoreSignaling = kIsWeb ? true : true; // Prefer Firestore on web
   bool _isLocalHost = false; // True when this device hosts the local WS server
 
   // File transfer state
@@ -107,6 +124,16 @@ class WebRTCFileTransferService {
   String? get mySocketId => _mySocketId;
   String? get roomId => _roomId;
   
+  /// Create a new Firestore room with an auto-generated ID (default 4 digits)
+  /// and immediately connect to signaling using that room. Returns the room ID.
+  Future<String> createAutoRoomAndConnect({int length = 4, bool alphanumeric = false}) async {
+    await FirebaseInitializer.ensure();
+    final fs = FirestoreSignalingService(db: FirebaseFirestore.instance);
+    final newId = await fs.createAutoRoomId(length: length, alphanumeric: alphanumeric);
+    await _connectViaFirestore(newId);
+    return newId;
+  }
+  
   /// Get received file bytes (useful for web platform downloads)
   List<int> get receivedFileBytes {
     final buf = _receiveBuffer;
@@ -169,8 +196,17 @@ class WebRTCFileTransferService {
     AppLogger.i('Host mode: $isHost', tag: 'WebRTC');
   }
 
-  /// Connect to signaling server with Socket.IO
+  /// Connect to signaling server: Firestore (preferred on web) or Socket.IO/local WS
   Future<void> connectToSignalingServer(String roomId) async {
+    if (useFirestoreSignaling) {
+      await _connectViaFirestore(roomId);
+      return;
+    }
+    // Firestore signaling path
+    if (useFirestoreSignaling) {
+      await _connectViaFirestore(roomId);
+      return;
+    }
     if (useLocalWebSocket) {
       _roomId = roomId;
       // For local mode: Both host and joiner connect to the same server
@@ -353,6 +389,240 @@ class WebRTCFileTransferService {
     }
   }
 
+  // (Removed duplicate _connectViaFirestore definition above)
+
+  Future<void> _connectViaFirestore(String roomId) async {
+    _roomId = roomId;
+    // Ensure Firebase is initialized (web-safe) before touching Firestore
+    await FirebaseInitializer.ensure();
+
+    final fs = FirestoreSignalingService(db: FirebaseFirestore.instance);
+    final session = await fs.createSession(roomId);
+    _firestoreSession = session;
+    _fsOfferHandled = false;
+    _fsAnswerHandled = false;
+    _fsRemoteDescriptionSet = false;
+    _fsPendingRemoteCandidates.clear();
+    _fsSessionId = null;
+
+    // Decide role based on Firestore doc state: if no offer exists, we act as offerer
+    final snap = await session.doc.get();
+    final existing = snap.data();
+    // Determine/assign sessionId, resetting stale rooms
+    final now = DateTime.now();
+    final createdAt = existing?['createdAt'];
+    final updatedAt = existing?['updatedAt'];
+    DateTime? lastActivity;
+    if (updatedAt is Timestamp) {
+      lastActivity = updatedAt.toDate();
+    } else if (createdAt is Timestamp) {
+      lastActivity = createdAt.toDate();
+    }
+    final isStale = lastActivity != null && now.difference(lastActivity) > const Duration(minutes: 2);
+    final existingSessionId = existing?['sessionId'] as String?;
+    final hasOffer = existing != null && existing['offer'] != null;
+    final hasAnswer = existing != null && existing['answer'] != null;
+
+    // Generate a new sessionId proposal
+    final proposedSessionId = DateTime.now().microsecondsSinceEpoch.toString();
+
+    if (existingSessionId == null || isStale || (hasOffer && isStale) || (hasAnswer && isStale)) {
+      // Reset the room for a fresh round and claim the sessionId
+      await session.resetForNewSession(proposedSessionId);
+      _fsSessionId = proposedSessionId;
+    } else {
+      // Adopt existing active sessionId
+      _fsSessionId = existingSessionId;
+    }
+
+    // Re-fetch after potential reset to compute role
+    final snap2 = await session.doc.get();
+    final existing2 = snap2.data();
+    final hasOffer2 = existing2 != null && existing2['offer'] != null;
+    final isOfferer = !hasOffer2;
+
+    // Create connection; offerer creates data channel
+    await _createPeerConnectionForPeer('firestore-peer', createDataChannel: isOfferer);
+
+    // ICE exchange
+    _peerConnection!.onIceCandidate = (c) {
+      if (c.candidate != null) {
+        session.addIce({
+          'candidate': c.candidate,
+          'sdpMid': c.sdpMid,
+          'sdpMLineIndex': c.sdpMLineIndex,
+          // Mark role to avoid consuming our own candidates
+          'role': isOfferer ? 'offerer' : 'answerer',
+          'sessionId': _fsSessionId,
+        });
+      }
+    };
+    _fsIceSub = session.onIce().listen((snapshot) async {
+      for (final change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data();
+          final cand = data?['candidate'] as Map<String, dynamic>?;
+          final role = data?['role'] as String?; // who produced this candidate
+          final sid = data?['sessionId'] as String?;
+          if (cand != null) {
+            // Ignore ICE from different session rounds
+            if (_fsSessionId != null && sid != null && sid != _fsSessionId) {
+              continue;
+            }
+            // Ignore our own ICE candidates
+            final producedByOfferer = role == 'offerer';
+            final amOfferer = isOfferer;
+            if (role != null && producedByOfferer == amOfferer) {
+              continue;
+            }
+            final remoteCand = RTCIceCandidate(
+              cand['candidate'] as String?,
+              cand['sdpMid'] as String?,
+              (cand['sdpMLineIndex'] as num?)?.toInt(),
+            );
+            if (_fsRemoteDescriptionSet) {
+              try {
+                await _peerConnection?.addCandidate(remoteCand);
+              } catch (e) {
+                AppLogger.e('Failed to add ICE candidate (post-remote SDP): $e', tag: 'WebRTC');
+              }
+            } else {
+              _fsPendingRemoteCandidates.add(remoteCand);
+            }
+          }
+        }
+      }
+    });
+
+    if (isOfferer) {
+      // Write offer and wait for answer
+      final pcOfferer = _peerConnection;
+      if (pcOfferer == null) {
+        AppLogger.w('PeerConnection is null before creating offer (offerer path). Aborting.', tag: 'WebRTC');
+        return;
+      }
+      final offer = await pcOfferer.createOffer();
+      await pcOfferer.setLocalDescription(offer);
+      final offerMap = offer.toMap();
+      offerMap['sessionId'] = _fsSessionId;
+      await session.writeOffer(offerMap);
+      _fsAnswerSub = session.onAnswer().listen((ans) async {
+        if (ans != null && _peerConnection != null && !_fsAnswerHandled) {
+          // Enforce session filter
+          final sid = ans['sessionId'];
+          if (_fsSessionId != null && sid != null && sid != _fsSessionId) {
+            return;
+          }
+          final pc = _peerConnection;
+          if (pc == null) {
+            AppLogger.w('PeerConnection became null before processing remote answer (offerer path). Aborting.', tag: 'WebRTC');
+            return;
+          }
+          final state = pc.signalingState;
+          if (state != RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+            AppLogger.w('Ignoring remote answer: signalingState=$state (expected have-local-offer)', tag: 'WebRTC');
+            return; // Prevent setRemoteDescription in wrong state
+          }
+          await pc.setRemoteDescription(RTCSessionDescription(ans['sdp'], ans['type']));
+          _fsRemoteDescriptionSet = true;
+          // Drain any buffered remote ICE now that remote SDP is set
+          for (final cand in List<RTCIceCandidate>.from(_fsPendingRemoteCandidates)) {
+            try {
+              await pc.addCandidate(cand);
+            } catch (e) {
+              AppLogger.e('Failed to add buffered ICE candidate: $e', tag: 'WebRTC');
+            }
+          }
+          _fsPendingRemoteCandidates.clear();
+          // Clean up signaling once connected and schedule deletion
+          unawaited(_firestoreSession?.cleanup());
+          unawaited(Future.delayed(const Duration(minutes: 5), () => _firestoreSession?.deleteRoom()));
+          _fsAnswerHandled = true;
+          await _fsAnswerSub?.cancel();
+        }
+      });
+    } else {
+      // Wait for offer and respond with answer
+      _fsOfferSub = session.onOffer().listen((off) async {
+        if (off != null && _peerConnection != null && !_fsOfferHandled) {
+          // Enforce session filter
+          final sid = off['sessionId'];
+          if (_fsSessionId != null && sid != null && sid != _fsSessionId) {
+            return;
+          }
+          var state = _peerConnection!.signalingState;
+
+          // If not stable, handle glare by resetting the connection to accept remote offer
+          if (state != RTCSignalingState.RTCSignalingStateStable) {
+            AppLogger.w(
+              'Remote offer arrived in non-stable state ($state). Resetting to accept remote offer.',
+              tag: 'WebRTC',
+            );
+
+            try {
+              await _peerConnection?.close();
+              await _dataChannel?.close();
+            } catch (_) {}
+            _peerConnection = null;
+            _dataChannel = null;
+            _isConnected = false;
+            connectionEstablished.value = false;
+
+            // Recreate a fresh peer connection (as answerer, do NOT create data channel)
+            await _createPeerConnectionForPeer('firestore-peer', createDataChannel: false);
+
+            // Reattach Firestore ICE emission for the new connection (role: answerer)
+            _peerConnection!.onIceCandidate = (c) {
+              if (c.candidate != null) {
+                session.addIce({
+                  'candidate': c.candidate,
+                  'sdpMid': c.sdpMid,
+                  'sdpMLineIndex': c.sdpMLineIndex,
+                  'role': 'answerer',
+                  'sessionId': _fsSessionId,
+                });
+              }
+            };
+
+            state = _peerConnection!.signalingState;
+          }
+
+          // Apply remote offer and generate answer (guard against races)
+          final pc = _peerConnection;
+          if (pc == null) {
+            AppLogger.w('PeerConnection became null before applying remote offer (answerer path). Aborting.', tag: 'WebRTC');
+            return;
+          }
+          await pc.setRemoteDescription(
+            RTCSessionDescription(off['sdp'], off['type']),
+          );
+          _fsRemoteDescriptionSet = true;
+          final answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          final ansMap = answer.toMap();
+          ansMap['sessionId'] = _fsSessionId;
+          await session.writeAnswer(ansMap);
+
+          // Drain any buffered remote ICE now that remote SDP is set
+          for (final cand in List<RTCIceCandidate>.from(_fsPendingRemoteCandidates)) {
+            try {
+              await _peerConnection?.addCandidate(cand);
+            } catch (e) {
+              AppLogger.e('Failed to add buffered ICE candidate: $e', tag: 'WebRTC');
+            }
+          }
+          _fsPendingRemoteCandidates.clear();
+
+          // Clean up signaling once connected and schedule deletion
+          unawaited(_firestoreSession?.cleanup());
+          unawaited(Future.delayed(const Duration(minutes: 5), () => _firestoreSession?.deleteRoom()));
+          _fsOfferHandled = true;
+          await _fsOfferSub?.cancel();
+        }
+      });
+    }
+  }
+
   // ===== Local WebSocket signaling support =====
   Future<int> enableLocalWebSocketMode({required bool host, int port = 8080}) async {
     if (kIsWeb) {
@@ -392,7 +662,9 @@ class WebRTCFileTransferService {
       AppLogger.e('❌ Unable to determine local IP for WebSocket signaling', tag: 'WebRTC');
       return;
     }
-    final uri = 'ws://$ip:$port/ws';
+    // Use secure WebSocket when page is served over HTTPS to avoid mixed content blocking
+    String scheme = (kIsWeb && Uri.base.scheme == 'https') ? 'wss://' : 'ws://';
+    final uri = '${scheme}$ip:$port/ws';
     AppLogger.i('Connecting to local signaling WS: $uri', tag: 'WebRTC');
     try {
       // If we are supposed to be host but server not started (e.g. missed enable call), start it now.
@@ -449,6 +721,9 @@ class WebRTCFileTransferService {
     _roomId = roomId;
     
     // If no host IP provided, try to discover from local server
+    if (kIsWeb && Uri.base.scheme == 'https') {
+      AppLogger.w('HTTPS origin detected: attempting secure WebSocket (wss). Ensure local WS has TLS.', tag: 'WebRTC');
+    }
     final ip = hostIp ?? await _detectLocalIp();
     await _connectLocalWebSocket(roomId, hostIp: ip, port: port);
   }
@@ -466,6 +741,9 @@ class WebRTCFileTransferService {
     final actualStartPort = extractedPort ?? startPort;
     final baseRoomId = getBaseRoomId(roomId);
     
+      if (kIsWeb && Uri.base.scheme == 'https') {
+        AppLogger.e('Failed secure WS (wss). In HTTPS, ws:// is blocked. Options:\n- Use hosted signaling: $signalingServerUrl\n- Configure TLS (valid cert) for local WS\n- Develop over http:// to allow ws:// (not for production).', tag: 'WebRTC');
+      }
     AppLogger.i('═══════════════════════════════════════', tag: 'WebRTC');
     AppLogger.i('Starting host discovery on local network', tag: 'WebRTC');
     AppLogger.i('Room ID: $roomId', tag: 'WebRTC');
@@ -613,7 +891,8 @@ class WebRTCFileTransferService {
   /// Try connecting to a specific IP and port, return true if successful
   Future<bool> _tryConnectToHost(String ip, String roomId, int port) async {
     try {
-      final uri = 'ws://$ip:$port/ws';
+      String scheme = (kIsWeb && Uri.base.scheme == 'https') ? 'wss://' : 'ws://';
+      final uri = '${scheme}$ip:$port/ws';
       final ws = await WsClient.connect(
         uri,
         timeout: const Duration(milliseconds: 500),
@@ -885,11 +1164,11 @@ class WebRTCFileTransferService {
     bool createDataChannel = false,
   }) async {
     _connectedPeerSocketId = peerSocketId;
+    // LAN-only: gather host candidates only (no STUN/TURN)
     final configuration = <String, dynamic>{
-      'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'},
-      ],
+      'iceServers': <Map<String, dynamic>>[],
       'iceCandidatePoolSize': 2,
+      // 'iceTransportPolicy': 'all', // default; host only since no servers provided
     };
 
     _peerConnection = await createPeerConnection(configuration);
@@ -1086,9 +1365,12 @@ class WebRTCFileTransferService {
 
   /// Send file to connected peer
   Future<void> sendFile(String filePath) async {
-    if (!_isConnected || _dataChannel == null) {
-      throw Exception('WebRTC not connected');
+    if (_dataChannel == null) {
+      throw Exception('WebRTC data channel not available');
     }
+
+    // Ensure data channel is open before sending
+    await _ensureDataChannelOpen();
 
     if (kIsWeb) {
       throw UnsupportedError('sendFile() with file path is not supported on web. Use sendFileBytes() instead.');
@@ -1162,7 +1444,7 @@ class WebRTCFileTransferService {
             stallSince = null; // progress observed
           } else {
             stallSince ??= DateTime.now();
-            if (DateTime.now().difference(stallSince!) > stallTimeout) {
+            if (DateTime.now().difference(stallSince) > stallTimeout) {
               final name = fileName;
               _resetSendState();
               onFileTransferError?.call(
@@ -1278,9 +1560,12 @@ class WebRTCFileTransferService {
 
   /// Send file from bytes (web-compatible)
   Future<void> sendFileBytes(String fileName, List<int> fileBytes) async {
-    if (!_isConnected || _dataChannel == null) {
-      throw Exception('WebRTC not connected');
+    if (_dataChannel == null) {
+      throw Exception('WebRTC data channel not available');
     }
+
+    // Ensure data channel is open before sending
+    await _ensureDataChannelOpen();
 
     try {
       final fileSize = fileBytes.length;
@@ -1342,7 +1627,7 @@ class WebRTCFileTransferService {
             stallSince = null; // progress observed
           } else {
             stallSince ??= DateTime.now();
-            if (DateTime.now().difference(stallSince!) > stallTimeout) {
+            if (DateTime.now().difference(stallSince) > stallTimeout) {
               _resetSendState();
               onFileTransferError?.call(
                   fileName, 'Sender stalled: no drain for ${stallTimeout.inSeconds}s', true);
@@ -1926,5 +2211,25 @@ class WebRTCFileTransferService {
     transferSpeed.value = 0.0;
     _transferStartTime = null;
     _totalBytesTransferred = 0;
+  }
+
+  /// Ensure the RTCDataChannel is open before attempting to send
+  Future<void> _ensureDataChannelOpen({Duration timeout = const Duration(seconds: 10)}) async {
+    final dc = _dataChannel;
+    if (dc == null) {
+      throw Exception('WebRTC data channel not available');
+    }
+    if (dc.state == RTCDataChannelState.RTCDataChannelOpen) {
+      return;
+    }
+    final start = DateTime.now();
+    while (DateTime.now().difference(start) < timeout) {
+      if (_dataChannel == null) break; // channel lost
+      if (_dataChannel!.state == RTCDataChannelState.RTCDataChannelOpen) {
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    throw Exception('WebRTC data channel did not open in time');
   }
 }
