@@ -44,7 +44,8 @@ class AppPermissions {
     }
 
     // For Android, try to request nearby devices permission (required for WiFi hotspot on Android 12+)
-    // We'll attempt to request it regardless of API level, and handle any exceptions
+    // This permission is only available on Android 12+ (API 31+)
+    // On older devices or if the permission is not available, we continue anyway
     try {
       AppLogger.d('Attempting to request nearby devices permission for WiFi hotspot', tag: 'Permissions');
       final nearbyDevicesStatus = await Permission.nearbyWifiDevices.status;
@@ -53,30 +54,30 @@ class AppPermissions {
       if (!nearbyDevicesStatus.isGranted) {
         AppLogger.d('Nearby devices permission not granted. Requesting...', tag: 'Permissions');
 
-        // Force request the permission
+        // Request the permission
         final nearbyRequestResult = await Permission.nearbyWifiDevices.request();
         AppLogger.d('Nearby devices permission request result: $nearbyRequestResult', tag: 'Permissions');
 
         if (!nearbyRequestResult.isGranted) {
-          AppLogger.w('Nearby devices permission denied. WiFi hotspot may not work.', tag: 'Permissions');
-          AppLogger.w('Permission REQUIRED for WiFi hotspot on Android 12+', tag: 'Permissions');
+          AppLogger.w('Nearby devices permission denied. WiFi hotspot may have limited functionality on Android 12+', tag: 'Permissions');
 
           // If permanently denied, guide user to settings
           if (nearbyRequestResult.isPermanentlyDenied) {
-            AppLogger.w('Nearby devices permission permanently denied. Opening app settings...', tag: 'Permissions');
-            await openAppSettings();
+            AppLogger.w('Nearby devices permission permanently denied. User can enable in settings if needed.', tag: 'Permissions');
           }
 
-          return false;
+          // Don't return false - continue with other permissions
+          // WiFi hotspot may still work on some devices/Android versions
+        } else {
+          AppLogger.i('Nearby devices permission granted', tag: 'Permissions');
         }
-        AppLogger.i('Nearby devices permission granted', tag: 'Permissions');
       } else {
         AppLogger.i('Nearby devices permission already granted', tag: 'Permissions');
       }
     } catch (e) {
-      AppLogger.d('Nearby devices permission not available on this Android version (expected on Android < 12): $e', tag: 'Permissions');
-      // This is expected on Android versions < 12 where the permission doesn't exist
-      // Continue without the permission
+      AppLogger.d('Nearby devices permission not available on this device/Android version: $e', tag: 'Permissions');
+      // This is expected on Android versions < 12 or devices without the permission
+      // Continue without the permission - the app will still work
     }
     
     return true;

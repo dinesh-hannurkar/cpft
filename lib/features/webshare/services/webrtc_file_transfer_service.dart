@@ -1,12 +1,11 @@
 // ignore_for_file: unused_field
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
-import 'dart:typed_data';
+import 'dart:io'
+    if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:firebase_core/firebase_core.dart';
 import 'package:cpft/services/firebase_initializer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cpft/features/webshare/services/firestore_signaling_service.dart';
@@ -31,9 +30,12 @@ class WebRTCFileTransferService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _fsIceSub;
   bool _fsOfferHandled = false;
   bool _fsAnswerHandled = false;
-  bool _fsRemoteDescriptionSet = false; // Track when remote SDP applied (Firestore path)
-  final List<RTCIceCandidate> _fsPendingRemoteCandidates = <RTCIceCandidate>[]; // Buffer ICE until remote SDP
-  String? _fsSessionId; // Session token to distinguish fresh rounds for reused room IDs
+  bool _fsRemoteDescriptionSet =
+      false; // Track when remote SDP applied (Firestore path)
+  final List<RTCIceCandidate> _fsPendingRemoteCandidates =
+      <RTCIceCandidate>[]; // Buffer ICE until remote SDP
+  String?
+  _fsSessionId; // Session token to distinguish fresh rounds for reused room IDs
   // FirestoreSession? _firestoreSession; // Firestore signaling session for cleanup
   String? _roomId;
   String? _mySocketId;
@@ -46,7 +48,9 @@ class WebRTCFileTransferService {
 
   // Use hosted signaling server (Vercel)
   final String signalingServerUrl = 'https://webrtc-yesc.onrender.com';
-  bool useLocalWebSocket = kIsWeb ? false : true; // Default true for native, false for web
+  bool useLocalWebSocket = kIsWeb
+      ? false
+      : true; // Default true for native, false for web
   bool useFirestoreSignaling = kIsWeb ? true : true; // Prefer Firestore on web
   bool _isLocalHost = false; // True when this device hosts the local WS server
 
@@ -55,8 +59,12 @@ class WebRTCFileTransferService {
   final ValueNotifier<double> transferProgress = ValueNotifier<double>(0.0);
   final ValueNotifier<String?> currentFileName = ValueNotifier<String?>(null);
   final ValueNotifier<bool> connectionEstablished = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> isLocalMode = ValueNotifier<bool>(kIsWeb ? false : true); // Track signaling mode for UI
-  final ValueNotifier<bool> isHostMode = ValueNotifier<bool>(false); // Track if hosting
+  final ValueNotifier<bool> isLocalMode = ValueNotifier<bool>(
+    kIsWeb ? false : true,
+  ); // Track signaling mode for UI
+  final ValueNotifier<bool> isHostMode = ValueNotifier<bool>(
+    false,
+  ); // Track if hosting
 
   // Callbacks
   final Function()? onConnectionEstablished;
@@ -70,7 +78,7 @@ class WebRTCFileTransferService {
   onFileSendComplete;
   // New: error callback to signal stalled/failed transfers
   final Function(String filename, String reason, bool duringSend)?
-      onFileTransferError;
+  onFileTransferError;
 
   // File transfer data
   Uint8List? _receiveBuffer; // Pre-allocated receive buffer
@@ -83,18 +91,21 @@ class WebRTCFileTransferService {
   DateTime? _lastReceiveAt;
   // Web-only: store received parts to avoid huge contiguous buffers
   List<Uint8List>? _webReceivedParts;
-  
+
   // Transfer speed tracking (both send and receive)
   DateTime? _transferStartTime;
   int _totalBytesTransferred = 0;
-  final ValueNotifier<double> transferSpeed = ValueNotifier<double>(0.0); // bytes per second
+  final ValueNotifier<double> transferSpeed = ValueNotifier<double>(
+    0.0,
+  ); // bytes per second
 
   // Current send file info (for callback)
   String? _currentSendFilePath;
   int _currentSendFileSize = 0;
 
   // Simple credit-based flow control (receiver-driven)
-  int _sendCredits = 0; // decremented on each chunk sent, incremented by receiver acks
+  int _sendCredits =
+      0; // decremented on each chunk sent, incremented by receiver acks
   int _creditWindow = 64; // initial credits; adapt within bounds
   static const int _minCreditWindow = 32;
   static const int _maxCreditWindow = 256;
@@ -104,9 +115,9 @@ class WebRTCFileTransferService {
   double _smoothedRttMs = 0; // simple EWMA
   static const double _rttAlpha = 0.2; // smoothing factor
   // Chunk sizing (adaptive)
-  int _currentChunkSize = 32 * 1024; // start at 32KB
+  int _currentChunkSize = 64 * 1024; // start at 32KB
   static const int _minChunkSize = 8 * 1024;
-  static const int _maxChunkSize = 64 * 1024;
+  static const int _maxChunkSize = 128 * 1024;
   int _chunksSinceAck = 0; // receiver-side: send an ack every N chunks
 
   WebRTCFileTransferService({
@@ -123,17 +134,23 @@ class WebRTCFileTransferService {
   bool get isConnected => _isConnected;
   String? get mySocketId => _mySocketId;
   String? get roomId => _roomId;
-  
+
   /// Create a new Firestore room with an auto-generated ID (default 4 digits)
   /// and immediately connect to signaling using that room. Returns the room ID.
-  Future<String> createAutoRoomAndConnect({int length = 4, bool alphanumeric = false}) async {
+  Future<String> createAutoRoomAndConnect({
+    int length = 4,
+    bool alphanumeric = false,
+  }) async {
     await FirebaseInitializer.ensure();
     final fs = FirestoreSignalingService(db: FirebaseFirestore.instance);
-    final newId = await fs.createAutoRoomId(length: length, alphanumeric: alphanumeric);
+    final newId = await fs.createAutoRoomId(
+      length: length,
+      alphanumeric: alphanumeric,
+    );
     await _connectViaFirestore(newId);
     return newId;
   }
-  
+
   /// Get received file bytes (useful for web platform downloads)
   List<int> get receivedFileBytes {
     final buf = _receiveBuffer;
@@ -141,6 +158,7 @@ class WebRTCFileTransferService {
     final len = _receivedBytes > 0 ? _receivedBytes : buf.length;
     return Uint8List.view(buf.buffer, 0, len);
   }
+
   String? get receivedFileName => _expectedFileName;
 
   /// Generate a room ID with embedded IP and port: <random>-<lastIPoctet>-p<port>
@@ -184,9 +202,15 @@ class WebRTCFileTransferService {
     useLocalWebSocket = useLocal;
     isLocalMode.value = useLocal;
     if (kIsWeb && useLocal && isHostMode.value) {
-      AppLogger.w('Host mode for local signaling is not supported on web. Switch to Join.', tag: 'WebRTC');
+      AppLogger.w(
+        'Host mode for local signaling is not supported on web. Switch to Join.',
+        tag: 'WebRTC',
+      );
     }
-    AppLogger.i('Signaling mode set to: ${useLocal ? "Local" : "Remote"}', tag: 'WebRTC');
+    AppLogger.i(
+      'Signaling mode set to: ${useLocal ? "Local" : "Remote"}',
+      tag: 'WebRTC',
+    );
   }
 
   /// Set host mode (for local signaling)
@@ -217,7 +241,10 @@ class WebRTCFileTransferService {
         await _connectLocalWebSocket(roomId);
       } else {
         // Joiner: Try multicast discovery or broadcast to find host
-        AppLogger.w('Join mode in local signaling requires host IP. Use connectToLocalHost() instead.', tag: 'WebRTC');
+        AppLogger.w(
+          'Join mode in local signaling requires host IP. Use connectToLocalHost() instead.',
+          tag: 'WebRTC',
+        );
         // Attempt to connect to gateway/broadcast to find host
         await _discoverAndConnectToHost(roomId);
       }
@@ -238,12 +265,12 @@ class WebRTCFileTransferService {
       _socket = IO.io(
         signalingServerUrl,
         IO.OptionBuilder()
-        // Prefer WebSocket on Render; fall back to polling if needed
-        .setTransports(['websocket', 'polling'])
-        // If your server uses a custom path like /socket.io specify it here
-        // .setPath('/socket.io')
-        .disableAutoConnect()
-        .build(),
+            // Prefer WebSocket on Render; fall back to polling if needed
+            .setTransports(['websocket', 'polling'])
+            // If your server uses a custom path like /socket.io specify it here
+            // .setPath('/socket.io')
+            .disableAutoConnect()
+            .build(),
       );
 
       // Set up event handlers
@@ -418,7 +445,9 @@ class WebRTCFileTransferService {
     } else if (createdAt is Timestamp) {
       lastActivity = createdAt.toDate();
     }
-    final isStale = lastActivity != null && now.difference(lastActivity) > const Duration(minutes: 2);
+    final isStale =
+        lastActivity != null &&
+        now.difference(lastActivity) > const Duration(minutes: 2);
     final existingSessionId = existing?['sessionId'] as String?;
     final hasOffer = existing != null && existing['offer'] != null;
     final hasAnswer = existing != null && existing['answer'] != null;
@@ -426,7 +455,10 @@ class WebRTCFileTransferService {
     // Generate a new sessionId proposal
     final proposedSessionId = DateTime.now().microsecondsSinceEpoch.toString();
 
-    if (existingSessionId == null || isStale || (hasOffer && isStale) || (hasAnswer && isStale)) {
+    if (existingSessionId == null ||
+        isStale ||
+        (hasOffer && isStale) ||
+        (hasAnswer && isStale)) {
       // Reset the room for a fresh round and claim the sessionId
       await session.resetForNewSession(proposedSessionId);
       _fsSessionId = proposedSessionId;
@@ -442,7 +474,10 @@ class WebRTCFileTransferService {
     final isOfferer = !hasOffer2;
 
     // Create connection; offerer creates data channel
-    await _createPeerConnectionForPeer('firestore-peer', createDataChannel: isOfferer);
+    await _createPeerConnectionForPeer(
+      'firestore-peer',
+      createDataChannel: isOfferer,
+    );
 
     // ICE exchange
     _peerConnection!.onIceCandidate = (c) {
@@ -484,7 +519,10 @@ class WebRTCFileTransferService {
               try {
                 await _peerConnection?.addCandidate(remoteCand);
               } catch (e) {
-                AppLogger.e('Failed to add ICE candidate (post-remote SDP): $e', tag: 'WebRTC');
+                AppLogger.e(
+                  'Failed to add ICE candidate (post-remote SDP): $e',
+                  tag: 'WebRTC',
+                );
               }
             } else {
               _fsPendingRemoteCandidates.add(remoteCand);
@@ -498,7 +536,10 @@ class WebRTCFileTransferService {
       // Write offer and wait for answer
       final pcOfferer = _peerConnection;
       if (pcOfferer == null) {
-        AppLogger.w('PeerConnection is null before creating offer (offerer path). Aborting.', tag: 'WebRTC');
+        AppLogger.w(
+          'PeerConnection is null before creating offer (offerer path). Aborting.',
+          tag: 'WebRTC',
+        );
         return;
       }
       final offer = await pcOfferer.createOffer();
@@ -515,28 +556,46 @@ class WebRTCFileTransferService {
           }
           final pc = _peerConnection;
           if (pc == null) {
-            AppLogger.w('PeerConnection became null before processing remote answer (offerer path). Aborting.', tag: 'WebRTC');
+            AppLogger.w(
+              'PeerConnection became null before processing remote answer (offerer path). Aborting.',
+              tag: 'WebRTC',
+            );
             return;
           }
           final state = pc.signalingState;
           if (state != RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
-            AppLogger.w('Ignoring remote answer: signalingState=$state (expected have-local-offer)', tag: 'WebRTC');
+            AppLogger.w(
+              'Ignoring remote answer: signalingState=$state (expected have-local-offer)',
+              tag: 'WebRTC',
+            );
             return; // Prevent setRemoteDescription in wrong state
           }
-          await pc.setRemoteDescription(RTCSessionDescription(ans['sdp'], ans['type']));
+          await pc.setRemoteDescription(
+            RTCSessionDescription(ans['sdp'], ans['type']),
+          );
           _fsRemoteDescriptionSet = true;
           // Drain any buffered remote ICE now that remote SDP is set
-          for (final cand in List<RTCIceCandidate>.from(_fsPendingRemoteCandidates)) {
+          for (final cand in List<RTCIceCandidate>.from(
+            _fsPendingRemoteCandidates,
+          )) {
             try {
               await pc.addCandidate(cand);
             } catch (e) {
-              AppLogger.e('Failed to add buffered ICE candidate: $e', tag: 'WebRTC');
+              AppLogger.e(
+                'Failed to add buffered ICE candidate: $e',
+                tag: 'WebRTC',
+              );
             }
           }
           _fsPendingRemoteCandidates.clear();
           // Clean up signaling once connected and schedule deletion
           unawaited(_firestoreSession?.cleanup());
-          unawaited(Future.delayed(const Duration(minutes: 5), () => _firestoreSession?.deleteRoom()));
+          unawaited(
+            Future.delayed(
+              const Duration(minutes: 5),
+              () => _firestoreSession?.deleteRoom(),
+            ),
+          );
           _fsAnswerHandled = true;
           await _fsAnswerSub?.cancel();
         }
@@ -569,7 +628,10 @@ class WebRTCFileTransferService {
             connectionEstablished.value = false;
 
             // Recreate a fresh peer connection (as answerer, do NOT create data channel)
-            await _createPeerConnectionForPeer('firestore-peer', createDataChannel: false);
+            await _createPeerConnectionForPeer(
+              'firestore-peer',
+              createDataChannel: false,
+            );
 
             // Reattach Firestore ICE emission for the new connection (role: answerer)
             _peerConnection!.onIceCandidate = (c) {
@@ -590,7 +652,10 @@ class WebRTCFileTransferService {
           // Apply remote offer and generate answer (guard against races)
           final pc = _peerConnection;
           if (pc == null) {
-            AppLogger.w('PeerConnection became null before applying remote offer (answerer path). Aborting.', tag: 'WebRTC');
+            AppLogger.w(
+              'PeerConnection became null before applying remote offer (answerer path). Aborting.',
+              tag: 'WebRTC',
+            );
             return;
           }
           await pc.setRemoteDescription(
@@ -604,18 +669,28 @@ class WebRTCFileTransferService {
           await session.writeAnswer(ansMap);
 
           // Drain any buffered remote ICE now that remote SDP is set
-          for (final cand in List<RTCIceCandidate>.from(_fsPendingRemoteCandidates)) {
+          for (final cand in List<RTCIceCandidate>.from(
+            _fsPendingRemoteCandidates,
+          )) {
             try {
               await _peerConnection?.addCandidate(cand);
             } catch (e) {
-              AppLogger.e('Failed to add buffered ICE candidate: $e', tag: 'WebRTC');
+              AppLogger.e(
+                'Failed to add buffered ICE candidate: $e',
+                tag: 'WebRTC',
+              );
             }
           }
           _fsPendingRemoteCandidates.clear();
 
           // Clean up signaling once connected and schedule deletion
           unawaited(_firestoreSession?.cleanup());
-          unawaited(Future.delayed(const Duration(minutes: 5), () => _firestoreSession?.deleteRoom()));
+          unawaited(
+            Future.delayed(
+              const Duration(minutes: 5),
+              () => _firestoreSession?.deleteRoom(),
+            ),
+          );
           _fsOfferHandled = true;
           await _fsOfferSub?.cancel();
         }
@@ -624,11 +699,18 @@ class WebRTCFileTransferService {
   }
 
   // ===== Local WebSocket signaling support =====
-  Future<int> enableLocalWebSocketMode({required bool host, int port = 8080}) async {
+  Future<int> enableLocalWebSocketMode({
+    required bool host,
+    int port = 8080,
+  }) async {
     if (kIsWeb) {
       if (host) {
-        AppLogger.w('Local WebSocket host mode is not supported on web. Acting as Joiner only.', tag: 'WebRTC');
-        useLocalWebSocket = false; // cannot host, default to remote unless user explicitly connects to host IP
+        AppLogger.w(
+          'Local WebSocket host mode is not supported on web. Acting as Joiner only.',
+          tag: 'WebRTC',
+        );
+        useLocalWebSocket =
+            false; // cannot host, default to remote unless user explicitly connects to host IP
         isLocalMode.value = false;
         _isLocalHost = false;
         isHostMode.value = false;
@@ -650,16 +732,26 @@ class WebRTCFileTransferService {
     if (host) {
       await LocalWebSocketSignalingServer().start(port: port);
       final actualPort = LocalWebSocketSignalingServer().port ?? port;
-      AppLogger.i('Local WebSocket signaling server started on port $actualPort', tag: 'WebRTC');
+      AppLogger.i(
+        'Local WebSocket signaling server started on port $actualPort',
+        tag: 'WebRTC',
+      );
       return actualPort;
     }
     return port;
   }
 
-  Future<void> _connectLocalWebSocket(String roomId, {String? hostIp, int port = 8080}) async {
+  Future<void> _connectLocalWebSocket(
+    String roomId, {
+    String? hostIp,
+    int port = 8080,
+  }) async {
     final ip = hostIp ?? await _detectLocalIp();
     if (ip == null) {
-      AppLogger.e('❌ Unable to determine local IP for WebSocket signaling', tag: 'WebRTC');
+      AppLogger.e(
+        '❌ Unable to determine local IP for WebSocket signaling',
+        tag: 'WebRTC',
+      );
       return;
     }
     // Use secure WebSocket when page is served over HTTPS to avoid mixed content blocking
@@ -668,25 +760,40 @@ class WebRTCFileTransferService {
     AppLogger.i('Connecting to local signaling WS: $uri', tag: 'WebRTC');
     try {
       // If we are supposed to be host but server not started (e.g. missed enable call), start it now.
-      if (!kIsWeb && _isLocalHost && !LocalWebSocketSignalingServer().isRunning) {
-        AppLogger.i('⚠️  Local WS server not running; starting automatically', tag: 'WebRTC');
+      if (!kIsWeb &&
+          _isLocalHost &&
+          !LocalWebSocketSignalingServer().isRunning) {
+        AppLogger.i(
+          '⚠️  Local WS server not running; starting automatically',
+          tag: 'WebRTC',
+        );
         await LocalWebSocketSignalingServer().start(port: port);
       }
       _ws = await WsClient.connect(uri);
-      _ws!.listen(_handleWsMessage, onDone: () {
-        AppLogger.i('Local WS connection closed', tag: 'WebRTC');
-      }, onError: (error) {
-        AppLogger.e('Local WS error: $error', tag: 'WebRTC');
-      });
+      _ws!.listen(
+        _handleWsMessage,
+        onDone: () {
+          AppLogger.i('Local WS connection closed', tag: 'WebRTC');
+        },
+        onError: (error) {
+          AppLogger.e('Local WS error: $error', tag: 'WebRTC');
+        },
+      );
       // Await welcome handshake assigning _peerId
       await _awaitLocalWsHandshake();
-      AppLogger.i('✅ Connected successfully to local signaling server', tag: 'WebRTC');
+      AppLogger.i(
+        '✅ Connected successfully to local signaling server',
+        tag: 'WebRTC',
+      );
     } on SocketException catch (e) {
       AppLogger.e('═══════════════════════════════════════', tag: 'WebRTC');
       AppLogger.e('❌ Socket connection FAILED', tag: 'WebRTC');
       AppLogger.e('URI: $uri', tag: 'WebRTC');
       AppLogger.e('Error: ${e.message}', tag: 'WebRTC');
-      AppLogger.e('OS Error: ${e.osError?.errorCode} - ${e.osError?.message}', tag: 'WebRTC');
+      AppLogger.e(
+        'OS Error: ${e.osError?.errorCode} - ${e.osError?.message}',
+        tag: 'WebRTC',
+      );
       if (_isLocalHost) {
         AppLogger.e('', tag: 'WebRTC');
         AppLogger.e('Host mode connection failed:', tag: 'WebRTC');
@@ -696,40 +803,65 @@ class WebRTCFileTransferService {
       } else {
         AppLogger.e('', tag: 'WebRTC');
         AppLogger.e('Join mode connection failed:', tag: 'WebRTC');
-        AppLogger.e('• Ensure host device is on same WiFi network', tag: 'WebRTC');
-        AppLogger.e('• Verify host app is running with server started', tag: 'WebRTC');
-        AppLogger.e('• Check if IP $ip is correct and reachable', tag: 'WebRTC');
+        AppLogger.e(
+          '• Ensure host device is on same WiFi network',
+          tag: 'WebRTC',
+        );
+        AppLogger.e(
+          '• Verify host app is running with server started',
+          tag: 'WebRTC',
+        );
+        AppLogger.e(
+          '• Check if IP $ip is correct and reachable',
+          tag: 'WebRTC',
+        );
         AppLogger.e('• Try pinging $ip from your device', tag: 'WebRTC');
       }
       AppLogger.e('═══════════════════════════════════════', tag: 'WebRTC');
     } catch (e) {
       AppLogger.e('❌ Local WS connect failed: $e', tag: 'WebRTC');
       if (_isLocalHost) {
-        AppLogger.e('Host mode connection failed. Verify no other service is using port $port and retry.', tag: 'WebRTC');
+        AppLogger.e(
+          'Host mode connection failed. Verify no other service is using port $port and retry.',
+          tag: 'WebRTC',
+        );
       } else {
-        AppLogger.e('Join mode failed. Ensure host app started local signaling and that IP $ip is reachable.', tag: 'WebRTC');
+        AppLogger.e(
+          'Join mode failed. Ensure host app started local signaling and that IP $ip is reachable.',
+          tag: 'WebRTC',
+        );
       }
     }
   }
 
   /// Explicit connect for a non-host peer using provided host IP
-  Future<void> connectToLocalHost(String roomId, {String? hostIp, int port = 8080}) async {
+  Future<void> connectToLocalHost(
+    String roomId, {
+    String? hostIp,
+    int port = 8080,
+  }) async {
     useLocalWebSocket = true;
     isLocalMode.value = true;
     _isLocalHost = false;
     isHostMode.value = false;
     _roomId = roomId;
-    
+
     // If no host IP provided, try to discover from local server
     if (kIsWeb && Uri.base.scheme == 'https') {
-      AppLogger.w('HTTPS origin detected: attempting secure WebSocket (wss). Ensure local WS has TLS.', tag: 'WebRTC');
+      AppLogger.w(
+        'HTTPS origin detected: attempting secure WebSocket (wss). Ensure local WS has TLS.',
+        tag: 'WebRTC',
+      );
     }
     final ip = hostIp ?? await _detectLocalIp();
     await _connectLocalWebSocket(roomId, hostIp: ip, port: port);
   }
 
   /// Attempt to discover host on local network by trying subnet IPs
-  Future<void> _discoverAndConnectToHost(String roomId, {int startPort = 8080}) async {
+  Future<void> _discoverAndConnectToHost(
+    String roomId, {
+    int startPort = 8080,
+  }) async {
     // Web-specific discovery: try common subnets using roomId-encoded hints
     if (kIsWeb) {
       await _discoverAndConnectToHostOnWeb(roomId, startPort: startPort);
@@ -740,93 +872,141 @@ class WebRTCFileTransferService {
     final extractedHostOctet = extractHostOctetFromRoomId(roomId);
     final actualStartPort = extractedPort ?? startPort;
     final baseRoomId = getBaseRoomId(roomId);
-    
-      if (kIsWeb && Uri.base.scheme == 'https') {
-        AppLogger.e('Failed secure WS (wss). In HTTPS, ws:// is blocked. Options:\n- Use hosted signaling: $signalingServerUrl\n- Configure TLS (valid cert) for local WS\n- Develop over http:// to allow ws:// (not for production).', tag: 'WebRTC');
-      }
+
+    if (kIsWeb && Uri.base.scheme == 'https') {
+      AppLogger.e(
+        'Failed secure WS (wss). In HTTPS, ws:// is blocked. Options:\n- Use hosted signaling: $signalingServerUrl\n- Configure TLS (valid cert) for local WS\n- Develop over http:// to allow ws:// (not for production).',
+        tag: 'WebRTC',
+      );
+    }
     AppLogger.i('═══════════════════════════════════════', tag: 'WebRTC');
     AppLogger.i('Starting host discovery on local network', tag: 'WebRTC');
     AppLogger.i('Room ID: $roomId', tag: 'WebRTC');
     if (extractedHostOctet != null) {
-      AppLogger.i('✓ Host IP octet extracted from Room ID: $extractedHostOctet', tag: 'WebRTC');
+      AppLogger.i(
+        '✓ Host IP octet extracted from Room ID: $extractedHostOctet',
+        tag: 'WebRTC',
+      );
     }
     if (extractedPort != null) {
-      AppLogger.i('✓ Port extracted from Room ID: $extractedPort', tag: 'WebRTC');
+      AppLogger.i(
+        '✓ Port extracted from Room ID: $extractedPort',
+        tag: 'WebRTC',
+      );
       if (extractedHostOctet != null) {
-        AppLogger.i('🚀 Direct connection mode: Will try only .$extractedHostOctet:$extractedPort', tag: 'WebRTC');
+        AppLogger.i(
+          '🚀 Direct connection mode: Will try only .$extractedHostOctet:$extractedPort',
+          tag: 'WebRTC',
+        );
       } else {
-        AppLogger.i('Will connect directly to port $extractedPort', tag: 'WebRTC');
+        AppLogger.i(
+          'Will connect directly to port $extractedPort',
+          tag: 'WebRTC',
+        );
       }
     } else {
-      AppLogger.i('No port in Room ID, will try ports: $actualStartPort-${actualStartPort + 9}', tag: 'WebRTC');
+      AppLogger.i(
+        'No port in Room ID, will try ports: $actualStartPort-${actualStartPort + 9}',
+        tag: 'WebRTC',
+      );
     }
     AppLogger.i('═══════════════════════════════════════', tag: 'WebRTC');
-    
+
     // Get our own IP to determine subnet
     final myIp = await _detectLocalIp();
     if (myIp == null) {
-      AppLogger.e('❌ Cannot discover host: unable to detect own IP', tag: 'WebRTC');
-      AppLogger.e('Possible causes: Not connected to WiFi, VPN active, or network permission denied', tag: 'WebRTC');
+      AppLogger.e(
+        '❌ Cannot discover host: unable to detect own IP',
+        tag: 'WebRTC',
+      );
+      AppLogger.e(
+        'Possible causes: Not connected to WiFi, VPN active, or network permission denied',
+        tag: 'WebRTC',
+      );
       return;
     }
-    
+
     AppLogger.i('✓ My IP: $myIp', tag: 'WebRTC');
-    
+
     // Parse subnet (e.g., 192.168.1.x)
     final parts = myIp.split('.');
     if (parts.length != 4) {
       AppLogger.e('❌ Invalid IP format: $myIp', tag: 'WebRTC');
       return;
     }
-    
+
     final subnet = '${parts[0]}.${parts[1]}.${parts[2]}';
     final myHost = int.parse(parts[3]);
-    
-    AppLogger.i('📡 Scanning subnet: $subnet.x (will skip $subnet.$myHost which is me)', tag: 'WebRTC');
-    
+
+    AppLogger.i(
+      '📡 Scanning subnet: $subnet.x (will skip $subnet.$myHost which is me)',
+      tag: 'WebRTC',
+    );
+
     // If we have both IP octet and port from room ID, try direct connection first!
     if (extractedHostOctet != null && extractedPort != null) {
       final directIp = '$subnet.$extractedHostOctet';
-      AppLogger.i('⚡ Attempting direct connection to $directIp:$extractedPort...', tag: 'WebRTC');
+      AppLogger.i(
+        '⚡ Attempting direct connection to $directIp:$extractedPort...',
+        tag: 'WebRTC',
+      );
       if (await _tryConnectToHost(directIp, baseRoomId, extractedPort)) {
-        AppLogger.i('✅ SUCCESS! Connected directly to $directIp:$extractedPort', tag: 'WebRTC');
+        AppLogger.i(
+          '✅ SUCCESS! Connected directly to $directIp:$extractedPort',
+          tag: 'WebRTC',
+        );
         return;
       } else {
-        AppLogger.w('Direct connection failed. Falling back to subnet scan...', tag: 'WebRTC');
+        AppLogger.w(
+          'Direct connection failed. Falling back to subnet scan...',
+          tag: 'WebRTC',
+        );
       }
     }
-    
-    AppLogger.i('🔍 Starting with priority IPs: .1, .100, .101, .10, .20, .50', tag: 'WebRTC');
-    
+
+    AppLogger.i(
+      '🔍 Starting with priority IPs: .1, .100, .101, .10, .20, .50',
+      tag: 'WebRTC',
+    );
+
     // Try common IPs first (router, gateway, common static IPs)
     final priorityHosts = [1, 100, 101, 10, 20, 50];
-    
+
     AppLogger.i('--- Testing priority IPs ---', tag: 'WebRTC');
     for (final host in priorityHosts) {
       if (host == myHost) continue; // Skip our own IP
       final testIp = '$subnet.$host';
       AppLogger.i('Trying: $testIp...', tag: 'WebRTC');
-      
+
       if (extractedPort != null) {
         // Port known from room ID - try only that port
         if (await _tryConnectToHost(testIp, baseRoomId, extractedPort)) {
-          AppLogger.i('✅ SUCCESS! Found host at $testIp:$extractedPort', tag: 'WebRTC');
+          AppLogger.i(
+            '✅ SUCCESS! Found host at $testIp:$extractedPort',
+            tag: 'WebRTC',
+          );
           return;
         }
       } else {
         // Try multiple ports (8080-8089) since host may be on any of them
         for (int port = actualStartPort; port < actualStartPort + 10; port++) {
           if (await _tryConnectToHost(testIp, baseRoomId, port)) {
-            AppLogger.i('✅ SUCCESS! Found host at $testIp:$port', tag: 'WebRTC');
+            AppLogger.i(
+              '✅ SUCCESS! Found host at $testIp:$port',
+              tag: 'WebRTC',
+            );
             return;
           }
         }
       }
     }
-    AppLogger.i('Priority IPs exhausted, scanning full range...', tag: 'WebRTC');
-    
+    AppLogger.i(
+      'Priority IPs exhausted, scanning full range...',
+      tag: 'WebRTC',
+    );
+
     // Scan broader range (this might take a while)
-    final scanMessage = extractedPort != null 
+    final scanMessage = extractedPort != null
         ? '--- Scanning full subnet (fast - using known port $extractedPort) ---'
         : '--- Scanning full subnet range (this may take several minutes) ---';
     AppLogger.i(scanMessage, tag: 'WebRTC');
@@ -839,73 +1019,115 @@ class WebRTCFileTransferService {
       if (scanned % 50 == 0) {
         AppLogger.i('Progress: Scanned $scanned IPs...', tag: 'WebRTC');
       }
-      
+
       if (extractedPort != null) {
         // Port known - only try that port (much faster!)
         if (await _tryConnectToHost(testIp, baseRoomId, extractedPort)) {
-          AppLogger.i('✅ SUCCESS! Found host at $testIp:$extractedPort after scanning $scanned IPs', tag: 'WebRTC');
+          AppLogger.i(
+            '✅ SUCCESS! Found host at $testIp:$extractedPort after scanning $scanned IPs',
+            tag: 'WebRTC',
+          );
           return;
         }
       } else {
         // Try multiple ports on each IP
         for (int port = actualStartPort; port < actualStartPort + 10; port++) {
           if (await _tryConnectToHost(testIp, baseRoomId, port)) {
-            AppLogger.i('✅ SUCCESS! Found host at $testIp:$port after scanning $scanned IPs', tag: 'WebRTC');
+            AppLogger.i(
+              '✅ SUCCESS! Found host at $testIp:$port after scanning $scanned IPs',
+              tag: 'WebRTC',
+            );
             return;
           }
         }
       }
     }
-    
+
     AppLogger.e('═══════════════════════════════════════', tag: 'WebRTC');
     AppLogger.e('❌ Host discovery FAILED', tag: 'WebRTC');
     AppLogger.e('Scanned $scanned IPs on subnet $subnet.x', tag: 'WebRTC');
     if (extractedHostOctet != null && extractedPort != null) {
-      AppLogger.e('Tried direct connection to .$extractedHostOctet:$extractedPort', tag: 'WebRTC');
+      AppLogger.e(
+        'Tried direct connection to .$extractedHostOctet:$extractedPort',
+        tag: 'WebRTC',
+      );
     }
     if (extractedPort != null) {
       AppLogger.e('Tried port $extractedPort (from Room ID)', tag: 'WebRTC');
     } else {
-      AppLogger.e('Tried ports $actualStartPort-${actualStartPort + 9} on each IP', tag: 'WebRTC');
+      AppLogger.e(
+        'Tried ports $actualStartPort-${actualStartPort + 9} on each IP',
+        tag: 'WebRTC',
+      );
     }
     AppLogger.e('No WebRTC server found on network', tag: 'WebRTC');
     AppLogger.e('═══════════════════════════════════════', tag: 'WebRTC');
     AppLogger.e('', tag: 'WebRTC');
     AppLogger.e('🔧 Troubleshooting checklist:', tag: 'WebRTC');
-    AppLogger.e('1. Is host device connected to SAME WiFi network?', tag: 'WebRTC');
-    AppLogger.e('2. Did host successfully start the server (check host logs)?', tag: 'WebRTC');
+    AppLogger.e(
+      '1. Is host device connected to SAME WiFi network?',
+      tag: 'WebRTC',
+    );
+    AppLogger.e(
+      '2. Did host successfully start the server (check host logs)?',
+      tag: 'WebRTC',
+    );
     if (extractedHostOctet != null) {
-      AppLogger.e('3. Verify host IP ends with .$extractedHostOctet', tag: 'WebRTC');
+      AppLogger.e(
+        '3. Verify host IP ends with .$extractedHostOctet',
+        tag: 'WebRTC',
+      );
     }
     if (extractedPort != null) {
-      AppLogger.e('${extractedHostOctet != null ? "4" : "3"}. Is firewall blocking port $extractedPort on host device?', tag: 'WebRTC');
-      AppLogger.e('${extractedHostOctet != null ? "5" : "4"}. Verify Room ID is correct: $roomId', tag: 'WebRTC');
+      AppLogger.e(
+        '${extractedHostOctet != null ? "4" : "3"}. Is firewall blocking port $extractedPort on host device?',
+        tag: 'WebRTC',
+      );
+      AppLogger.e(
+        '${extractedHostOctet != null ? "5" : "4"}. Verify Room ID is correct: $roomId',
+        tag: 'WebRTC',
+      );
     } else {
-      AppLogger.e('3. Is firewall blocking ports $actualStartPort-${actualStartPort + 9} on host device?', tag: 'WebRTC');
+      AppLogger.e(
+        '3. Is firewall blocking ports $actualStartPort-${actualStartPort + 9} on host device?',
+        tag: 'WebRTC',
+      );
     }
-    AppLogger.e('${extractedPort != null ? (extractedHostOctet != null ? "6" : "5") : "4"}. Are you on a mobile hotspot with client isolation enabled?', tag: 'WebRTC');
-    AppLogger.e('${extractedPort != null ? (extractedHostOctet != null ? "7" : "6") : "5"}. Are both devices on the same subnet (check IP ranges)?', tag: 'WebRTC');
+    AppLogger.e(
+      '${extractedPort != null ? (extractedHostOctet != null ? "6" : "5") : "4"}. Are you on a mobile hotspot with client isolation enabled?',
+      tag: 'WebRTC',
+    );
+    AppLogger.e(
+      '${extractedPort != null ? (extractedHostOctet != null ? "7" : "6") : "5"}. Are both devices on the same subnet (check IP ranges)?',
+      tag: 'WebRTC',
+    );
     AppLogger.e('═══════════════════════════════════════', tag: 'WebRTC');
   }
 
   /// Try connecting to a specific IP and port, return true if successful
   Future<bool> _tryConnectToHost(String ip, String roomId, int port) async {
     try {
-      String scheme = (kIsWeb && Uri.base.scheme == 'https') ? 'wss://' : 'ws://';
+      String scheme = (kIsWeb && Uri.base.scheme == 'https')
+          ? 'wss://'
+          : 'ws://';
       final uri = '${scheme}$ip:$port/ws';
       final ws = await WsClient.connect(
         uri,
         timeout: const Duration(milliseconds: 500),
       );
-      
+
       // Successfully connected
       AppLogger.i('✓ Connected to potential host at $ip:$port', tag: 'WebRTC');
       _ws = ws;
-      _ws!.listen(_handleWsMessage, onDone: () {
-        AppLogger.i('Local WS connection closed', tag: 'WebRTC');
-      }, onError: (error) {
-        AppLogger.e('Local WS error: $error', tag: 'WebRTC');
-      });
+      _ws!.listen(
+        _handleWsMessage,
+        onDone: () {
+          AppLogger.i('Local WS connection closed', tag: 'WebRTC');
+        },
+        onError: (error) {
+          AppLogger.e('Local WS error: $error', tag: 'WebRTC');
+        },
+      );
       await _awaitLocalWsHandshake();
       AppLogger.i('✅ Handshake successful with $ip:$port', tag: 'WebRTC');
       return true;
@@ -919,7 +1141,10 @@ class WebRTCFileTransferService {
         return false;
       }
       // Unexpected socket error
-      AppLogger.w('Unexpected socket error on $ip: ${e.osError?.errorCode} - ${e.message}', tag: 'WebRTC');
+      AppLogger.w(
+        'Unexpected socket error on $ip: ${e.osError?.errorCode} - ${e.message}',
+        tag: 'WebRTC',
+      );
       return false;
     } catch (e) {
       // Other errors might be worth logging
@@ -929,15 +1154,24 @@ class WebRTCFileTransferService {
   }
 
   /// Web-only: attempt to connect using roomId-derived last octet across common subnets
-  Future<void> _discoverAndConnectToHostOnWeb(String roomId, {int startPort = 8080}) async {
+  Future<void> _discoverAndConnectToHostOnWeb(
+    String roomId, {
+    int startPort = 8080,
+  }) async {
     final extractedPort = extractPortFromRoomId(roomId);
     final extractedHostOctet = extractHostOctetFromRoomId(roomId);
     final actualStartPort = extractedPort ?? startPort;
     final baseRoomId = getBaseRoomId(roomId);
 
-    AppLogger.i('Web discovery for local host using Room ID: $roomId', tag: 'WebRTC');
+    AppLogger.i(
+      'Web discovery for local host using Room ID: $roomId',
+      tag: 'WebRTC',
+    );
     if (extractedHostOctet == null) {
-      AppLogger.e('Room ID does not include host IP octet. Cannot discover host from web. Please provide full host IP.', tag: 'WebRTC');
+      AppLogger.e(
+        'Room ID does not include host IP octet. Cannot discover host from web. Please provide full host IP.',
+        tag: 'WebRTC',
+      );
       return;
     }
 
@@ -964,7 +1198,10 @@ class WebRTCFileTransferService {
       }
     }
 
-    AppLogger.e('Web discovery failed. Provide host IP explicitly or ensure Room ID includes correct IP octet and try different common subnets.', tag: 'WebRTC');
+    AppLogger.e(
+      'Web discovery failed. Provide host IP explicitly or ensure Room ID includes correct IP octet and try different common subnets.',
+      tag: 'WebRTC',
+    );
   }
 
   /// Convenience: start local host server (if not running) and connect, returning room ID with port.
@@ -973,32 +1210,38 @@ class WebRTCFileTransferService {
     AppLogger.i('═══════════════════════════════════════', tag: 'WebRTC');
     AppLogger.i('Starting as HOST', tag: 'WebRTC');
     AppLogger.i('═══════════════════════════════════════', tag: 'WebRTC');
-    
+
     useLocalWebSocket = true;
     isLocalMode.value = true;
     _isLocalHost = true;
     isHostMode.value = true;
-    final actualPort = await enableLocalWebSocketMode(host: true, port: port); // ensures server start
-    
+    final actualPort = await enableLocalWebSocketMode(
+      host: true,
+      port: port,
+    ); // ensures server start
+
     final ip = await _detectLocalIp();
-    
+
     if (ip == null) {
       AppLogger.e('❌ Failed to detect local IP address', tag: 'WebRTC');
       AppLogger.e('Cannot start as host without valid IP', tag: 'WebRTC');
       return null;
     }
-    
+
     // Generate room ID with embedded IP and port
     final roomIdWithPort = generateRoomIdWithPort(actualPort, ip);
     _roomId = roomIdWithPort;
-    
+
     AppLogger.i('✓ Host IP: $ip', tag: 'WebRTC');
     AppLogger.i('✓ Port: $actualPort', tag: 'WebRTC');
     AppLogger.i('✓ Generated Room ID: $roomIdWithPort', tag: 'WebRTC');
     AppLogger.i('📡 Server running at ws://$ip:$actualPort/ws', tag: 'WebRTC');
-    AppLogger.i('Other devices can join using Room ID: $roomIdWithPort', tag: 'WebRTC');
+    AppLogger.i(
+      'Other devices can join using Room ID: $roomIdWithPort',
+      tag: 'WebRTC',
+    );
     AppLogger.i('═══════════════════════════════════════', tag: 'WebRTC');
-    
+
     await _connectLocalWebSocket(roomIdWithPort, hostIp: ip, port: actualPort);
     return roomIdWithPort;
   }
@@ -1011,11 +1254,13 @@ class WebRTCFileTransferService {
           _peerId = msg['id'] as String?;
           AppLogger.i('Local WS assigned peerId: $_peerId', tag: 'WebRTC');
           if (_roomId != null) {
-            _ws?.add(jsonEncode({
-              'type': 'join',
-              'roomId': _roomId,
-              'isHost': _isLocalHost,
-            }));
+            _ws?.add(
+              jsonEncode({
+                'type': 'join',
+                'roomId': _roomId,
+                'isHost': _isLocalHost,
+              }),
+            );
           }
           break;
         case 'existing-peers':
@@ -1024,8 +1269,9 @@ class WebRTCFileTransferService {
           if (hostInfo != null && !_isLocalHost) {
             AppLogger.i('Received host info: $hostInfo', tag: 'WebRTC');
           }
-          
-          final peers = (msg['peers'] as List<dynamic>).cast<Map<String, dynamic>>();
+
+          final peers = (msg['peers'] as List<dynamic>)
+              .cast<Map<String, dynamic>>();
           if (peers.isNotEmpty) {
             final targetId = peers.first['id'] as String;
             _createOffer(targetId);
@@ -1035,13 +1281,18 @@ class WebRTCFileTransferService {
           AppLogger.i('Local WS peer joined: ${msg['id']}', tag: 'WebRTC');
           break; // Offer will be created by the joining peer
         case 'offer':
-          _handleOffer(msg['from'] as String, Map<String, dynamic>.from(msg['sdp'] as Map));
+          _handleOffer(
+            msg['from'] as String,
+            Map<String, dynamic>.from(msg['sdp'] as Map),
+          );
           break;
         case 'answer':
           _handleAnswer(Map<String, dynamic>.from(msg['sdp'] as Map));
           break;
         case 'ice-candidate':
-          _handleIceCandidate(Map<String, dynamic>.from(msg['candidate'] as Map));
+          _handleIceCandidate(
+            Map<String, dynamic>.from(msg['candidate'] as Map),
+          );
           break;
         case 'peer-left':
           AppLogger.i('Local WS peer left: ${msg['id']}', tag: 'WebRTC');
@@ -1053,27 +1304,40 @@ class WebRTCFileTransferService {
     }
   }
 
-  Future<void> _awaitLocalWsHandshake({Duration timeout = const Duration(seconds: 5)}) async {
+  Future<void> _awaitLocalWsHandshake({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
     final start = DateTime.now();
     while (_peerId == null && DateTime.now().difference(start) < timeout) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
     if (_peerId == null) {
-      AppLogger.e('Local WS handshake (welcome) not received within ${timeout.inSeconds}s. Verify host started server or port blocked.', tag: 'WebRTC');
+      AppLogger.e(
+        'Local WS handshake (welcome) not received within ${timeout.inSeconds}s. Verify host started server or port blocked.',
+        tag: 'WebRTC',
+      );
     } else {
-      AppLogger.i('Local WS handshake complete (peerId=$_peerId)', tag: 'WebRTC');
+      AppLogger.i(
+        'Local WS handshake complete (peerId=$_peerId)',
+        tag: 'WebRTC',
+      );
     }
   }
 
   Future<String?> _detectLocalIp() async {
     // On web, we cannot detect local IP using NetworkInterface
     if (kIsWeb) {
-      AppLogger.w('Local IP detection not available on web platform', tag: 'WebRTC');
+      AppLogger.w(
+        'Local IP detection not available on web platform',
+        tag: 'WebRTC',
+      );
       return null;
     }
-    
+
     try {
-      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      );
       for (final iface in interfaces) {
         for (final addr in iface.addresses) {
           if (!_isLoopback(addr.address) && _isPrivateIp(addr.address)) {
@@ -1088,7 +1352,6 @@ class WebRTCFileTransferService {
   }
 
   bool _isLoopback(String ip) => ip.startsWith('127.') || ip == '::1';
-
 
   /// Check if this is the polite peer (backs off during collisions)
   bool _isPolite(String peerSocketId) {
@@ -1134,13 +1397,15 @@ class WebRTCFileTransferService {
         tag: 'WebRTC',
       );
       if (useLocalWebSocket) {
-        _ws?.add(jsonEncode({
-          'type': 'offer',
-          'roomId': _roomId,
-          'to': targetSocketId,
-          'from': _peerId,
-          'sdp': offer.toMap(),
-        }));
+        _ws?.add(
+          jsonEncode({
+            'type': 'offer',
+            'roomId': _roomId,
+            'to': targetSocketId,
+            'from': _peerId,
+            'sdp': offer.toMap(),
+          }),
+        );
       } else {
         _socket?.emit('offer', {
           'roomId': _roomId,
@@ -1201,7 +1466,8 @@ class WebRTCFileTransferService {
       _dataChannel = await _peerConnection!.createDataChannel(
         'file-transfer',
         RTCDataChannelInit()
-          ..ordered = true,
+          ..ordered = false
+          ..maxRetransmits = 2,
       );
       AppLogger.i('Created data channel (reliable unordered)', tag: 'WebRTC');
       _setupDataChannel(_dataChannel!);
@@ -1216,13 +1482,15 @@ class WebRTCFileTransferService {
           tag: 'WebRTC',
         );
         if (useLocalWebSocket) {
-          _ws?.add(jsonEncode({
-            'type': 'ice-candidate',
-            'roomId': _roomId,
-            'to': peerSocketId,
-            'from': _peerId,
-            'candidate': candidate.toMap(),
-          }));
+          _ws?.add(
+            jsonEncode({
+              'type': 'ice-candidate',
+              'roomId': _roomId,
+              'to': peerSocketId,
+              'from': _peerId,
+              'candidate': candidate.toMap(),
+            }),
+          );
         } else {
           _socket?.emit('ice-candidate', {
             'roomId': _roomId,
@@ -1299,13 +1567,15 @@ class WebRTCFileTransferService {
         tag: 'WebRTC',
       );
       if (useLocalWebSocket) {
-        _ws?.add(jsonEncode({
-          'type': 'answer',
-          'roomId': _roomId,
-          'to': fromSocketId,
-          'from': _peerId,
-          'sdp': answer.toMap(),
-        }));
+        _ws?.add(
+          jsonEncode({
+            'type': 'answer',
+            'roomId': _roomId,
+            'to': fromSocketId,
+            'from': _peerId,
+            'sdp': answer.toMap(),
+          }),
+        );
       } else {
         _socket?.emit('answer', {
           'roomId': _roomId,
@@ -1373,7 +1643,9 @@ class WebRTCFileTransferService {
     await _ensureDataChannelOpen();
 
     if (kIsWeb) {
-      throw UnsupportedError('sendFile() with file path is not supported on web. Use sendFileBytes() instead.');
+      throw UnsupportedError(
+        'sendFile() with file path is not supported on web. Use sendFileBytes() instead.',
+      );
     }
 
     try {
@@ -1406,7 +1678,7 @@ class WebRTCFileTransferService {
       _dataChannel!.send(RTCDataChannelMessage(jsonEncode(metadata)));
 
       // Send file data in chunks with backpressure + stall detection + credit-based flow control
-      const chunkSize = 16 * 1024; // 16KB chunks
+      const chunkSize = 64 * 1024; // 64KB chunks
       const highWaterMark = 1024 * 1024; // 1MB buffer threshold
       var sentBytes = 0;
       // Stall detection while waiting on bufferedAmount/credits (300s for slow networks)
@@ -1430,7 +1702,10 @@ class WebRTCFileTransferService {
             final name = fileName;
             _resetSendState();
             onFileTransferError?.call(
-                name, 'Sender stalled: no receiver acks for ${stallTimeout.inSeconds}s', true);
+              name,
+              'Sender stalled: no receiver acks for ${stallTimeout.inSeconds}s',
+              true,
+            );
             throw Exception('WebRTC send stalled (no acks)');
           }
           await Future.delayed(const Duration(milliseconds: 2));
@@ -1448,12 +1723,18 @@ class WebRTCFileTransferService {
               final name = fileName;
               _resetSendState();
               onFileTransferError?.call(
-                  name, 'Sender stalled: no drain for ${stallTimeout.inSeconds}s', true);
+                name,
+                'Sender stalled: no drain for ${stallTimeout.inSeconds}s',
+                true,
+              );
               throw Exception('WebRTC send stalled');
             }
           }
           if (DateTime.now().second % 10 == 0) {
-            AppLogger.i('Waiting: bufferedAmount=$currentBuffered (> $highWaterMark)', tag: 'WebRTC');
+            AppLogger.i(
+              'Waiting: bufferedAmount=$currentBuffered (> $highWaterMark)',
+              tag: 'WebRTC',
+            );
           }
           await Future.delayed(const Duration(milliseconds: 100));
         }
@@ -1476,15 +1757,17 @@ class WebRTCFileTransferService {
         sentBytes += chunk.length;
         _totalBytesTransferred += chunk.length;
         transferProgress.value = sentBytes / fileSize;
-        
+
         // Calculate transfer speed
         if (_transferStartTime != null) {
-          final elapsed = DateTime.now().difference(_transferStartTime!).inMilliseconds;
+          final elapsed = DateTime.now()
+              .difference(_transferStartTime!)
+              .inMilliseconds;
           if (elapsed > 0) {
             transferSpeed.value = (_totalBytesTransferred * 1000.0) / elapsed;
           }
         }
-        
+
         onFileSendProgress?.call(fileName, sentBytes.toInt(), fileSize);
         // Adaptive pacing based on current bufferedAmount
         final b = _dataChannel!.bufferedAmount ?? 0;
@@ -1509,22 +1792,31 @@ class WebRTCFileTransferService {
       // CRITICAL: Wait for all buffered data to be sent before completion message
       // The data channel buffers data, so we need to wait until bufferedAmount is 0
       final initialBuffered = _dataChannel!.bufferedAmount ?? 0;
-      AppLogger.i('Waiting for data channel to flush (bufferedAmount: $initialBuffered)...', tag: 'WebRTC');
-      
+      AppLogger.i(
+        'Waiting for data channel to flush (bufferedAmount: $initialBuffered)...',
+        tag: 'WebRTC',
+      );
+
       // Wait with timeout (60 seconds max for large files)
       final flushStartTime = DateTime.now();
       const maxFlushWait = Duration(seconds: 60);
       while ((_dataChannel!.bufferedAmount ?? 0) > 0) {
         if (DateTime.now().difference(flushStartTime) > maxFlushWait) {
           final remaining = _dataChannel!.bufferedAmount ?? 0;
-          AppLogger.w('Flush timeout after 60s, remaining buffer: $remaining bytes', tag: 'WebRTC');
+          AppLogger.w(
+            'Flush timeout after 60s, remaining buffer: $remaining bytes',
+            tag: 'WebRTC',
+          );
           break;
         }
         await Future.delayed(const Duration(milliseconds: 100));
       }
-      
+
       final finalBuffered = _dataChannel!.bufferedAmount ?? 0;
-      AppLogger.i('Data channel flushed (remaining: $finalBuffered), sending completion message', tag: 'WebRTC');
+      AppLogger.i(
+        'Data channel flushed (remaining: $finalBuffered), sending completion message',
+        tag: 'WebRTC',
+      );
 
       // Send completion message
       final completion = {'type': 'file-complete', 'fileName': fileName};
@@ -1551,7 +1843,9 @@ class WebRTCFileTransferService {
     } catch (e) {
       AppLogger.e('Failed to send file: $e', tag: 'WebRTC');
       // Surface error if available
-      final name = _currentSendFilePath != null ? p.basename(_currentSendFilePath!) : (currentFileName.value ?? 'unknown');
+      final name = _currentSendFilePath != null
+          ? p.basename(_currentSendFilePath!)
+          : (currentFileName.value ?? 'unknown');
       _resetSendState();
       onFileTransferError?.call(name, e.toString(), true);
       rethrow;
@@ -1613,7 +1907,10 @@ class WebRTCFileTransferService {
           if (DateTime.now().difference(waitStart) > stallTimeout) {
             _resetSendState();
             onFileTransferError?.call(
-                fileName, 'Sender stalled: no receiver acks for ${stallTimeout.inSeconds}s', true);
+              fileName,
+              'Sender stalled: no receiver acks for ${stallTimeout.inSeconds}s',
+              true,
+            );
             throw Exception('WebRTC send stalled (no acks)');
           }
           await Future.delayed(const Duration(milliseconds: 2));
@@ -1630,12 +1927,18 @@ class WebRTCFileTransferService {
             if (DateTime.now().difference(stallSince) > stallTimeout) {
               _resetSendState();
               onFileTransferError?.call(
-                  fileName, 'Sender stalled: no drain for ${stallTimeout.inSeconds}s', true);
+                fileName,
+                'Sender stalled: no drain for ${stallTimeout.inSeconds}s',
+                true,
+              );
               throw Exception('WebRTC send stalled');
             }
           }
           if (DateTime.now().second % 10 == 0) {
-            AppLogger.i('Waiting: bufferedAmount=$currentBuffered (> $highWaterMark)', tag: 'WebRTC');
+            AppLogger.i(
+              'Waiting: bufferedAmount=$currentBuffered (> $highWaterMark)',
+              tag: 'WebRTC',
+            );
           }
           await Future.delayed(const Duration(milliseconds: 100));
         }
@@ -1658,15 +1961,17 @@ class WebRTCFileTransferService {
         sentBytes += chunk.length;
         _totalBytesTransferred += chunk.length;
         transferProgress.value = sentBytes / fileSize;
-        
+
         // Calculate transfer speed
         if (_transferStartTime != null) {
-          final elapsed = DateTime.now().difference(_transferStartTime!).inMilliseconds;
+          final elapsed = DateTime.now()
+              .difference(_transferStartTime!)
+              .inMilliseconds;
           if (elapsed > 0) {
             transferSpeed.value = (_totalBytesTransferred * 1000.0) / elapsed;
           }
         }
-        
+
         onFileSendProgress?.call(fileName, sentBytes.toInt(), fileSize);
         // Adaptive pacing based on current bufferedAmount
         final b = _dataChannel!.bufferedAmount ?? 0;
@@ -1686,26 +1991,38 @@ class WebRTCFileTransferService {
       }
 
       // Log completion of sending all chunks (web)
-      AppLogger.i('All chunks sent (web): $sentBytes/$fileSize bytes', tag: 'WebRTC');
+      AppLogger.i(
+        'All chunks sent (web): $sentBytes/$fileSize bytes',
+        tag: 'WebRTC',
+      );
 
       // CRITICAL: Wait for all buffered data to be sent before completion message
       final initialBuffered = _dataChannel!.bufferedAmount ?? 0;
-      AppLogger.i('Waiting for data channel to flush (bufferedAmount: $initialBuffered)...', tag: 'WebRTC');
-      
+      AppLogger.i(
+        'Waiting for data channel to flush (bufferedAmount: $initialBuffered)...',
+        tag: 'WebRTC',
+      );
+
       // Wait with timeout (60 seconds max for large files)
       final flushStartTime = DateTime.now();
       const maxFlushWait = Duration(seconds: 60);
       while ((_dataChannel!.bufferedAmount ?? 0) > 0) {
         if (DateTime.now().difference(flushStartTime) > maxFlushWait) {
           final remaining = _dataChannel!.bufferedAmount ?? 0;
-          AppLogger.w('Flush timeout after 60s, remaining buffer: $remaining bytes', tag: 'WebRTC');
+          AppLogger.w(
+            'Flush timeout after 60s, remaining buffer: $remaining bytes',
+            tag: 'WebRTC',
+          );
           break;
         }
         await Future.delayed(const Duration(milliseconds: 100));
       }
-      
+
       final finalBuffered = _dataChannel!.bufferedAmount ?? 0;
-      AppLogger.i('Data channel flushed (remaining: $finalBuffered), sending completion message', tag: 'WebRTC');
+      AppLogger.i(
+        'Data channel flushed (remaining: $finalBuffered), sending completion message',
+        tag: 'WebRTC',
+      );
 
       // Send completion message
       final completion = {'type': 'file-complete', 'fileName': fileName};
@@ -1761,9 +2078,11 @@ class WebRTCFileTransferService {
           isTransferring.value) {
         final name = currentFileName.value ?? 'unknown';
         onFileTransferError?.call(
-            name, 'Data channel closed during transfer',
-            // If we are sending, treat as send; else receive
-            _currentSendFileSize > 0);
+          name,
+          'Data channel closed during transfer',
+          // If we are sending, treat as send; else receive
+          _currentSendFileSize > 0,
+        );
       }
     };
 
@@ -1879,26 +2198,42 @@ class WebRTCFileTransferService {
     try {
       // Extract offset from first 8 bytes (2x uint32 big endian)
       if (chunkData.length < 8) {
-        AppLogger.e('Invalid binary chunk: too small (${chunkData.length} bytes)', tag: 'WebRTC');
+        AppLogger.e(
+          'Invalid binary chunk: too small (${chunkData.length} bytes)',
+          tag: 'WebRTC',
+        );
         return;
       }
-      final byteData = ByteData.view(chunkData.buffer, chunkData.offsetInBytes, chunkData.lengthInBytes);
+      final byteData = ByteData.view(
+        chunkData.buffer,
+        chunkData.offsetInBytes,
+        chunkData.lengthInBytes,
+      );
       // Reconstruct 64-bit offset from two 32-bit values (high, low)
       final offsetHigh = byteData.getUint32(0, Endian.big);
       final offsetLow = byteData.getUint32(4, Endian.big);
       final offset = (offsetHigh << 32) | offsetLow;
-      final actualData = Uint8List.view(chunkData.buffer, chunkData.offsetInBytes + 8, chunkData.lengthInBytes - 8);
-      
+      final actualData = Uint8List.view(
+        chunkData.buffer,
+        chunkData.offsetInBytes + 8,
+        chunkData.lengthInBytes - 8,
+      );
+
       // Track actual received bytes (chunk size, not offset)
       _receivedBytes += actualData.length;
       _totalBytesTransferred += actualData.length;
-      
+
       // Log progress every 10MB for large files
-      if (_expectedFileSize > 50 * 1024 * 1024 && _receivedBytes % (10 * 1024 * 1024) < actualData.length) {
-        final percent = (_receivedBytes / _expectedFileSize * 100).toStringAsFixed(1);
-        AppLogger.i('Receive progress: $_receivedBytes/$_expectedFileSize bytes ($percent%)', tag: 'WebRTC');
+      if (_expectedFileSize > 50 * 1024 * 1024 &&
+          _receivedBytes % (10 * 1024 * 1024) < actualData.length) {
+        final percent = (_receivedBytes / _expectedFileSize * 100)
+            .toStringAsFixed(1);
+        AppLogger.i(
+          'Receive progress: $_receivedBytes/$_expectedFileSize bytes ($percent%)',
+          tag: 'WebRTC',
+        );
       }
-      
+
       if (kIsWeb) {
         // For web, we need to maintain ordered parts for corruption-free assembly
         // Store chunk with its offset for later ordered reconstruction
@@ -1915,9 +2250,12 @@ class WebRTCFileTransferService {
 
       // Calculate transfer speed
       if (_transferStartTime != null) {
-        final elapsed = DateTime.now().difference(_transferStartTime!).inMilliseconds;
+        final elapsed = DateTime.now()
+            .difference(_transferStartTime!)
+            .inMilliseconds;
         if (elapsed > 0) {
-          transferSpeed.value = (_totalBytesTransferred * 1000.0) / elapsed; // bytes per second
+          transferSpeed.value =
+              (_totalBytesTransferred * 1000.0) / elapsed; // bytes per second
         }
       }
 
@@ -1938,10 +2276,15 @@ class WebRTCFileTransferService {
         _dataChannel?.send(RTCDataChannelMessage(jsonEncode(ack)));
         _chunksSinceAck = 0;
       }
-      
+
       // Auto-complete if all bytes received (in case completion message arrives early or is lost)
-      if (_receivedBytes >= _expectedFileSize && _expectedFileSize > 0 && !_isCompleting) {
-        AppLogger.i('All bytes received ($_receivedBytes/$_expectedFileSize), completing transfer', tag: 'WebRTC');
+      if (_receivedBytes >= _expectedFileSize &&
+          _expectedFileSize > 0 &&
+          !_isCompleting) {
+        AppLogger.i(
+          'All bytes received ($_receivedBytes/$_expectedFileSize), completing transfer',
+          tag: 'WebRTC',
+        );
         // Trigger completion handling
         _handleFileComplete({});
       }
@@ -1956,22 +2299,28 @@ class WebRTCFileTransferService {
 
     try {
       _cancelReceiveInactivityWatch();
-      
+
       // Verify all bytes received before completing
       if (_receivedBytes < _expectedFileSize) {
         final missing = _expectedFileSize - _receivedBytes;
-        final percentReceived = (_receivedBytes / _expectedFileSize * 100).toStringAsFixed(2);
+        final percentReceived = (_receivedBytes / _expectedFileSize * 100)
+            .toStringAsFixed(2);
         AppLogger.w(
           'File completion received but missing $missing bytes ($_receivedBytes/$_expectedFileSize = $percentReceived%)',
           tag: 'WebRTC',
         );
         // Don't complete yet - wait for remaining chunks
         // Set a timeout based on file size (larger files get more time)
-        final timeoutSeconds = (_expectedFileSize > 100 * 1024 * 1024) ? 30 : 10; // 30s for files > 100MB
+        final timeoutSeconds = (_expectedFileSize > 100 * 1024 * 1024)
+            ? 30
+            : 10; // 30s for files > 100MB
         Future.delayed(Duration(seconds: timeoutSeconds), () {
-          if (_receivedBytes < _expectedFileSize && _expectedFileName != null && !_isCompleting) {
+          if (_receivedBytes < _expectedFileSize &&
+              _expectedFileName != null &&
+              !_isCompleting) {
             final finalMissing = _expectedFileSize - _receivedBytes;
-            final finalPercent = (_receivedBytes / _expectedFileSize * 100).toStringAsFixed(2);
+            final finalPercent = (_receivedBytes / _expectedFileSize * 100)
+                .toStringAsFixed(2);
             AppLogger.e(
               'File transfer incomplete after ${timeoutSeconds}s timeout: $_expectedFileName - '
               'Missing $finalMissing bytes ($finalPercent% received)',
@@ -1994,20 +2343,23 @@ class WebRTCFileTransferService {
         });
         return;
       }
-      
+
       // Mark as completing to prevent duplicate calls
       _isCompleting = true;
-      
+
       String? filePath;
       final isWeb = kIsWeb;
       final bytes = (!isWeb && _receiveBuffer != null)
           ? Uint8List.view(_receiveBuffer!.buffer, 0, _expectedFileSize)
           : Uint8List(0);
-      
+
       if (isWeb) {
         final parts = _webReceivedParts ?? <Uint8List>[];
         final total = _receivedBytes;
-        AppLogger.i('File received on web: ${_expectedFileName!}, $total bytes in ${parts.length} parts', tag: 'WebRTC');
+        AppLogger.i(
+          'File received on web: ${_expectedFileName!}, $total bytes in ${parts.length} parts',
+          tag: 'WebRTC',
+        );
 
         isTransferring.value = false;
         transferProgress.value = 1.0;
@@ -2043,7 +2395,10 @@ class WebRTCFileTransferService {
       );
 
       if (kIsWeb) {
-        AppLogger.i('File received: $_expectedFileName (web download ready)', tag: 'WebRTC');
+        AppLogger.i(
+          'File received: $_expectedFileName (web download ready)',
+          tag: 'WebRTC',
+        );
       } else {
         AppLogger.i('File received and saved: $filePath', tag: 'WebRTC');
       }
@@ -2076,7 +2431,10 @@ class WebRTCFileTransferService {
         t.cancel();
         final name = _expectedFileName ?? (currentFileName.value ?? 'unknown');
         onFileTransferError?.call(
-            name, 'Receiver stalled: no data for ${threshold.inSeconds}s', false);
+          name,
+          'Receiver stalled: no data for ${threshold.inSeconds}s',
+          false,
+        );
         // Reset receive state
         isTransferring.value = false;
         transferProgress.value = 0.0;
@@ -2143,7 +2501,10 @@ class WebRTCFileTransferService {
   Future<void> logSelectedIceRoute() async {
     final pc = _peerConnection;
     if (pc == null) {
-      AppLogger.e('Cannot log ICE route: peer connection is null', tag: 'WebRTC');
+      AppLogger.e(
+        'Cannot log ICE route: peer connection is null',
+        tag: 'WebRTC',
+      );
       return;
     }
     try {
@@ -2152,14 +2513,18 @@ class WebRTCFileTransferService {
       final candidates = <String, Map<String, dynamic>>{};
       // Collect candidate reports
       for (final report in stats) {
-        if (report.type == 'local-candidate' || report.type == 'remote-candidate' || report.type == 'candidate') {
+        if (report.type == 'local-candidate' ||
+            report.type == 'remote-candidate' ||
+            report.type == 'candidate') {
           final mapValues = Map<String, dynamic>.from(report.values);
           candidates[report.id] = mapValues;
         }
       }
       // Find selected pair
       for (final report in stats) {
-        if (report.type == 'candidate-pair' && (report.values['selected'] == true || report.values['state'] == 'succeeded')) {
+        if (report.type == 'candidate-pair' &&
+            (report.values['selected'] == true ||
+                report.values['state'] == 'succeeded')) {
           selectedPair = Map<String, dynamic>.from(report.values);
           break;
         }
@@ -2177,7 +2542,10 @@ class WebRTCFileTransferService {
       final localType = local['candidateType'];
       final remoteType = remote['candidateType'];
       final isLan = _isPrivateIp('$localAddr') && _isPrivateIp('$remoteAddr');
-      AppLogger.i('Selected ICE route => local($localType $localAddr) <-> remote($remoteType $remoteAddr) | LAN: $isLan', tag: 'WebRTC');
+      AppLogger.i(
+        'Selected ICE route => local($localType $localAddr) <-> remote($remoteType $remoteAddr) | LAN: $isLan',
+        tag: 'WebRTC',
+      );
     } catch (e) {
       AppLogger.e('Failed to log ICE route: $e', tag: 'WebRTC');
     }
@@ -2189,7 +2557,8 @@ class WebRTCFileTransferService {
         ip.startsWith('192.168.') ||
         _startsWith172Private(ip) ||
         ip.startsWith('169.254.') || // link-local
-        ip == '::1' || ip.startsWith('fe80:'); // IPv6 loopback/link-local
+        ip == '::1' ||
+        ip.startsWith('fe80:'); // IPv6 loopback/link-local
   }
 
   bool _startsWith172Private(String ip) {
@@ -2214,7 +2583,9 @@ class WebRTCFileTransferService {
   }
 
   /// Ensure the RTCDataChannel is open before attempting to send
-  Future<void> _ensureDataChannelOpen({Duration timeout = const Duration(seconds: 10)}) async {
+  Future<void> _ensureDataChannelOpen({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     final dc = _dataChannel;
     if (dc == null) {
       throw Exception('WebRTC data channel not available');

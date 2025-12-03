@@ -103,9 +103,11 @@ class _HomeWrapperState extends State<HomeWrapper> {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('device_name');
     if (name != null && name.isNotEmpty) {
-      setState(() {
-        _deviceName = name;
-      });
+      if (mounted) {
+        setState(() {
+          _deviceName = name;
+        });
+      }
       // Create discovery service once we have the device name
       _initializeDiscoveryService(name);
     } else {
@@ -256,23 +258,29 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
       }
     }
     
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _checkPermissions() async {
-    setState(() {
-      _isCheckingPermissions = true;
-      _locationServiceDisabled = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isCheckingPermissions = true;
+        _locationServiceDisabled = false;
+      });
+    }
 
     // Check if location services are enabled
     final serviceEnabled = await AppPermissions.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      setState(() {
-        _locationServiceDisabled = true;
-        _permissionsGranted = false;
-        _isCheckingPermissions = false;
-      });
+      if (mounted) {
+        setState(() {
+          _locationServiceDisabled = true;
+          _permissionsGranted = false;
+          _isCheckingPermissions = false;
+        });
+      }
       return;
     }
 
@@ -284,10 +292,12 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
       await LocalNetworkPermissionHelper.requestPermission();
     }
 
-    setState(() {
-      _permissionsGranted = granted;
-      _isCheckingPermissions = false;
-    });
+    if (mounted) {
+      setState(() {
+        _permissionsGranted = granted;
+        _isCheckingPermissions = false;
+      });
+    }
   }
 
   Future<String?> _getDeviceName() async {

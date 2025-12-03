@@ -23,8 +23,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Permission to install APK files from unknown sources -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- For Android 12+ nearby devices permission required for WiFi hotspot -->
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <!-- For Android 12+ (API 31+) nearby devices permission required for WiFi hotspot -->
+    <!-- For Android 13+ (API 33+), the neverForLocation flag indicates this is not for location -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        android:minSdkVersion="33" />
     
     <application
         android:label="cpft"
