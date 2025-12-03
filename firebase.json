@@ -1,1 +1,93 @@
-{"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"flutter":{"platforms":{"android":{"default":{"projectId":"cpft-bf8a0","appId":"1:962041178714:android:720015f37599a0bbac4663","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"cpft-bf8a0","appId":"1:962041178714:ios:bda046e250af0e68ac4663","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"cpft-bf8a0","appId":"1:962041178714:ios:bda046e250af0e68ac4663","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"cpft-bf8a0","configurations":{"android":"1:962041178714:android:720015f37599a0bbac4663","ios":"1:962041178714:ios:bda046e250af0e68ac4663","macos":"1:962041178714:ios:bda046e250af0e68ac4663","web":"1:962041178714:web:347cdb1f39624971ac4663","windows":"1:962041178714:web:db22eb94d9102b2dac4663"}}}}}}
+{
+    "hosting": {
+        "public": "build/web",
+        "ignore": [
+            "firebase.json",
+            "**/.*",
+            "**/node_modules/**"
+        ],
+        "headers": [
+            {
+                "source": "/index.html",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    }
+                ]
+            },
+            {
+                "source": "/flutter_service_worker.js",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    }
+                ]
+            },
+            {
+                "source": "/assets/**",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "public, max-age=31536000, immutable"
+                    }
+                ]
+            },
+            {
+                "source": "/main.dart.js",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "public, max-age=31536000, immutable"
+                    }
+                ]
+            }
+        ],
+        "rewrites": [
+            {
+                "source": "**",
+                "destination": "/index.html"
+            }
+        ]
+    },
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "cpft-bf8a0",
+                    "appId": "1:962041178714:android:720015f37599a0bbac4663",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "ios": {
+                "default": {
+                    "projectId": "cpft-bf8a0",
+                    "appId": "1:962041178714:ios:bda046e250af0e68ac4663",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "ios/Runner/GoogleService-Info.plist"
+                }
+            },
+            "macos": {
+                "default": {
+                    "projectId": "cpft-bf8a0",
+                    "appId": "1:962041178714:ios:bda046e250af0e68ac4663",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "macos/Runner/GoogleService-Info.plist"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "cpft-bf8a0",
+                    "configurations": {
+                        "android": "1:962041178714:android:720015f37599a0bbac4663",
+                        "ios": "1:962041178714:ios:bda046e250af0e68ac4663",
+                        "macos": "1:962041178714:ios:bda046e250af0e68ac4663",
+                        "web": "1:962041178714:web:347cdb1f39624971ac4663",
+                        "windows": "1:962041178714:web:db22eb94d9102b2dac4663"
+                    }
+                }
+            }
+        }
+    }
+}
