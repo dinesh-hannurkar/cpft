@@ -151,9 +151,9 @@ class _WebShareScreenState extends State<WebShareScreen>
       },
       onFileReceiveProgress: (filename, received, total) {
         if (!mounted) return;
-        debugPrint(
-          '[WebShareScreen] WebRTC receive progress: $filename - $received/$total bytes',
-        );
+        // debugPrint(
+        //   '[WebShareScreen] WebRTC receive progress: $filename - $received/$total bytes',
+        // );
         setState(() {
           _uploadProgress[filename] = UploadProgress(
             filename: filename,
@@ -214,9 +214,9 @@ class _WebShareScreenState extends State<WebShareScreen>
       },
       onFileSendProgress: (filename, sent, total) {
         if (!mounted) return;
-        debugPrint(
-          '[WebShareScreen] WebRTC send progress: $filename - $sent/$total bytes',
-        );
+        // debugPrint(
+        //   '[WebShareScreen] WebRTC send progress: $filename - $sent/$total bytes',
+        // );
         setState(() {
           _uploadProgress[filename] = UploadProgress(
             filename: filename,

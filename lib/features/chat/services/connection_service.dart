@@ -501,13 +501,8 @@ class ConnectionService {
               if (incoming == null) {
                 debugPrint('[ConnectionService] ⚠️ No state for transfer ${chunk.transferId}');
               } else {
-                if (chunk.index != incoming.nextIndex) {
-                  debugPrint('[ConnectionService] ⚠️ Unexpected chunk index ${chunk.index} expected ${incoming.nextIndex}');
-                }
-                final bytes = base64Decode(chunk.dataBase64);
-                await incoming.sink.writeFrom(bytes);
-                incoming.receivedBytes += bytes.length;
-                incoming.nextIndex = chunk.index + 1;
+                await incoming.processChunk(chunk);
+
                 // Emit progress update for UI
                 _notifyMessageListeners(DeviceMessage(
                   type: 'file_progress',
@@ -522,6 +517,21 @@ class ConnectionService {
                   },
                 ));
                 if (chunk.isLast) {
+                  debugPrint('[ConnectionService] 📍 Final chunk received for transfer ${chunk.transferId}, waiting for all chunks...');
+
+                  // Wait longer to ensure all buffered chunks are processed
+                  // With parallel channels, chunks can arrive significantly out of order
+                  await Future.delayed(const Duration(seconds: 10));
+
+                  // Check if all chunks have been received and processed
+                  if (!incoming.isComplete()) {
+                    debugPrint('[ConnectionService] ⚠️ Final chunk received but transfer ${chunk.transferId} is not complete. Buffered chunks remaining: ${incoming._chunkBuffer.length}');
+                    debugPrint('[ConnectionService] 📊 Buffer contents: ${incoming._chunkBuffer.keys.toList()}');
+                    // Don't complete yet, wait for more chunks
+                    continue;
+                  }
+
+                  debugPrint('[ConnectionService] ✅ All chunks received and processed for transfer ${chunk.transferId}');
                   await incoming.sink.flush();
                   await incoming.sink.close();
                   // Hash verify
@@ -567,9 +577,14 @@ class ConnectionService {
                     title: 'File Received',
                     body: 'Successfully received ${incoming.offer.fileName}',
                   );
+
+                  // Send final completion ack
+                  final completionAck = FileAck(transferId: chunk.transferId, nextExpectedIndex: chunk.index + 1, completed: true);
+                  await sendMessage(DeviceMessage(type: 'file_ack', content: jsonEncode(completionAck.toJson()), senderName: deviceName));
                 }
               }
-              final ack = FileAck(transferId: chunk.transferId, nextExpectedIndex: chunk.index + 1, completed: chunk.isLast);
+              // Send ack for this chunk (never completed here - completion ack sent after processing)
+              final ack = FileAck(transferId: chunk.transferId, nextExpectedIndex: chunk.index + 1, completed: false);
               await sendMessage(DeviceMessage(type: 'file_ack', content: jsonEncode(ack.toJson()), senderName: deviceName));
             } catch (e) {
               debugPrint('[ConnectionService] ⚠️ Failed to parse file_chunk: $e');
@@ -1058,6 +1073,7 @@ class _IncomingFile {
   final RandomAccessFile sink;
   int receivedBytes;
   int nextIndex;
+  final Map<int, Uint8List> _chunkBuffer = {}; // Buffer for out-of-order chunks
 
   _IncomingFile({
     required this.offer,
@@ -1066,6 +1082,39 @@ class _IncomingFile {
     required this.receivedBytes,
     required this.nextIndex,
   });
+
+  // Process a chunk, handling out-of-order arrival
+  Future<void> processChunk(FileChunk chunk) async {
+    final bytes = base64Decode(chunk.dataBase64);
+
+    if (chunk.index == nextIndex) {
+      // This is the expected chunk, write it immediately
+      await sink.writeFrom(bytes);
+      receivedBytes += bytes.length;
+      nextIndex++;
+
+      // Write any buffered chunks that are now in sequence
+      while (_chunkBuffer.containsKey(nextIndex)) {
+        final bufferedBytes = _chunkBuffer.remove(nextIndex)!;
+        await sink.writeFrom(bufferedBytes);
+        receivedBytes += bufferedBytes.length;
+        nextIndex++;
+      }
+      debugPrint('[ConnectionService] ✅ Processed chunk ${chunk.index}, next expected: $nextIndex, buffered: ${_chunkBuffer.length}');
+    } else if (chunk.index > nextIndex) {
+      // Future chunk, buffer it
+      _chunkBuffer[chunk.index] = bytes;
+      debugPrint('[ConnectionService] 📦 Buffered chunk ${chunk.index} for transfer (expecting $nextIndex), buffer size: ${_chunkBuffer.length}');
+    } else {
+      // Duplicate or past chunk, ignore
+      debugPrint('[ConnectionService] ⚠️ Ignoring duplicate/past chunk ${chunk.index} (expecting $nextIndex)');
+    }
+  }
+
+  // Check if transfer is complete (all chunks received up to the final marker)
+  bool isComplete() {
+    return _chunkBuffer.isEmpty; // All chunks should be written when buffer is empty
+  }
 }
 
 class _OutgoingTransfer {

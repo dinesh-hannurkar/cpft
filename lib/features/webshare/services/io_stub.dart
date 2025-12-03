@@ -68,6 +68,24 @@ class HttpStatus {
   static const int internalServerError = 500;
 }
 
+// Stub for RandomAccessFile (not available on web)
+class RandomAccessFile {
+  Future<void> writeFrom(List<int> buffer, [int start = 0, int? end]) async {
+    throw UnsupportedError('RandomAccessFile is not supported on web');
+  }
+  
+  Future<void> flush() async {
+    throw UnsupportedError('RandomAccessFile is not supported on web');
+  }
+  
+  Future<void> close() async {}
+}
+
+// Stub for FileMode (not available on web)
+class FileMode {
+  static const FileMode write = FileMode._();
+  const FileMode._();
+}
 class NetworkInterface {
   static Future<List<NetworkInterface>> list({InternetAddressType? type, bool includeLinkLocal = false}) {
     return Future.value([]);

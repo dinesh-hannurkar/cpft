@@ -1,8 +1,9 @@
 // ignore_for_file: unused_field
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io'
+import 'dart:io' as io
     if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -16,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:cpft/features/webshare/services/websocket_compat.dart';
 import 'package:cpft/features/webshare/services/web_received_cache.dart';
+import 'package:cpft/features/webshare/services/webrtc_transfer_isolate.dart';
 
 /// WebRTC-based peer-to-peer file transfer service
 class WebRTCFileTransferService {
@@ -81,7 +83,7 @@ class WebRTCFileTransferService {
   onFileTransferError;
 
   // File transfer data
-  Uint8List? _receiveBuffer; // Pre-allocated receive buffer
+  Uint8List? _receiveBuffer; // Pre-allocated receive buffer (legacy, not used with streaming)
   int _expectedFileSize = 0;
   int _receivedBytes = 0; // Number of bytes written into buffer
   String? _expectedFileName;
@@ -89,8 +91,13 @@ class WebRTCFileTransferService {
   // Receiver stall detection
   Timer? _receiveInactivityTimer;
   DateTime? _lastReceiveAt;
-  // Web-only: store received parts to avoid huge contiguous buffers
-  List<Uint8List>? _webReceivedParts;
+  // Web-only: sparse buffer to handle out-of-order chunks
+  BytesBuilder? _webReceiveBuffer;
+  final Map<int, Uint8List> _webChunkMap = {}; // offset -> chunk data for out-of-order chunks
+  int _webNextExpectedOffset = 0; // Next sequential offset we're waiting for
+  // Native-only: streaming file write (not available on web)
+  io.RandomAccessFile? _receiveFileStream;
+  String? _receiveFilePath;
 
   // Transfer speed tracking (both send and receive)
   DateTime? _transferStartTime;
@@ -106,18 +113,23 @@ class WebRTCFileTransferService {
   // Simple credit-based flow control (receiver-driven)
   int _sendCredits =
       0; // decremented on each chunk sent, incremented by receiver acks
-  int _creditWindow = 64; // initial credits; adapt within bounds
-  static const int _minCreditWindow = 32;
-  static const int _maxCreditWindow = 256;
+  int _creditWindow = 256; // Moderate window to avoid overwhelming web receivers
+  static const int _minCreditWindow = 64;
+  static const int _maxCreditWindow = 512;
+  int _receiverReceivedBytes = 0; // Track how many bytes receiver has confirmed
   // Track ACK timing to estimate simple RTT and adapt credits
   DateTime? _lastAckSentTime; // receiver side
   DateTime? _lastAckReceivedTime; // sender side
   double _smoothedRttMs = 0; // simple EWMA
   static const double _rttAlpha = 0.2; // smoothing factor
   // Chunk sizing (adaptive)
-  int _currentChunkSize = 64 * 1024; // start at 32KB
-  static const int _minChunkSize = 8 * 1024;
-  static const int _maxChunkSize = 128 * 1024;
+  int _currentChunkSize = 128 * 1024; // 128KB - good balance with ordered delivery
+  static const int _minChunkSize = 64 * 1024;
+  static const int _maxChunkSize = 256 * 1024;
+
+  // Isolate-based transfer support (experimental)
+  bool _useIsolates = false; // Enable isolate-based transfers for better performance
+  WebRTCTransferIsolate? _transferIsolate;
   int _chunksSinceAck = 0; // receiver-side: send an ack every N chunks
 
   WebRTCFileTransferService({
@@ -128,7 +140,41 @@ class WebRTCFileTransferService {
     this.onFileSendProgress,
     this.onFileSendComplete,
     this.onFileTransferError,
-  });
+    bool useIsolates = false,
+  }) {
+    _useIsolates = useIsolates;
+    if (_useIsolates) {
+      _initializeIsolates();
+    }
+  }
+
+  /// Initialize isolate-based transfer system
+  Future<void> _initializeIsolates() async {
+    _transferIsolate = WebRTCTransferIsolate(
+      onSendProgress: (fileName, bytesSent, totalBytes) {
+        transferProgress.value = totalBytes == 0 ? 0 : bytesSent / totalBytes;
+        onFileSendProgress?.call(fileName, bytesSent, totalBytes);
+      },
+      onReceiveProgress: (fileName, bytesReceived, totalBytes) {
+        transferProgress.value = totalBytes == 0 ? 0 : bytesReceived / totalBytes;
+        onFileReceiveProgress?.call(fileName, bytesReceived, totalBytes);
+      },
+      onSendComplete: (fileName, filePath, fileSize) {
+        isTransferring.value = false;
+        transferProgress.value = 1.0;
+        transferSpeed.value = 0.0;
+        onFileSendComplete?.call(fileName, filePath, fileSize);
+      },
+      onReceiveComplete: (fileName, savedPath) {
+        onFileReceiveComplete?.call(fileName, savedPath);
+      },
+      onTransferError: (fileName, reason, duringSend) {
+        onFileTransferError?.call(fileName, reason, duringSend);
+      },
+    );
+
+    AppLogger.i('Isolate-based transfers enabled', tag: 'WebRTC');
+  }
 
   bool get isInitialized => _isInitialized;
   bool get isConnected => _isConnected;
@@ -288,8 +334,8 @@ class WebRTCFileTransferService {
             'roomId': _roomId,
             'role': 'peer',
             'deviceInfo': {
-              'platform': Platform.operatingSystem,
-              'version': Platform.operatingSystemVersion,
+              'platform': io.Platform.operatingSystem,
+              'version': io.Platform.operatingSystemVersion,
             },
           });
           AppLogger.i(
@@ -785,7 +831,7 @@ class WebRTCFileTransferService {
         '✅ Connected successfully to local signaling server',
         tag: 'WebRTC',
       );
-    } on SocketException catch (e) {
+    } on io.SocketException catch (e) {
       AppLogger.e('═══════════════════════════════════════', tag: 'WebRTC');
       AppLogger.e('❌ Socket connection FAILED', tag: 'WebRTC');
       AppLogger.e('URI: $uri', tag: 'WebRTC');
@@ -1134,7 +1180,7 @@ class WebRTCFileTransferService {
     } on TimeoutException catch (_) {
       // Timeout is expected for most IPs, don't log
       return false;
-    } on SocketException catch (e) {
+    } on io.SocketException catch (e) {
       // Connection refused/unreachable - expected, don't spam logs
       if (e.osError?.errorCode == 61 || e.osError?.errorCode == 111) {
         // ECONNREFUSED - service not running on this IP
@@ -1335,8 +1381,8 @@ class WebRTCFileTransferService {
     }
 
     try {
-      final interfaces = await NetworkInterface.list(
-        type: InternetAddressType.IPv4,
+      final interfaces = await io.NetworkInterface.list(
+        type: io.InternetAddressType.IPv4,
       );
       for (final iface in interfaces) {
         for (final addr in iface.addresses) {
@@ -1461,15 +1507,14 @@ class WebRTCFileTransferService {
 
     if (createDataChannel) {
       // Create data channel (for offerer)
-      // Use RELIABLE + UNORDERED to avoid head-of-line blocking.
-      // Reliability is ensured by leaving maxRetransmits/maxPacketLifeTime unset.
+      // UNORDERED for speed - receivers handle out-of-order with sparse buffer
+      // Still reliable (will retransmit lost packets, just not in order)
       _dataChannel = await _peerConnection!.createDataChannel(
         'file-transfer',
         RTCDataChannelInit()
-          ..ordered = false
-          ..maxRetransmits = 2,
+          ..ordered = false,  // Unordered prevents head-of-line blocking
       );
-      AppLogger.i('Created data channel (reliable unordered)', tag: 'WebRTC');
+      AppLogger.i('Created data channel (unordered + reliable)', tag: 'WebRTC');
       _setupDataChannel(_dataChannel!);
     }
 
@@ -1649,7 +1694,7 @@ class WebRTCFileTransferService {
     }
 
     try {
-      final file = File(filePath);
+      final file = io.File(filePath);
       if (!await file.exists()) {
         throw Exception('File does not exist: $filePath');
       }
@@ -1678,7 +1723,8 @@ class WebRTCFileTransferService {
       _dataChannel!.send(RTCDataChannelMessage(jsonEncode(metadata)));
 
       // Send file data in chunks with backpressure + stall detection + credit-based flow control
-      const chunkSize = 64 * 1024; // 64KB chunks
+      // Use smaller chunks for native→web transfers to avoid browser memory issues
+      const chunkSize = 64 * 1024; // 64KB - better for web receivers (browser memory limits)
       const highWaterMark = 1024 * 1024; // 1MB buffer threshold
       var sentBytes = 0;
       // Stall detection while waiting on bufferedAmount/credits (300s for slow networks)
@@ -1769,21 +1815,14 @@ class WebRTCFileTransferService {
         }
 
         onFileSendProgress?.call(fileName, sentBytes.toInt(), fileSize);
-        // Adaptive pacing based on current bufferedAmount
+        // Minimal adaptive pacing for speed (only when buffer very high)
         final b = _dataChannel!.bufferedAmount ?? 0;
-        int delayMs = 0;
-        if (b > 1024 * 1024) {
-          delayMs = 8;
-        } else if (b > 512 * 1024) {
-          delayMs = 5;
-        } else if (b > 256 * 1024) {
-          delayMs = 3;
-        } else if (b > 128 * 1024) {
-          delayMs = 1;
+        if (b > 1536 * 1024) {
+          await Future.delayed(const Duration(milliseconds: 2));
+        } else if (b > 1024 * 1024) {
+          await Future.delayed(const Duration(milliseconds: 1));
         }
-        if (delayMs > 0) {
-          await Future.delayed(Duration(milliseconds: delayMs));
-        }
+        // No delay when buffer < 1MB for maximum throughput
       }
 
       // Log completion of sending all chunks
@@ -1817,6 +1856,18 @@ class WebRTCFileTransferService {
         'Data channel flushed (remaining: $finalBuffered), sending completion message',
         tag: 'WebRTC',
       );
+
+      // Add additional delay to ensure all chunks have time to propagate through the network
+      // Adaptive delay based on file size: small files need less time, large files need more
+      final completionDelay = (fileSize < 10 * 1024 * 1024) ? 15 // 15 seconds for files < 10MB
+          : (fileSize < 100 * 1024 * 1024) ? 45 // 45 seconds for files < 100MB
+          : 90; // 90 seconds for larger files (increased from 60s to reduce missing chunks)
+      AppLogger.i(
+        'Waiting $completionDelay seconds for all chunks to reach receiver...',
+        tag: 'WebRTC',
+      );
+      await Future.delayed(Duration(seconds: completionDelay));
+      AppLogger.i('Completion delay finished, sending file-complete message', tag: 'WebRTC');
 
       // Send completion message
       final completion = {'type': 'file-complete', 'fileName': fileName};
@@ -1861,19 +1912,43 @@ class WebRTCFileTransferService {
     // Ensure data channel is open before sending
     await _ensureDataChannelOpen();
 
+    // Store current send file info for callback
+    _currentSendFilePath = fileName;
+    _currentSendFileSize = fileBytes.length;
+
+    isTransferring.value = true;
+    currentFileName.value = fileName;
+    transferProgress.value = 0.0;
+    _transferStartTime = DateTime.now();
+    _totalBytesTransferred = 0;
+    transferSpeed.value = 0.0;
+
+    if (_useIsolates && _transferIsolate != null) {
+      // Initialize isolate with data channel
+      await _transferIsolate!.initialize(_dataChannel!);
+
+      // Use isolate-based transfer
+      await _transferIsolate!.sendFileBytes(fileName, fileBytes);
+
+      // Show notification
+      NotificationService().showNotification(
+        type: NotificationType.fileTransferCompleted,
+        title: 'File Sent',
+        body: 'Successfully sent $fileName via WebRTC (isolates)',
+      );
+    } else {
+      // Use traditional single-threaded transfer
+      await _sendFileBytesTraditional(fileName, fileBytes);
+    }
+  }
+
+  /// Traditional single-threaded file sending (fallback when isolates disabled)
+  Future<void> _sendFileBytesTraditional(String fileName, List<int> fileBytes) async {
     try {
       final fileSize = fileBytes.length;
 
-      // Store current send file info for callback
-      _currentSendFilePath = fileName;
-      _currentSendFileSize = fileSize;
-
-      isTransferring.value = true;
-      currentFileName.value = fileName;
-      transferProgress.value = 0.0;
-      _transferStartTime = DateTime.now();
-      _totalBytesTransferred = 0;
-      transferSpeed.value = 0.0;
+      // Reset receiver progress tracking for new transfer
+      _receiverReceivedBytes = 0;
 
       // Send file metadata
       final metadata = {
@@ -1886,8 +1961,8 @@ class WebRTCFileTransferService {
       AppLogger.i('Sending file: $fileName ($fileSize bytes)', tag: 'WebRTC');
 
       // Send file in chunks with backpressure + stall detection + credit-based flow control
-      const chunkSize = 16 * 1024; // 16KB chunks
-      const highWaterMark = 1024 * 1024; // 1MB buffer threshold
+      const chunkSize = 128 * 1024; // 128KB chunks for better throughput
+      const highWaterMark = 1536 * 1024; // 1.5MB buffer threshold
       int sentBytes = 0;
       // Stall detection while waiting on bufferedAmount/credits (300s for slow networks)
       const stallTimeout = Duration(seconds: 300);
@@ -1973,21 +2048,14 @@ class WebRTCFileTransferService {
         }
 
         onFileSendProgress?.call(fileName, sentBytes.toInt(), fileSize);
-        // Adaptive pacing based on current bufferedAmount
+        // Minimal adaptive pacing for speed (only when buffer very high)
         final b = _dataChannel!.bufferedAmount ?? 0;
-        int delayMs = 0;
-        if (b > 1024 * 1024) {
-          delayMs = 8;
-        } else if (b > 512 * 1024) {
-          delayMs = 5;
-        } else if (b > 256 * 1024) {
-          delayMs = 3;
-        } else if (b > 128 * 1024) {
-          delayMs = 1;
+        if (b > 1536 * 1024) {
+          await Future.delayed(const Duration(milliseconds: 2));
+        } else if (b > 1024 * 1024) {
+          await Future.delayed(const Duration(milliseconds: 1));
         }
-        if (delayMs > 0) {
-          await Future.delayed(Duration(milliseconds: delayMs));
-        }
+        // No delay when buffer < 1MB for maximum throughput
       }
 
       // Log completion of sending all chunks (web)
@@ -2020,9 +2088,68 @@ class WebRTCFileTransferService {
 
       final finalBuffered = _dataChannel!.bufferedAmount ?? 0;
       AppLogger.i(
-        'Data channel flushed (remaining: $finalBuffered), sending completion message',
+        'Data channel flushed (remaining: $finalBuffered)',
         tag: 'WebRTC',
       );
+
+      // Wait for receiver to confirm they have all bytes (with timeout)
+      AppLogger.i(
+        'Waiting for receiver to confirm all bytes received...',
+        tag: 'WebRTC',
+      );
+      final confirmStartTime = DateTime.now();
+      const maxConfirmWait = Duration(minutes: 5); // 5 minutes max total wait
+      int lastReportedBytes = _receiverReceivedBytes;
+      DateTime lastProgressTime = DateTime.now();
+      
+      while (_receiverReceivedBytes < fileSize) {
+        final elapsed = DateTime.now().difference(confirmStartTime);
+        
+        // Check if receiver made progress
+        if (_receiverReceivedBytes > lastReportedBytes) {
+          lastReportedBytes = _receiverReceivedBytes;
+          lastProgressTime = DateTime.now();
+          final percent = (_receiverReceivedBytes / fileSize * 100).toStringAsFixed(2);
+          final remaining = fileSize - _receiverReceivedBytes;
+          AppLogger.i(
+            'Receiver progress: $_receiverReceivedBytes/$fileSize bytes ($percent%), $remaining remaining',
+            tag: 'WebRTC',
+          );
+        }
+        
+        // Timeout conditions:
+        // 1. No progress for 2 minutes (receiver sends ACK every 32 chunks = 512KB, allow time for slow networks)
+        // 2. Total wait exceeds 5 minutes
+        final noProgressDuration = DateTime.now().difference(lastProgressTime);
+        if (elapsed > maxConfirmWait) {
+          final missing = fileSize - _receiverReceivedBytes;
+          AppLogger.w(
+            'Timeout waiting for receiver confirmation after ${elapsed.inSeconds}s. '
+            'Receiver has $_receiverReceivedBytes/$fileSize bytes ($missing missing). '
+            'Sending completion anyway - receiver will wait for remaining chunks.',
+            tag: 'WebRTC',
+          );
+          break;
+        } else if (noProgressDuration.inSeconds > 120) {
+          final missing = fileSize - _receiverReceivedBytes;
+          AppLogger.w(
+            'No progress from receiver for ${noProgressDuration.inSeconds}s. '
+            'Last confirmed: $_receiverReceivedBytes/$fileSize bytes ($missing missing). '
+            'Sending completion anyway - receiver will wait for remaining chunks.',
+            tag: 'WebRTC',
+          );
+          break;
+        }
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      
+      if (_receiverReceivedBytes >= fileSize) {
+        AppLogger.i(
+          '✅ Receiver confirmed all $fileSize bytes received! Sending completion message.',
+          tag: 'WebRTC',
+        );
+      }
 
       // Send completion message
       final completion = {'type': 'file-complete', 'fileName': fileName};
@@ -2061,7 +2188,11 @@ class WebRTCFileTransferService {
 
     channel.onMessage = (RTCDataChannelMessage message) {
       if (message.isBinary) {
-        _handleBinaryChunk(message.binary);
+        if (_useIsolates && _transferIsolate != null) {
+          _transferIsolate!.handleBinaryChunk(message.binary);
+        } else {
+          _handleBinaryChunk(message.binary);
+        }
         return;
       }
       try {
@@ -2077,11 +2208,18 @@ class WebRTCFileTransferService {
       if (state == RTCDataChannelState.RTCDataChannelClosed &&
           isTransferring.value) {
         final name = currentFileName.value ?? 'unknown';
+        final isSending = _currentSendFileSize > 0;
+        final progress = isSending 
+            ? '${(_totalBytesTransferred / _currentSendFileSize * 100).toStringAsFixed(1)}%'
+            : '${(_receivedBytes / _expectedFileSize * 100).toStringAsFixed(1)}%';
+        AppLogger.e(
+          'Data channel closed during ${isSending ? "send" : "receive"} at $progress progress',
+          tag: 'WebRTC',
+        );
         onFileTransferError?.call(
           name,
-          'Data channel closed during transfer',
-          // If we are sending, treat as send; else receive
-          _currentSendFileSize > 0,
+          'Data channel closed during transfer at $progress',
+          isSending,
         );
       }
     };
@@ -2095,26 +2233,57 @@ class WebRTCFileTransferService {
 
   /// Handle incoming data channel messages
   void _handleDataChannelMessage(Map<String, dynamic> data) {
-    switch (data['type']) {
-      case 'file-metadata':
-        _handleFileMetadata(data);
-        break;
-      case 'file-chunk':
-        _handleFileChunk(data);
-        break;
-      case 'file-complete':
-        _handleFileComplete(data);
-        break;
-      case 'ack':
-        // Receiver reports it processed some chunks; increase send credits
-        final inc = (data['count'] is int)
-            ? data['count'] as int
-            : int.tryParse('${data['count']}') ?? 0;
-        if (inc > 0) {
-          _sendCredits += inc;
-          if (_sendCredits > _creditWindow) _sendCredits = _creditWindow;
-        }
-        break;
+    if (_useIsolates && _transferIsolate != null) {
+      switch (data['type']) {
+        case 'file-metadata':
+          _transferIsolate!.startReceivingFile(data['fileName'], data['fileSize']);
+          break;
+        case 'file-complete':
+          _transferIsolate!.handleFileComplete(data['fileName']);
+          break;
+        case 'ack':
+          // Update credits for flow control
+          final inc = (data['count'] is int)
+              ? data['count'] as int
+              : int.tryParse('${data['count']}') ?? 0;
+          if (inc > 0) {
+            _sendCredits += inc;
+            if (_sendCredits > _creditWindow) _sendCredits = _creditWindow;
+            _transferIsolate!.updateCredits(_sendCredits);
+          }
+          break;
+      }
+    } else {
+      switch (data['type']) {
+        case 'file-metadata':
+          _handleFileMetadata(data);
+          break;
+        case 'file-chunk':
+          _handleFileChunk(data);
+          break;
+        case 'file-complete':
+          _handleFileComplete(data);
+          break;
+        case 'ack':
+          // Receiver reports it processed some chunks; increase send credits
+          final inc = (data['count'] is int)
+              ? data['count'] as int
+              : int.tryParse('${data['count']}') ?? 0;
+          if (inc > 0) {
+            _sendCredits += inc;
+            if (_sendCredits > _creditWindow) _sendCredits = _creditWindow;
+          }
+          // Track receiver's progress
+          final receivedBytes = data['receivedBytes'];
+          if (receivedBytes is int) {
+            _receiverReceivedBytes = receivedBytes;
+            AppLogger.i(
+              '📥 Received ACK: Receiver has $receivedBytes bytes',
+              tag: 'WebRTC',
+            );
+          }
+          break;
+      }
     }
   }
 
@@ -2122,13 +2291,7 @@ class WebRTCFileTransferService {
   void _handleFileMetadata(Map<String, dynamic> data) {
     _expectedFileName = data['fileName'];
     _expectedFileSize = data['fileSize'];
-    if (kIsWeb) {
-      _receiveBuffer = null; // avoid huge contiguous allocation on web
-      _webReceivedParts = <Uint8List>[];
-    } else {
-      _receiveBuffer = Uint8List(_expectedFileSize);
-      _webReceivedParts = null;
-    }
+    
     _receivedBytes = 0;
     _isCompleting = false;
     _chunksSinceAck = 0; // reset receiver ack counter
@@ -2138,6 +2301,14 @@ class WebRTCFileTransferService {
     isTransferring.value = true;
     currentFileName.value = _expectedFileName;
     transferProgress.value = 0.0;
+    
+    // Both web and native: Use pre-allocated buffer for large files
+    // BytesBuilder cannot handle 648MB+ files on web due to browser memory limits
+    _receiveBuffer = Uint8List(_expectedFileSize);
+    _webReceiveBuffer = null;
+    _webChunkMap.clear(); // Clear any buffered out-of-order chunks
+    _webNextExpectedOffset = 0; // Start from beginning
+    
     // Start receiver inactivity watchdog
     _lastReceiveAt = DateTime.now();
     _startReceiveInactivityWatch();
@@ -2153,8 +2324,8 @@ class WebRTCFileTransferService {
     try {
       final chunkData = base64Decode(data['data']);
       if (kIsWeb) {
-        _webReceivedParts ??= <Uint8List>[];
-        _webReceivedParts!.add(Uint8List.fromList(chunkData));
+        _webReceiveBuffer ??= BytesBuilder();
+        _webReceiveBuffer!.add(chunkData);
         _receivedBytes += chunkData.length;
       } else {
         final int? offset = data['offset'] is int
@@ -2165,8 +2336,8 @@ class WebRTCFileTransferService {
               ? _receiveBuffer!.length
               : offset + chunkData.length;
           _receiveBuffer!.setRange(offset, end, chunkData);
-          final written = end;
-          if (written > _receivedBytes) _receivedBytes = written;
+          // Accumulate actual bytes received, not buffer position
+          _receivedBytes += chunkData.length;
         } else {
           _receivedBytes += chunkData.length;
         }
@@ -2194,7 +2365,7 @@ class WebRTCFileTransferService {
   }
 
   /// Handle binary chunk (preferred for performance)
-  void _handleBinaryChunk(Uint8List chunkData) {
+  void _handleBinaryChunk(Uint8List chunkData) async {
     try {
       // Extract offset from first 8 bytes (2x uint32 big endian)
       if (chunkData.length < 8) {
@@ -2220,8 +2391,30 @@ class WebRTCFileTransferService {
       );
 
       // Track actual received bytes (chunk size, not offset)
+      final previousBytes = _receivedBytes;
       _receivedBytes += actualData.length;
       _totalBytesTransferred += actualData.length;
+
+      // Log chunk reception for debugging
+      AppLogger.d(
+        'Received binary chunk: offset $offset, size ${actualData.length}, total received: $_receivedBytes/$_expectedFileSize',
+        tag: 'WebRTC',
+      );
+
+      // If we're close to completion (>99%), log more frequently to track final chunks
+      if (_expectedFileSize > 0 && previousBytes < _expectedFileSize && _receivedBytes >= _expectedFileSize) {
+        AppLogger.i(
+          '🎯 Final chunk received! Now have all $_receivedBytes/$_expectedFileSize bytes',
+          tag: 'WebRTC',
+        );
+      } else if (_expectedFileSize > 0 && _receivedBytes > (_expectedFileSize * 0.99)) {
+        final remaining = _expectedFileSize - _receivedBytes;
+        final percent = (_receivedBytes / _expectedFileSize * 100).toStringAsFixed(2);
+        AppLogger.i(
+          'Near completion: $_receivedBytes/$_expectedFileSize bytes ($percent%), $remaining bytes remaining',
+          tag: 'WebRTC',
+        );
+      }
 
       // Log progress every 10MB for large files
       if (_expectedFileSize > 50 * 1024 * 1024 &&
@@ -2234,18 +2427,29 @@ class WebRTCFileTransferService {
         );
       }
 
-      if (kIsWeb) {
-        // For web, we need to maintain ordered parts for corruption-free assembly
-        // Store chunk with its offset for later ordered reconstruction
-        _webReceivedParts ??= <Uint8List>[];
-        _webReceivedParts!.add(actualData);
-      } else {
-        if (_receiveBuffer != null) {
-          final end = (offset + actualData.length) > _receiveBuffer!.length
-              ? _receiveBuffer!.length
-              : offset + actualData.length;
-          _receiveBuffer!.setRange(offset.toInt(), end, actualData);
+      // Both web and native: write to pre-allocated buffer (required for unordered delivery)
+      if (_receiveBuffer != null) {
+        final end = (offset + actualData.length) > _receiveBuffer!.length
+            ? _receiveBuffer!.length
+            : offset + actualData.length;
+        _receiveBuffer!.setRange(offset.toInt(), end, actualData);
+        
+        // Track sequential progress for logging (web only)
+        if (kIsWeb && offset.toInt() == _webNextExpectedOffset) {
+          _webNextExpectedOffset += actualData.length;
+          
+          // Log buffer progress every 50MB
+          if (_receivedBytes % (50 * 1024 * 1024) < actualData.length) {
+            final progressMB = (_receivedBytes / (1024 * 1024)).toStringAsFixed(1);
+            final totalMB = (_expectedFileSize / (1024 * 1024)).toStringAsFixed(1);
+            AppLogger.i(
+              'Web buffer progress: ${progressMB}MB / ${totalMB}MB',
+              tag: 'WebRTC',
+            );
+          }
         }
+      } else {
+        AppLogger.e('No buffer available for chunk at offset $offset', tag: 'WebRTC');
       }
 
       // Calculate transfer speed
@@ -2269,11 +2473,37 @@ class WebRTCFileTransferService {
         _expectedFileSize,
       );
       _lastReceiveAt = DateTime.now();
-      // Receiver-driven flow control: send an ack every 32 chunks processed
+      // Receiver-driven flow control: send ACKs periodically and at key milestones
       _chunksSinceAck++;
-      if (_chunksSinceAck >= 32) {
-        final ack = {'type': 'ack', 'count': _chunksSinceAck};
-        _dataChannel?.send(RTCDataChannelMessage(jsonEncode(ack)));
+      
+      // Near completion (>99%): send ACK on EVERY chunk to give sender maximum visibility
+      final nearCompletion = _expectedFileSize > 0 && _receivedBytes >= (_expectedFileSize * 0.99);
+      final shouldSendAck = nearCompletion || // Send every chunk when >99%
+          _chunksSinceAck >= 16 || // Regular interval (every 16 chunks = 1MB with 64KB chunks)
+          _receivedBytes >= _expectedFileSize; // Reached expected size
+      
+      if (shouldSendAck) {
+        final ack = {
+          'type': 'ack',
+          'count': _chunksSinceAck,
+          'receivedBytes': _receivedBytes, // Track total bytes received
+        };
+        if (_dataChannel != null) {
+          _dataChannel!.send(RTCDataChannelMessage(jsonEncode(ack)));
+          if (nearCompletion) {
+            AppLogger.i(
+              '📤 Sent ACK (near completion): $_receivedBytes/$_expectedFileSize bytes (${(_receivedBytes / _expectedFileSize * 100).toStringAsFixed(2)}%)',
+              tag: 'WebRTC',
+            );
+          } else {
+            AppLogger.i(
+              '📤 Sent ACK: $_receivedBytes/$_expectedFileSize bytes (${(_receivedBytes / _expectedFileSize * 100).toStringAsFixed(1)}%)',
+              tag: 'WebRTC',
+            );
+          }
+        } else {
+          AppLogger.w('Cannot send ACK: data channel is null', tag: 'WebRTC');
+        }
         _chunksSinceAck = 0;
       }
 
@@ -2282,7 +2512,19 @@ class WebRTCFileTransferService {
           _expectedFileSize > 0 &&
           !_isCompleting) {
         AppLogger.i(
-          'All bytes received ($_receivedBytes/$_expectedFileSize), completing transfer',
+          '═══════════════════════════════════════',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          '✅ All bytes received! Auto-completing transfer',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          'Received: $_receivedBytes/$_expectedFileSize bytes (100.00%)',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          '═══════════════════════════════════════',
           tag: 'WebRTC',
         );
         // Trigger completion handling
@@ -2305,25 +2547,73 @@ class WebRTCFileTransferService {
         final missing = _expectedFileSize - _receivedBytes;
         final percentReceived = (_receivedBytes / _expectedFileSize * 100)
             .toStringAsFixed(2);
+        final missingMB = (missing / (1024 * 1024)).toStringAsFixed(2);
         AppLogger.w(
-          'File completion received but missing $missing bytes ($_receivedBytes/$_expectedFileSize = $percentReceived%)',
+          '═══════════════════════════════════════',
+          tag: 'WebRTC',
+        );
+        AppLogger.w(
+          '⚠️  File completion received but MISSING CHUNKS',
+          tag: 'WebRTC',
+        );
+        AppLogger.w(
+          'Missing: $missing bytes ($missingMB MB)',
+          tag: 'WebRTC',
+        );
+        AppLogger.w(
+          'Received: $_receivedBytes/$_expectedFileSize ($percentReceived%)',
+          tag: 'WebRTC',
+        );
+        AppLogger.w(
+          'Continuing to receive chunks in background...',
+          tag: 'WebRTC',
+        );
+        AppLogger.w(
+          'Will auto-complete when all bytes arrive (or timeout after 10 min)',
+          tag: 'WebRTC',
+        );
+        AppLogger.w(
+          '═══════════════════════════════════════',
           tag: 'WebRTC',
         );
         // Don't complete yet - wait for remaining chunks
         // Set a timeout based on file size (larger files get more time)
-        final timeoutSeconds = (_expectedFileSize > 100 * 1024 * 1024)
-            ? 30
-            : 10; // 30s for files > 100MB
+        final timeoutSeconds = (_expectedFileSize > 100 * 1024 * 1024) ? 600 // 10 minutes for files > 100MB
+            : (_expectedFileSize > 10 * 1024 * 1024) ? 120 // 2 minutes for files > 10MB
+            : 60; // 1 minute for small files < 10MB
+        // Track progress during wait period
+        final startWaitBytes = _receivedBytes;
+        
         Future.delayed(Duration(seconds: timeoutSeconds), () {
           if (_receivedBytes < _expectedFileSize &&
               _expectedFileName != null &&
               !_isCompleting) {
+            final bytesReceivedDuringWait = _receivedBytes - startWaitBytes;
             final finalMissing = _expectedFileSize - _receivedBytes;
             final finalPercent = (_receivedBytes / _expectedFileSize * 100)
                 .toStringAsFixed(2);
             AppLogger.e(
-              'File transfer incomplete after ${timeoutSeconds}s timeout: $_expectedFileName - '
-              'Missing $finalMissing bytes ($finalPercent% received)',
+              '═══════════════════════════════════════',
+              tag: 'WebRTC',
+            );
+            AppLogger.e(
+              '❌ File transfer INCOMPLETE after ${timeoutSeconds}s timeout',
+              tag: 'WebRTC',
+            );
+            AppLogger.e(
+              'File: $_expectedFileName',
+              tag: 'WebRTC',
+            );
+            AppLogger.e(
+              'Missing: $finalMissing bytes ($finalPercent% received)',
+              tag: 'WebRTC',
+            );
+            AppLogger.e(
+              'Chunks received during wait: $bytesReceivedDuringWait bytes',
+              tag: 'WebRTC',
+            );
+            AppLogger.e(
+              '═══════════════════════════════════════',
               tag: 'WebRTC',
             );
             onFileTransferError?.call(
@@ -2335,7 +2625,7 @@ class WebRTCFileTransferService {
             _expectedFileSize = 0;
             _receivedBytes = 0;
             _receiveBuffer = null;
-            _webReceivedParts = null;
+            _webReceiveBuffer = null;
             isTransferring.value = false;
             transferSpeed.value = 0.0;
             _isCompleting = false;
@@ -2347,17 +2637,64 @@ class WebRTCFileTransferService {
       // Mark as completing to prevent duplicate calls
       _isCompleting = true;
 
+      // Send final ACK to confirm all bytes received
+      if (_chunksSinceAck > 0) {
+        final finalAck = {
+          'type': 'ack',
+          'count': _chunksSinceAck,
+          'receivedBytes': _receivedBytes, // Confirm total
+        };
+        _dataChannel?.send(RTCDataChannelMessage(jsonEncode(finalAck)));
+        _chunksSinceAck = 0;
+      }
+
       String? filePath;
       final isWeb = kIsWeb;
-      final bytes = (!isWeb && _receiveBuffer != null)
-          ? Uint8List.view(_receiveBuffer!.buffer, 0, _expectedFileSize)
-          : Uint8List(0);
 
       if (isWeb) {
-        final parts = _webReceivedParts ?? <Uint8List>[];
-        final total = _receivedBytes;
+        // Web: save buffer using the same approach as native
+        final buffer = _receiveBuffer != null
+            ? Uint8List.view(_receiveBuffer!.buffer, 0, _expectedFileSize)
+            : Uint8List(0);
+        final total = buffer.length;
+        final sizeMB = (total / (1024 * 1024)).toStringAsFixed(2);
+        final elapsed = _transferStartTime != null
+            ? DateTime.now().difference(_transferStartTime!).inSeconds
+            : 0;
+        final avgSpeed = elapsed > 0 ? (total / elapsed / 1024).toStringAsFixed(2) : '0';
         AppLogger.i(
-          'File received on web: ${_expectedFileName!}, $total bytes in ${parts.length} parts',
+          '═══════════════════════════════════════',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          '✅ File transfer COMPLETE (web)',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          'File: ${_expectedFileName!}',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          'Size: $total bytes ($sizeMB MB)',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          'Expected: $_expectedFileSize bytes (${(_expectedFileSize / (1024 * 1024)).toStringAsFixed(2)} MB)',
+          tag: 'WebRTC',
+        );
+        if (total != _expectedFileSize) {
+          final diff = (_expectedFileSize - total).abs();
+          AppLogger.e(
+            '⚠️ SIZE MISMATCH: ${total < _expectedFileSize ? "Missing" : "Extra"} $diff bytes (${(diff / (1024 * 1024)).toStringAsFixed(2)} MB)',
+            tag: 'WebRTC',
+          );
+        }
+        AppLogger.i(
+          'Time: ${elapsed}s (avg ${avgSpeed} KB/s)',
+          tag: 'WebRTC',
+        );
+        AppLogger.i(
+          '═══════════════════════════════════════',
           tag: 'WebRTC',
         );
 
@@ -2365,6 +2702,8 @@ class WebRTCFileTransferService {
         transferProgress.value = 1.0;
         transferSpeed.value = 0.0;
 
+        // For compatibility with existing cache, wrap single buffer as parts
+        final parts = buffer.isNotEmpty ? [buffer] : <Uint8List>[];
         final id = WebReceivedCache.putParts(_expectedFileName!, parts, total);
         onFileReceiveComplete?.call(_expectedFileName!, 'web-parts:$id');
         // Send final ack for any remaining credit
@@ -2374,18 +2713,28 @@ class WebRTCFileTransferService {
           _chunksSinceAck = 0;
         }
       } else {
-        // Save file to downloads directory (native platforms)
-        final directory = await getApplicationDocumentsDirectory();
-        filePath = p.join(directory.path, _expectedFileName!);
-        final file = File(filePath);
-        await file.writeAsBytes(bytes);
+        // Native: save buffer to file
+        if (_receiveBuffer != null) {
+          final directory = await getApplicationDocumentsDirectory();
+          filePath = p.join(directory.path, _expectedFileName!);
+          final file = io.File(filePath);
+          final bytes = Uint8List.view(_receiveBuffer!.buffer, 0, _expectedFileSize);
+          await file.writeAsBytes(bytes);
+          AppLogger.i('Saved file: $filePath (${bytes.length} bytes)', tag: 'WebRTC');
+        } else {
+          throw Exception('No buffer available to save file');
+        }
 
         isTransferring.value = false;
         transferProgress.value = 1.0;
         transferSpeed.value = 0.0;
 
         // Call callback with file info
-        onFileReceiveComplete?.call(_expectedFileName!, filePath);
+        if (filePath != null && filePath.isNotEmpty) {
+          onFileReceiveComplete?.call(_expectedFileName!, filePath);
+        } else {
+          throw Exception('File path is null or empty after save');
+        }
       }
 
       NotificationService().showNotification(
@@ -2408,7 +2757,9 @@ class WebRTCFileTransferService {
       _expectedFileSize = 0;
       _receivedBytes = 0;
       _receiveBuffer = null;
-      _webReceivedParts = null;
+      _webReceiveBuffer = null;
+      _webChunkMap.clear(); // Clear sparse buffer map
+      _webNextExpectedOffset = 0;
       _isCompleting = false;
       _sendCredits = 0; // reset sender credits
     } catch (e) {
@@ -2420,7 +2771,7 @@ class WebRTCFileTransferService {
 
   void _startReceiveInactivityWatch() {
     _cancelReceiveInactivityWatch();
-    const threshold = Duration(seconds: 120); // Increased for large files
+    const threshold = Duration(seconds: 180); // 3 minutes for packet retransmissions
     _receiveInactivityTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       final last = _lastReceiveAt;
       if (!isTransferring.value || last == null) {
@@ -2452,6 +2803,9 @@ class WebRTCFileTransferService {
     } catch (_) {}
     _receiveInactivityTimer = null;
     _lastReceiveAt = null;
+    
+    // Don't close the file stream here - it will be closed in _handleFileComplete
+    // after saving the file. Closing it here causes "no stream available" errors.
   }
 
   /// Disconnect from signaling server and reset connection
@@ -2493,6 +2847,13 @@ class WebRTCFileTransferService {
   /// Dispose resources
   Future<void> dispose() async {
     AppLogger.i('Disposing WebRTC service', tag: 'WebRTC');
+
+    // Shutdown isolates if enabled
+    if (_transferIsolate != null) {
+      await _transferIsolate!.shutdown();
+      _transferIsolate = null;
+    }
+
     await disconnect();
     AppLogger.i('WebRTC service disposed', tag: 'WebRTC');
   }
