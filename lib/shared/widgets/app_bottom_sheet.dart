@@ -32,7 +32,7 @@ class AppBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final defaultPadding = EdgeInsets.symmetric(
-      horizontal: 20,
+      horizontal: 16,
       vertical: title != null ? 16 : 12,
     );
 
@@ -68,7 +68,7 @@ class AppBottomSheet extends StatelessWidget {
           // Header with title and close button (if provided)
           if (title != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              padding: const EdgeInsets.fromLTRB(25, 16, 25, 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,

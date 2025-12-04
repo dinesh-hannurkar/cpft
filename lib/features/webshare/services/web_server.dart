@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cpft/features/chat/utils/file_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -11,25 +12,26 @@ class WebServer {
   int _port = 80;
   final String deviceName;
   final List<WebSocket> _connectedClients = [];
-  
+
   // Static registry of running instances for force stopping
   static final Set<WebServer> _runningInstances = {};
-  
+
   // Files available for download
   final Map<String, _AvailableFile> _availableFiles = {};
-  
+
   // Uploaded files for deletion
   final Map<String, String> _uploadedFiles = {}; // filename -> path
-  
+
   bool _isRunning = false;
-  
+
   // Callbacks for integration with app
   final Function(String filename, Uint8List data)? onFileReceived;
   final Function(String clientId)? onClientConnected;
   final Function(String clientId)? onClientDisconnected;
-  final Function(String filename, int bytesReceived, int totalBytes)? onFileUploadProgress;
+  final Function(String filename, int bytesReceived, int totalBytes)?
+  onFileUploadProgress;
   final Function(String filename, String savedPath)? onFileUploadComplete;
-  
+
   WebServer({
     required this.deviceName,
     this.onFileReceived,
@@ -42,7 +44,11 @@ class WebServer {
   /// Check if the web server port is already in use
   static Future<bool> isPortInUse({int port = 80}) async {
     try {
-      final socket = await Socket.connect('127.0.0.1', port, timeout: const Duration(milliseconds: 500));
+      final socket = await Socket.connect(
+        '127.0.0.1',
+        port,
+        timeout: const Duration(milliseconds: 500),
+      );
       await socket.close();
       return true;
     } catch (e) {
@@ -53,27 +59,29 @@ class WebServer {
   /// Force stop any web server running on the specified port
   static Future<bool> forceStop({int port = 80}) async {
     debugPrint('[WebServer] Attempting to force stop servers on port $port');
-    
+
     bool stoppedAny = false;
-    final instancesToStop = _runningInstances.where((server) => server._port == port).toList();
-    
+    final instancesToStop = _runningInstances
+        .where((server) => server._port == port)
+        .toList();
+
     for (final server in instancesToStop) {
       debugPrint('[WebServer] Force stopping instance on port ${server._port}');
       await server.stop();
       stoppedAny = true;
     }
-    
+
     if (!stoppedAny) {
       debugPrint('[WebServer] No running instances found on port $port');
     }
-    
+
     return stoppedAny;
   }
 
   bool get isRunning => _isRunning;
   int get port => _port;
   int get connectedClientsCount => _connectedClients.length;
-  
+
   /// Start the web server
   Future<bool> start({int port = 80}) async {
     if (_server != null) {
@@ -82,16 +90,22 @@ class WebServer {
     }
 
     _port = port;
-    
+
     try {
       // Prefer dual-stack (IPv6 with IPv4-mapped) when available
       try {
-        _server = await HttpServer.bind(InternetAddress.anyIPv6, _port, v6Only: false);
-        
+        _server = await HttpServer.bind(
+          InternetAddress.anyIPv6,
+          _port,
+          v6Only: false,
+        );
+
         debugPrint('[WebServer] ✅ Started (dual-stack) on port $_port');
       } catch (e) {
         // Fallback to IPv4 only
-        debugPrint('[WebServer] Dual-stack bind failed: $e. Falling back to IPv4...');
+        debugPrint(
+          '[WebServer] Dual-stack bind failed: $e. Falling back to IPv4...',
+        );
         _server = await HttpServer.bind(InternetAddress.anyIPv4, _port);
         debugPrint('[WebServer] ✅ Started (IPv4) on port $_port');
       }
@@ -101,8 +115,11 @@ class WebServer {
       _runningInstances.add(this); // Register this instance
       return true;
     } catch (e) {
-      if (e is SocketException && e.message.contains('Address already in use')) {
-        debugPrint('[WebServer] Port already in use, assuming server is running externally');
+      if (e is SocketException &&
+          e.message.contains('Address already in use')) {
+        debugPrint(
+          '[WebServer] Port already in use, assuming server is running externally',
+        );
         _isRunning = true;
         return true;
       }
@@ -116,12 +133,12 @@ class WebServer {
     debugPrint('[WebServer] Stopping web server...');
     // Always reset the running flag, even for external servers
     _isRunning = false;
-    
+
     if (_server == null) {
       debugPrint('[WebServer] No server instance to stop (external server)');
       return;
     }
-    
+
     // Close all WebSocket connections
     for (var ws in _connectedClients) {
       try {
@@ -129,7 +146,7 @@ class WebServer {
       } catch (_) {}
     }
     _connectedClients.clear();
-    
+
     await _server?.close();
     _server = null;
     _runningInstances.remove(this); // Unregister this instance
@@ -139,11 +156,17 @@ class WebServer {
   /// Handle HTTP requests
   void _handleRequest(HttpRequest request) async {
     final uri = request.uri;
-    
+
     // CORS headers for browser requests
     request.response.headers.add('Access-Control-Allow-Origin', '*');
-    request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    request.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
+    request.response.headers.add(
+      'Access-Control-Allow-Methods',
+      'GET, POST, OPTIONS',
+    );
+    request.response.headers.add(
+      'Access-Control-Allow-Headers',
+      'Content-Type',
+    );
 
     // Handle CORS preflight
     if (request.method == 'OPTIONS') {
@@ -175,7 +198,8 @@ class WebServer {
           request.response.write(json.encode({'error': 'File not found'}));
         }
         await request.response.close();
-      } else if (uri.path.startsWith('/uploaded/') && request.method == 'DELETE') {
+      } else if (uri.path.startsWith('/uploaded/') &&
+          request.method == 'DELETE') {
         // Delete an uploaded file
         final filename = uri.pathSegments.last;
         if (_uploadedFiles.containsKey(filename)) {
@@ -231,21 +255,27 @@ class WebServer {
     try {
       final socket = await WebSocketTransformer.upgrade(request);
       _connectedClients.add(socket);
-      debugPrint('[WebServer] WebSocket client connected (${_connectedClients.length} total)');
+      debugPrint(
+        '[WebServer] WebSocket client connected (${_connectedClients.length} total)',
+      );
       // Fire app-layer callback
       if (onClientConnected != null) {
         try {
-          onClientConnected!.call('client_${DateTime.now().microsecondsSinceEpoch}');
+          onClientConnected!.call(
+            'client_${DateTime.now().microsecondsSinceEpoch}',
+          );
         } catch (_) {}
       }
-      
+
       // Send welcome message
-      socket.add(json.encode({
-        'type': 'connected',
-        'deviceName': deviceName,
-        'timestamp': DateTime.now().toIso8601String(),
-      }));
-      
+      socket.add(
+        json.encode({
+          'type': 'connected',
+          'deviceName': deviceName,
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
+
       socket.listen(
         (data) => _handleWebSocketMessage(socket, data),
         onDone: () {
@@ -272,7 +302,7 @@ class WebServer {
     try {
       final message = json.decode(data as String);
       debugPrint('[WebServer] Received WebSocket message: ${message['type']}');
-      
+
       // Handle different message types
       if (message['type'] == 'ping') {
         socket.add(json.encode({'type': 'pong'}));
@@ -292,10 +322,16 @@ class WebServer {
 
     try {
       final contentType = request.headers.contentType;
-      if (contentType == null || contentType.mimeType != 'multipart/form-data') {
+      if (contentType == null ||
+          contentType.mimeType != 'multipart/form-data') {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
-        request.response.write(json.encode({'error': 'Expected multipart/form-data', 'got': contentType?.toString()}));
+        request.response.write(
+          json.encode({
+            'error': 'Expected multipart/form-data',
+            'got': contentType?.toString(),
+          }),
+        );
         await request.response.close();
         return;
       }
@@ -304,7 +340,9 @@ class WebServer {
       if (boundary == null || boundary.isEmpty) {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
-        request.response.write(json.encode({'error': 'Missing multipart boundary'}));
+        request.response.write(
+          json.encode({'error': 'Missing multipart boundary'}),
+        );
         await request.response.close();
         return;
       }
@@ -329,7 +367,7 @@ class WebServer {
         }
 
         processedFiles += 1;
-  final savePath = await _uniqueFilePath(downloadsDir.path, filename);
+        final savePath = await _uniqueFilePath(downloadsDir.path, filename);
         final sink = File(savePath).openWrite();
         int received = 0;
 
@@ -357,7 +395,9 @@ class WebServer {
 
         await completer.future;
 
-        debugPrint('[WebServer] ✅ Received file: $filename ($received bytes) -> $savePath');
+        debugPrint(
+          '[WebServer] ✅ Received file: $filename ($received bytes) -> $savePath',
+        );
 
         if (onFileUploadComplete != null) {
           onFileUploadComplete!(filename, savePath);
@@ -386,7 +426,9 @@ class WebServer {
 
       request.response.statusCode = HttpStatus.ok;
       request.response.headers.contentType = ContentType.json;
-      request.response.write(json.encode({'success': true, 'message': 'File uploaded successfully'}));
+      request.response.write(
+        json.encode({'success': true, 'message': 'File uploaded successfully'}),
+      );
       await request.response.close();
     } catch (e) {
       debugPrint('[WebServer] Error handling file upload: $e');
@@ -400,7 +442,7 @@ class WebServer {
   /// Extract filename from Content-Disposition header
   String? _extractFilename(String? contentDisposition) {
     if (contentDisposition == null) return null;
-    
+
     final regex = RegExp(r'filename="?([^";\r\n]+)"?', caseSensitive: false);
     final match = regex.firstMatch(contentDisposition);
     return match?.group(1);
@@ -466,52 +508,59 @@ class WebServer {
       'size': File(filePath).lengthSync(),
     });
 
-    debugPrint('[WebServer] File available for download: $filename (ID: $fileId)');
+    debugPrint(
+      '[WebServer] File available for download: $filename (ID: $fileId)',
+    );
     return fileId;
   }
 
   /// Remove a file from available downloads
   void removeFileFromDownload(String fileId) {
     _availableFiles.remove(fileId);
-    _broadcastToClients({
-      'type': 'file_removed',
-      'fileId': fileId,
-    });
+    _broadcastToClients({'type': 'file_removed', 'fileId': fileId});
   }
 
   /// Get list of all files currently shared for download
   List<Map<String, dynamic>> getSharedFiles() {
-    return _availableFiles.values.map((file) {
-      try {
-        final fileObj = File(file.path);
-        return {
-          'id': file.id,
-          'filename': file.filename,
-          'path': file.path,
-          'size': fileObj.existsSync() ? fileObj.lengthSync() : 0,
-          'sharedAt': file.addedAt.toIso8601String(),
-        };
-      } catch (e) {
-        debugPrint('[WebServer] Error getting file info for ${file.filename}: $e');
-        return null;
-      }
-    }).whereType<Map<String, dynamic>>().toList();
+    return _availableFiles.values
+        .map((file) {
+          try {
+            final fileObj = File(file.path);
+            return {
+              'id': file.id,
+              'filename': file.filename,
+              'path': file.path,
+              'size': fileObj.existsSync() ? fileObj.lengthSync() : 0,
+              'sharedAt': file.addedAt.toIso8601String(),
+            };
+          } catch (e) {
+            debugPrint(
+              '[WebServer] Error getting file info for ${file.filename}: $e',
+            );
+            return null;
+          }
+        })
+        .whereType<Map<String, dynamic>>()
+        .toList();
   }
 
   /// Serve list of available files as JSON
   void _serveFileList(HttpRequest request) {
-    final files = _availableFiles.values.map((file) {
-      try {
-        return {
-          'id': file.id,
-          'filename': file.filename,
-          'size': File(file.path).lengthSync(),
-          'addedAt': file.addedAt.toIso8601String(),
-        };
-      } catch (e) {
-        return null;
-      }
-    }).whereType<Map<String, dynamic>>().toList();
+    final files = _availableFiles.values
+        .map((file) {
+          try {
+            return {
+              'id': file.id,
+              'filename': file.filename,
+              'size': File(file.path).lengthSync(),
+              'addedAt': file.addedAt.toIso8601String(),
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .whereType<Map<String, dynamic>>()
+        .toList();
 
     request.response.headers.contentType = ContentType.json;
     request.response.write(json.encode({'files': files}));
@@ -541,11 +590,16 @@ class WebServer {
 
       final fileLength = await ioFile.length();
       request.response.headers.contentType = ContentType.binary;
-      request.response.headers.add('Content-Disposition', 'attachment; filename="${file.filename}"');
+      request.response.headers.add(
+        'Content-Disposition',
+        'attachment; filename="${file.filename}"',
+      );
       request.response.headers.contentLength = fileLength;
       request.response.headers.add('Accept-Ranges', 'bytes');
 
-      debugPrint('[WebServer] 📤 Starting file download: ${file.filename} (${_fmtBytes(fileLength)})');
+      debugPrint(
+        '[WebServer] 📤 Starting file download: ${file.filename} (${formatBytes(fileLength)})',
+      );
 
       // Stream the file instead of loading it entirely into memory
       final stream = ioFile.openRead();
@@ -558,7 +612,9 @@ class WebServer {
         },
         onDone: () async {
           await request.response.close();
-          debugPrint('[WebServer] ✅ File download completed: ${file.filename} (${_fmtBytes(totalSent)})');
+          debugPrint(
+            '[WebServer] ✅ File download completed: ${file.filename} (${formatBytes(totalSent)})',
+          );
 
           // Notify clients
           _broadcastToClients({
@@ -572,12 +628,13 @@ class WebServer {
           try {
             await request.response.close();
           } catch (e) {
-            debugPrint('[WebServer] Error closing response after stream error: $e');
+            debugPrint(
+              '[WebServer] Error closing response after stream error: $e',
+            );
           }
         },
         cancelOnError: true,
       );
-
     } catch (e) {
       debugPrint('[WebServer] Error serving file: $e');
       try {
@@ -1238,17 +1295,6 @@ class WebServer {
 </body>
 </html>
 ''';
-  }
-
-  String _fmtBytes(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    double size = bytes.toDouble();
-    int unit = 0;
-    while (size >= 1024 && unit < units.length - 1) {
-      size /= 1024;
-      unit++;
-    }
-    return '${size.toStringAsFixed(size < 10 && unit > 0 ? 1 : 0)} ${units[unit]}';
   }
 }
 

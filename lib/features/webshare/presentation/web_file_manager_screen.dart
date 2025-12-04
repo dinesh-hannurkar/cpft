@@ -1,6 +1,7 @@
 import 'dart:io';
+import 'package:cpft/utils/time_utils.dart';
+import 'package:cpft/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../services/discovery_service.dart';
@@ -157,7 +158,7 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.blue.shade100,
-          child: Icon(_getFileIcon(file.filename), color: Colors.blue.shade700),
+          child: FileIcon(filename: file.filename),
         ),
         title: Text(
           file.filename,
@@ -172,7 +173,7 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             Text(
-              'Shared ${_formatTimeAgo(file.sharedAt)}',
+              'Shared ${TimeUtils.formatTimeAgo(file.sharedAt)}',
               style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
           ],
@@ -195,10 +196,7 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.green.shade100,
-          child: Icon(
-            _getFileIcon(file.filename),
-            color: Colors.green.shade700,
-          ),
+          child: FileIcon(filename: file.filename),
         ),
         title: Text(
           file.filename,
@@ -214,7 +212,7 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             Text(
-              'Received ${_formatTimeAgo(file.receivedAt)}',
+              'Received ${TimeUtils.formatTimeAgo(file.receivedAt)}',
               style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
             if (!fileExists)
@@ -315,40 +313,6 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
     );
   }
 
-  IconData _getFileIcon(String filename) {
-    final ext = filename.split('.').last.toLowerCase();
-    switch (ext) {
-      case 'pdf':
-        return Icons.picture_as_pdf;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'webp':
-        return Icons.image;
-      case 'mp4':
-      case 'mov':
-      case 'avi':
-        return Icons.video_file;
-      case 'mp3':
-      case 'wav':
-      case 'aac':
-        return Icons.audio_file;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Icons.folder_zip;
-      case 'doc':
-      case 'docx':
-        return Icons.description;
-      case 'xls':
-      case 'xlsx':
-        return Icons.table_chart;
-      default:
-        return Icons.insert_drive_file;
-    }
-  }
-
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -356,18 +320,6 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
       return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
     }
     return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB';
-  }
-
-  String _formatTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inSeconds < 60) return 'just now';
-    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
-    if (difference.inHours < 24) return '${difference.inHours}h ago';
-    if (difference.inDays < 7) return '${difference.inDays}d ago';
-
-    return DateFormat('MMM d, y').format(dateTime);
   }
 
   void _removeSharedFile(SharedFileInfo file) {

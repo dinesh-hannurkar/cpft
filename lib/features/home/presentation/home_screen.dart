@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cpft/core/logging/app_logger.dart';
+import 'package:cpft/features/home/presentation/widgets/ios_hotspot_instruction_sheet.dart';
+import 'package:cpft/features/webshare/presentation/widgets/web_rtc_connection_bottomsheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -24,8 +27,10 @@ import 'package:cpft/features/home/presentation/widgets/connected_devices_sheet.
 import 'package:cpft/features/home/presentation/widgets/incoming_request_dialog.dart';
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
+import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
 import 'package:cpft/features/chat/presentation/chat_screen.dart';
-import 'package:cpft/features/webshare/presentation/webshare_screen.dart';
+import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
+import 'package:cpft/features/webshare/services/webshare_service.dart';
 import 'package:cpft/features/qr_scanner/presentation/qr_scanner_screen.dart';
 import 'package:cpft/features/chat/services/connection_service.dart';
 
@@ -57,6 +62,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _networkCheckTimer;
   bool _iosManualHotspotMode =
       false; // Track if iOS user manually enabled hotspot
+  late WebRTCFileTransferService _webrtcService;
+  late WebShareService _webShareService;
 
   @override
   void initState() {
@@ -80,6 +87,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       myDeviceName: widget.myDeviceName,
     );
     controller.init();
+
+    // Initialize WebRTC service for direct link sharing
+    _webrtcService = WebRTCFileTransferService(
+      onConnectionEstablished: () {
+        if (!mounted) return;
+        debugPrint('[HomeScreen] 🎉 WebRTC Connection Established!');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('WebRTC Connected! Ready to transfer files.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      },
+      onConnectionLost: () {
+        if (!mounted) return;
+        debugPrint('[HomeScreen] 💔 WebRTC Connection Lost');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('WebRTC Connection Lost'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      },
+      onFileTransferError: (filename, error, isReceive) {
+        if (!mounted) return;
+        debugPrint('[HomeScreen] ❌ WebRTC Transfer Error: $error');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Transfer Error: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      },
+    );
+
+    // Initialize WebShare service for file management
+    _webShareService = WebShareService(
+      deviceName: widget.myDeviceName,
+      customServiceName: 'CPFT_WebRTC_${widget.myDeviceName}',
+    );
   }
 
   void _setupConnectionListener() {
@@ -145,6 +192,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
     }
     controller.dispose();
+    _webrtcService.dispose();
+    _webShareService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -797,305 +846,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 30,
-              offset: const Offset(0, -8),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Drag handle
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 50,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSizes.lg,
-                  vertical: AppSizes.md,
-                ),
-                child: Column(
-                  children: [
-                    // Header with close button
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Enable Personal Hotspot',
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.darkPrimary,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Follow these simple steps',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close_rounded, size: 24),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.grey.shade100,
-                            padding: const EdgeInsets.all(10),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSizes.md),
-
-                    // Steps with cards
-                    _buildIosStepCard(
-                      1,
-                      Icons.settings_rounded,
-                      'Open Settings',
-                      'Tap the Settings app on your home screen',
-                      AppColors.primary,
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-                    _buildIosStepCard(
-                      2,
-                      Icons.signal_cellular_alt_rounded,
-                      'Navigate to Hotspot',
-                      'Tap "Personal Hotspot" or "Cellular" menu',
-                      AppColors.primary,
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-                    _buildIosStepCard(
-                      3,
-                      Icons.toggle_on_rounded,
-                      'Turn It On',
-                      'Toggle "Allow Others to Join" switch',
-                      AppColors.primary,
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-                    _buildIosStepCard(
-                      4,
-                      Icons.done_all_rounded,
-                      'You\'re All Set!',
-                      'Return to this app and continue',
-                      AppColors.primary,
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-
-                    // Info banner
-                    Container(
-                      padding: const EdgeInsets.all(AppSizes.md),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Colors.blue.shade50, Colors.cyan.shade50],
-                        ),
-                        borderRadius: BorderRadius.circular(AppSizes.md),
-                        border: Border.all(
-                          color: Colors.blue.shade200.withValues(alpha: 0.5),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.info_outline_rounded,
-                              color: Colors.blue.shade700,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              'iOS requires manual hotspot setup for security. This takes just few seconds!',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue.shade900,
-                                fontWeight: FontWeight.w600,
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-
-                    // Action button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          try {
-                            debugPrint('🔵 Attempting to open settings...');
-                            await WifiService.openWifiSettings();
-                            debugPrint('✅ Settings opened successfully');
-                          } catch (e) {
-                            debugPrint('❌ Error opening settings: $e');
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Could not open settings: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 20),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          elevation: 0,
-                          shadowColor: AppColors.primary.withValues(alpha: 0.4),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.settings_rounded, size: 22),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'Open Settings Now',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIosStepCard(
-    int number,
-    IconData icon,
-    String title,
-    String description,
-    Color accentColor,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(AppSizes.md),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppSizes.md),
-        border: Border.all(
-          color: accentColor.withValues(alpha: 0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Number badge
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [accentColor, accentColor.withValues(alpha: 0.8)],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: accentColor.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                number.toString(),
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSizes.md),
-          // Content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.2,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: AppSizes.xs),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      builder: (context) => const IosHotspotInstructionsSheet(),
     );
   }
 
@@ -1385,30 +1136,125 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: () async {
                 if (!mounted) return;
 
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WebShareScreen(
-                      deviceName: widget.myDeviceName,
-                      discoveryService: widget.discoveryService,
+                // Check if local-only hotspot is active (which blocks internet for WebRTC signaling)
+                final hotspotRunning =
+                    await LocalHotspotService.isHotspotRunning();
+                final lanIp = await NetworkUtils.getLanIPv4();
+                final hasNetwork = lanIp != null;
+
+                AppLogger.d(
+                  'Link share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
+                  tag: 'HomeScreen',
+                );
+
+                if (hotspotRunning) {
+                  // Local-only hotspot is active - this blocks internet access needed for WebRTC
+                  // Show dialog and let user choose to switch to WiFi
+                  if (!mounted) return;
+                  final shouldSwitch = await app_dialog.showAppDialog<bool>(
+                    context: context,
+                    builder: (context) => AppConfirmDialog(
+                      title: 'Internet Connection Required',
+                      content: Text(
+                        'WebRTC connections require internet access for signaling. '
+                        'A local-only hotspot is currently active.\n\n'
+                        'Would you like to stop the hotspot and open WiFi settings to connect to a network with internet access?',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.darkPrimary,
+                        ),
+                      ),
+                      confirmLabel: 'Yes, Switch to WiFi',
+                      cancelLabel: 'Cancel',
+                      destructive: false,
                     ),
+                  );
+
+                  if (shouldSwitch == true) {
+                    // User confirmed - stop hotspot and open WiFi settings
+                    try {
+                      await LocalHotspotService.stopHotspot();
+                      AppLogger.i(
+                        'Stopped local-only hotspot for WiFi switch',
+                        tag: 'HomeScreen',
+                      );
+
+                      // Clear hotspot info to update UI
+                      if (mounted) {
+                        setState(() {
+                          _hotspotInfo = null;
+                          _hotspotStarting = false;
+                        });
+                      }
+
+                      // Open WiFi settings
+                      await WifiService.openWifiSettings();
+                      AppLogger.i(
+                        'Opened WiFi settings for user',
+                        tag: 'HomeScreen',
+                      );
+
+                      // Refresh network name after a short delay to allow WiFi connection
+                      Future.delayed(const Duration(seconds: 2), () async {
+                        if (mounted) {
+                          await _initializeNetworkName();
+                          AppLogger.i(
+                            'Refreshed network name after WiFi switch',
+                            tag: 'HomeScreen',
+                          );
+                        }
+                      });
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Hotspot stopped. Please connect to WiFi with internet access.',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      AppLogger.w(
+                        'Failed to stop hotspot or open WiFi settings: $e',
+                        tag: 'HomeScreen',
+                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                  return;
+                }
+
+                showAppBottomSheet(
+                  context: context,
+                  title: 'Link Share',
+                  subtitle: 'Establish direct web connection for file sharing.',
+                  showCloseButton: true,
+                  child: WebRTCConnectionBottomSheet(
+                    webrtcService: _webrtcService,
+                    webShareService: _webShareService,
+                    onConnected: () {
+                      // Optionally navigate to file transfer screen or show success
+                    },
+                    onError: (error) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Connection Error: $error'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    },
                   ),
                 );
               },
             ),
-            // const SizedBox(width: AppSizes.md),
-            // HotspotButton(
-            //   onPressed: () async {
-            //     if (!mounted) return;
-
-            //     Navigator.push(
-            //       context,
-            //       MaterialPageRoute(
-            //         builder: (context) => const HotspotScreen(),
-            //       ),
-            //     );
-            //   },
-            // ),
           ],
         ),
         const SizedBox(height: AppSizes.md),

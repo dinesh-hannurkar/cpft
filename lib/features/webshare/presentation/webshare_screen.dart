@@ -1,19 +1,25 @@
+import 'package:cpft/features/chat/utils/file_utils.dart';
+import 'package:cpft/features/webshare/presentation/widgets/file_card.dart';
 import 'package:cpft/features/webshare/presentation/widgets/qr_image_section.dart';
 import 'package:cpft/features/webshare/presentation/widgets/qr_link_chip.dart';
 import 'package:cpft/features/webshare/presentation/widgets/received_file_item.dart';
+import 'package:cpft/features/webshare/presentation/widgets/status_indicator.dart';
 import 'package:cpft/features/webshare/presentation/widgets/upload_progress.dart';
 import 'package:cpft/features/webshare/presentation/widgets/uploading_file_item.dart';
+import 'package:cpft/features/webshare/services/web_server.dart';
 import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
+import 'package:cpft/utils/file_saver.dart';
+import 'package:cpft/utils/mime_utils.dart';
+import 'package:cpft/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:cpft/features/webshare/services/web_download.dart';
 import 'package:cpft/features/webshare/services/web_received_cache.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
-import 'package:path/path.dart' as p;
-import 'dart:io' if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
+import 'dart:io'
+    if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
 import 'dart:async';
 import 'package:open_filex/open_filex.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_action_button.dart';
@@ -23,7 +29,9 @@ import '../../../core/constants/app_sizes.dart';
 import '../../../utils/network_utils.dart';
 import '../../../features/home/presentation/widgets/network_banner.dart';
 import '../services/webshare_service.dart';
-import '../services/web_server.dart';
+import '../services/file_action_handler.dart';
+import '../../../utils/web_url_utils.dart';
+import 'webrtc_chat_screen.dart';
 
 /// Main screen for web share functionality
 class WebShareScreen extends StatefulWidget {
@@ -71,9 +79,29 @@ class _WebShareScreenState extends State<WebShareScreen>
   AnimationController? _fileIconPulse;
   Timer? _fileIconTimer;
 
+  // Room joining state for web
+  final TextEditingController _roomIdController = TextEditingController();
+  bool _isJoiningRoom = false;
+
   @override
   void initState() {
     super.initState();
+
+    // On web, check for room ID from URL parameters
+    if (kIsWeb) {
+      final roomIdFromUrl = WebUrlUtils.getRoomIdFromUrl();
+      if (roomIdFromUrl != null && roomIdFromUrl.isNotEmpty) {
+        _roomIdController.text = roomIdFromUrl;
+        // Auto-join the room after a short delay to allow UI to build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              _joinWebRTCRoom(roomIdFromUrl);
+            }
+          });
+        });
+      }
+    }
 
     // On web, default to WebRTC mode (HTTP server not available)
     if (kIsWeb) {
@@ -184,7 +212,11 @@ class _WebShareScreenState extends State<WebShareScreen>
             final bytes = _webrtcService.receivedFileBytes;
             final name = _webrtcService.receivedFileName ?? filename;
             final cacheId = WebReceivedCache.put(name, bytes);
-            _webShareService.addWebRTCReceivedFile(name, 'web-bytes:$cacheId', bytes.length);
+            _webShareService.addWebRTCReceivedFile(
+              name,
+              'web-bytes:$cacheId',
+              bytes.length,
+            );
           }
           // Do not auto-download on web; user will tap Download
         } else {
@@ -254,7 +286,9 @@ class _WebShareScreenState extends State<WebShareScreen>
       },
       onFileTransferError: (filename, reason, duringSend) {
         if (!mounted) return;
-        debugPrint('[WebShareScreen] ❌ WebRTC transfer error: $filename | $reason');
+        debugPrint(
+          '[WebShareScreen] ❌ WebRTC transfer error: $filename | $reason',
+        );
         setState(() {
           _uploadProgress.remove(filename);
         });
@@ -445,60 +479,14 @@ class _WebShareScreenState extends State<WebShareScreen>
     _initializeNetworkName();
   }
 
-  String _guessMime(String ext) {
-    switch (ext) {
-      case 'png':
-        return 'image/png';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      case 'svg':
-        return 'image/svg+xml';
-      case 'pdf':
-        return 'application/pdf';
-      case 'txt':
-        return 'text/plain';
-      case 'json':
-        return 'application/json';
-      case 'csv':
-        return 'text/csv';
-      case 'mp4':
-        return 'video/mp4';
-      case 'mp3':
-        return 'audio/mpeg';
-      case 'wav':
-        return 'audio/wav';
-      case 'zip':
-        return 'application/zip';
-      case 'gz':
-      case 'tgz':
-        return 'application/gzip';
-      case 'apk':
-        return 'application/vnd.android.package-archive';
-      default:
-        return 'application/octet-stream';
-    }
-  }
-
-  Future<void> _saveToDevicePicker(String filename, String sourcePath) async {
-    try {
-      final params = SaveFileDialogParams(sourceFilePath: sourcePath, fileName: filename);
-      final savedPath = await FlutterFileDialog.saveFile(params: params);
-      if (savedPath != null && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved: ${p.basename(savedPath)}')),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
-    }
+  @override
+  void dispose() {
+    _roomIdController.dispose();
+    _fileIconTimer?.cancel();
+    _fileIconPulse?.dispose();
+    _webShareService.dispose();
+    _webrtcService.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeNetworkName() async {
@@ -650,6 +638,201 @@ class _WebShareScreenState extends State<WebShareScreen>
         ),
       );
     }
+  }
+
+  // Join WebRTC room and navigate to chat screen
+  Future<void> _joinWebRTCRoom(String roomId) async {
+    if (roomId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter a room ID',
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isJoiningRoom = true;
+    });
+
+    try {
+      // Connect to signaling server
+      await _webrtcService.connectToSignalingServer(roomId);
+
+      // Navigate to WebRTC chat screen
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => WebRTCChatScreen(
+            webrtcService: _webrtcService,
+            webShareService: _webShareService,
+            roomId: roomId,
+            onDisconnect: () {
+              // Handle disconnect - go back to room joining screen
+              Navigator.of(context).pop();
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to join room: ${e.toString()}',
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isJoiningRoom = false;
+        });
+      }
+    }
+  }
+
+  // Build room joining UI for web
+  Widget _buildRoomJoiningUI() {
+    return Expanded(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Icon
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.skyBlue],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.group_add,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: AppSizes.lg),
+              // Title
+              Text(
+                'Join WebRTC Room',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSizes.md),
+              // Description
+              Text(
+                'Enter a room ID to connect with another device for peer-to-peer file sharing.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.greyDark,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSizes.xl),
+              // Room ID input
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _roomIdController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter room ID',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSizes.lg,
+                      vertical: AppSizes.md,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.meeting_room,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSizes.lg),
+              // Join button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isJoiningRoom
+                      ? null
+                      : () => _joinWebRTCRoom(_roomIdController.text.trim()),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: AppSizes.md),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: _isJoiningRoom
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Join Room',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: AppSizes.md),
+              // Helper text
+              Text(
+                'Both devices must enter the same room ID to connect.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.greyLight,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // Test method to discover HTTP services
@@ -902,7 +1085,10 @@ class _WebShareScreenState extends State<WebShareScreen>
                   ),
                 ),
                 const SizedBox(height: AppSizes.md),
-                if ((_transferMode && _webShareService.isRunning) ||
+                // On web, show room joining UI when not connected
+                if (kIsWeb && !_webrtcService.connectionEstablished.value) ...[
+                  _buildRoomJoiningUI(),
+                ] else if ((_transferMode && _webShareService.isRunning) ||
                     (!_transferMode &&
                         _webrtcService.connectionEstablished.value)) ...[
                   Center(
@@ -1347,9 +1533,9 @@ class _WebShareScreenState extends State<WebShareScreen>
           return Center(
             child: Text(
               'No files shared yet.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.greyLight,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.greyLight),
               textAlign: TextAlign.center,
             ),
           );
@@ -1365,10 +1551,10 @@ class _WebShareScreenState extends State<WebShareScreen>
             }
 
             final f = item as SharedFile;
-            return _buildFileCard(
-              f.filename,
-              f.sizeBytes,
-              f.sharedAt,
+            return FileCard(
+              filename: f.filename,
+              sizeBytes: f.sizeBytes,
+              timestamp: f.sharedAt,
               onAction: (context) => _webShareService.removeSharedFile(f.id),
               actionIcon: Icons.delete_forever,
             );
@@ -1412,131 +1598,18 @@ class _WebShareScreenState extends State<WebShareScreen>
               return _buildUploadingFileCard(item.progress);
             } else if (item is ReceivedFileItem) {
               final receivedFile = item.file;
-              return _buildFileCard(
-                receivedFile.filename,
-                receivedFile.sizeBytes,
-                receivedFile.receivedAt,
-                onTap: () async {
-                  if (kIsWeb && (receivedFile.path.startsWith('web-bytes:') || receivedFile.path.startsWith('web-parts:'))) {
-                    // On web cached items, trigger the same action as the download button
-                    try {
-                      // Reuse the action handler
-                      // ignore: use_build_context_synchronously
-                      await Future.microtask(() => {});
-                      // Call the same logic as onAction
-                      // Note: onAction is non-null in this callsite
-                      // ignore: unnecessary_lambdas
-                      (context as BuildContext);
-                      // Invoke the action using this context
-                      // ignore: inference_failure_on_untyped_parameter
-                      // ignore: avoid_dynamic_calls
-                      // We directly duplicate the download logic below to avoid context quirks
-                      final path = receivedFile.path;
-                      if (path.startsWith('web-bytes:')) {
-                        final id = path.substring('web-bytes:'.length);
-                        final data = WebReceivedCache.get(id);
-                        if (data != null) {
-                          final ext = (receivedFile.filename.contains('.')
-                              ? receivedFile.filename.split('.').last.toLowerCase()
-                              : '');
-                          final mime = _guessMime(ext);
-                          WebDownload.saveBytes(receivedFile.filename, data, contentType: mime);
-                          return;
-                        }
-                      } else if (path.startsWith('web-parts:')) {
-                        final id = path.substring('web-parts:'.length);
-                        final parts = WebReceivedCache.getParts(id);
-                        if (parts != null) {
-                          final ext = (receivedFile.filename.contains('.')
-                              ? receivedFile.filename.split('.').last.toLowerCase()
-                              : '');
-                          final mime = _guessMime(ext);
-                          WebDownload.saveParts(receivedFile.filename, parts, contentType: mime);
-                          return;
-                        }
-                      }
-                    } catch (_) {}
-                    return;
-                  }
-                  try {
-                    await OpenFilex.open(receivedFile.path);
-                  } catch (_) {}
-                },
-                onAction: (context) async {
-                  if (kIsWeb && receivedFile.path.startsWith('web-bytes:')) {
-                    final id = receivedFile.path.substring('web-bytes:'.length);
-                    final data = WebReceivedCache.get(id);
-                    if (data != null) {
-                      final ext = (receivedFile.filename.contains('.')
-                          ? receivedFile.filename.split('.').last.toLowerCase()
-                          : '');
-                      final mime = _guessMime(ext);
-                      WebDownload.saveBytes(receivedFile.filename, data, contentType: mime);
-                      return;
-                    }
-                  }
-                  if (kIsWeb && receivedFile.path.startsWith('web-parts:')) {
-                    final id = receivedFile.path.substring('web-parts:'.length);
-                    final parts = WebReceivedCache.getParts(id);
-                    if (parts != null) {
-                      final ext = (receivedFile.filename.contains('.')
-                          ? receivedFile.filename.split('.').last.toLowerCase()
-                          : '');
-                      final mime = _guessMime(ext);
-                      WebDownload.saveParts(receivedFile.filename, parts.cast(), contentType: mime);
-                      return;
-                    }
-                  }
-                  // Native: show actions - Open, Save to device…, Share
-                  if (!kIsWeb) {
-                    // ignore: use_build_context_synchronously
-                    await showModalBottomSheet(
-                      context: context,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                      ),
-                      builder: (_) => SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ListTile(
-                              leading: const Icon(Icons.open_in_new),
-                              title: const Text('Open'),
-                              onTap: () async {
-                                Navigator.of(context).pop();
-                                try { await OpenFilex.open(receivedFile.path); } catch (_) {}
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.save_alt),
-                              title: const Text('Save to device…'),
-                              subtitle: const Text('Choose a location to save this file'),
-                              onTap: () async {
-                                Navigator.of(context).pop();
-                                await _saveToDevicePicker(receivedFile.filename, receivedFile.path);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.ios_share),
-                              title: const Text('Share / Export'),
-                              onTap: () async {
-                                Navigator.of(context).pop();
-                                final box = context.findRenderObject() as RenderBox?;
-                                final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-                                final size = box?.size ?? Size.zero;
-                                await Share.shareXFiles(
-                                  [XFile(receivedFile.path)],
-                                  sharePositionOrigin: Rect.fromLTWH(position.dx, position.dy, size.width, size.height),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-                },
+              return FileCard(
+                filename: receivedFile.filename,
+                sizeBytes: receivedFile.sizeBytes,
+                timestamp: receivedFile.receivedAt,
+                onTap: FileActionHandler.createOnTap(
+                  receivedFile.filename,
+                  receivedFile.path,
+                ),
+                onAction: FileActionHandler.createOnAction(
+                  receivedFile.filename,
+                  receivedFile.path,
+                ),
                 actionIcon: Icons.download,
               );
             }
@@ -1545,103 +1618,6 @@ class _WebShareScreenState extends State<WebShareScreen>
         );
       },
     );
-  }
-
-  String _extensionTrim(String ext) {
-    ext = ext.trim();
-    if (ext.length > 6) ext = ext.substring(0, 6);
-    return ext.toUpperCase();
-  }
-
-  String _fmtBytes(int bytes) {
-    // Use SI (decimal) units for display to match user expectations (KB=1000, MB=1000^2)
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    double size = bytes.toDouble();
-    int unit = 0;
-    while (size >= 1000 && unit < units.length - 1) {
-      size /= 1000;
-      unit++;
-    }
-    return '${size.toStringAsFixed(size < 10 && unit > 0 ? 1 : 0)} ${units[unit]}';
-  }
-
-  Widget _buildFileIcon(String name) {
-    final lower = name.toLowerCase();
-    final ext = lower.contains('.') ? lower.split('.').last : '';
-
-    IconData icon;
-    Color fg;
-    Color bg;
-
-    const imageExt = {
-      'jpg',
-      'jpeg',
-      'png',
-      'gif',
-      'webp',
-      'bmp',
-      'svg',
-      'heic',
-      'heif',
-    };
-    const videoExt = {'mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v'};
-    const audioExt = {'mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus'};
-    const pdfExt = {'pdf'};
-    const archiveExt = {'zip', 'rar', '7z', 'tar', 'gz', 'bz2'};
-    const docExt = {'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'txt'};
-
-    if (imageExt.contains(ext)) {
-      icon = Icons.image;
-      fg = const Color(0xFF1E88E5);
-      bg = const Color(0xFFE3F2FD);
-    } else if (videoExt.contains(ext)) {
-      icon = Icons.videocam;
-      fg = const Color(0xFF6A1B9A);
-      bg = const Color(0xFFF3E5F5);
-    } else if (audioExt.contains(ext)) {
-      icon = Icons.audiotrack;
-      fg = const Color(0xFF00897B);
-      bg = const Color(0xFFE0F2F1);
-    } else if (pdfExt.contains(ext)) {
-      icon = Icons.picture_as_pdf;
-      fg = const Color(0xFFD32F2F);
-      bg = const Color(0xFFFDECEA);
-    } else if (archiveExt.contains(ext)) {
-      icon = Icons.archive;
-      fg = const Color(0xFF5D4037);
-      bg = const Color(0xFFEFEBE9);
-    } else if (docExt.contains(ext)) {
-      icon = Icons.description;
-      fg = const Color(0xFF1565C0);
-      bg = const Color(0xFFE3F2FD);
-    } else if (ext == 'apk') {
-      icon = Icons.android;
-      fg = const Color(0xFF2E7D32);
-      bg = const Color(0xFFE8F5E9);
-    } else {
-      icon = Icons.insert_drive_file;
-      fg = const Color(0xFF455A64);
-      bg = const Color(0xFFECEFF1);
-    }
-
-    return Container(
-      width: 68,
-      height: 68,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(icon, color: fg),
-    );
-  }
-
-  String _formatTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
   Widget _buildUploadingFileCard(UploadProgress progress) {
@@ -1673,7 +1649,7 @@ class _WebShareScreenState extends State<WebShareScreen>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  _buildFileIcon(progress.filename),
+                  FileIcon(filename: progress.filename),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -1696,7 +1672,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                               ),
                               child: Text(
                                 progress.filename.contains('.')
-                                    ? _extensionTrim(
+                                    ? extensionTrim(
                                         progress.filename.split('.').last,
                                       )
                                     : 'FILE',
@@ -1729,8 +1705,8 @@ class _WebShareScreenState extends State<WebShareScreen>
                               children: [
                                 Text(
                                   progress.isIndeterminate
-                                      ? '${_fmtBytes(progress.received)} uploaded'
-                                      : '${_fmtBytes(progress.received)} / ${_fmtBytes(progress.total)}',
+                                      ? '${formatBytes(progress.received)} uploaded'
+                                      : '${formatBytes(progress.received)} / ${formatBytes(progress.total)}',
                                   style: const TextStyle(
                                     color: Colors.black54,
                                     fontSize: 12,
@@ -1756,7 +1732,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                                   return Padding(
                                     padding: const EdgeInsets.only(top: 4),
                                     child: Text(
-                                      '${_fmtBytes(speed.toInt())}/s',
+                                      '${formatBytes(speed.toInt())}/s',
                                       style: TextStyle(
                                         color: Colors.blue.shade700,
                                         fontSize: 11,
@@ -1793,146 +1769,6 @@ class _WebShareScreenState extends State<WebShareScreen>
         ),
       ),
     );
-  }
-
-  Widget _buildFileCard(
-    String filename,
-    int sizeBytes,
-    DateTime timestamp, {
-    VoidCallback? onTap,
-    Function(BuildContext)? onAction,
-    IconData? actionIcon,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        splashColor: Colors.blue.withValues(alpha: 0.08),
-        highlightColor: Colors.blue.withValues(alpha: 0.04),
-        hoverColor: Colors.blue.withValues(alpha: 0.03),
-        mouseCursor: onTap != null
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: AppSizes.md),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-            border: Border.all(color: Colors.blue.shade50),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildFileIcon(filename),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              margin: const EdgeInsets.only(right: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE3F2FD),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: const Color(0xFFBBDEFB),
-                                ),
-                              ),
-                              child: Text(
-                                filename.contains('.')
-                                    ? _extensionTrim(filename.split('.').last)
-                                    : 'FILE',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1565C0),
-                                  letterSpacing: .5,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                filename,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Text(
-                              _fmtBytes(sizeBytes),
-                              style: const TextStyle(
-                                color: Colors.black54,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              _formatTime(timestamp),
-                              style: const TextStyle(
-                                color: Colors.black38,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (onAction != null)
-                    Builder(
-                      builder: (buttonContext) => IconButton(
-                        icon: Icon(
-                          actionIcon ?? Icons.delete_forever,
-                          color: actionIcon == Icons.download
-                              ? AppColors.primary
-                              : const Color(0xFFD32F2F),
-                          size: 22,
-                        ),
-                        onPressed: () => onAction.call(buttonContext),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _fileIconPulse?.dispose();
-    _fileIconTimer?.cancel();
-    _webShareService.dispose();
-    _webrtcService.dispose();
-    super.dispose();
   }
 
   Future<void> _startWebRTCConnection() async {
@@ -2017,10 +1853,12 @@ class WebRTCConnectionBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<WebRTCConnectionBottomSheet> createState() => _WebRTCConnectionBottomSheetState();
+  State<WebRTCConnectionBottomSheet> createState() =>
+      _WebRTCConnectionBottomSheetState();
 }
 
-class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomSheet> {
+class _WebRTCConnectionBottomSheetState
+    extends State<WebRTCConnectionBottomSheet> {
   final TextEditingController _peerIdController = TextEditingController();
   bool _isConnecting = false;
   bool _hasJoinedRoom = false;
@@ -2062,7 +1900,7 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
     // Check if local mode and if host
     final isLocal = widget.webrtcService.isLocalMode.value;
     final isHost = widget.webrtcService.isHostMode.value;
-    
+
     // For host mode, room ID is auto-generated. For join mode, need manual entry.
     String roomId;
     if (isHost && isLocal) {
@@ -2094,11 +1932,12 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
       setState(() {
         _isDiscovering = !isHost && isLocal; // Show discovery for join mode
       });
-      
+
       if (isLocal) {
         if (isHost) {
           // Start as host and get generated room ID with port
-          final generatedRoomId = await widget.webrtcService.startLocalHostAndConnect();
+          final generatedRoomId = await widget.webrtcService
+              .startLocalHostAndConnect();
           if (mounted && generatedRoomId != null) {
             setState(() {
               _detectedHostIp = generatedRoomId; // Store the room ID
@@ -2120,7 +1959,7 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
         // Use remote Socket.IO signaling
         await widget.webrtcService.connectToSignalingServer(roomId);
       }
-      
+
       if (mounted) {
         setState(() {
           _hasJoinedRoom = true;
@@ -2176,14 +2015,18 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                                 'Signaling Mode',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: isLocal ? Colors.blue.shade900 : Colors.green.shade900,
+                                  color: isLocal
+                                      ? Colors.blue.shade900
+                                      : Colors.green.shade900,
                                 ),
                               ),
                               const Spacer(),
                               Switch(
                                 value: isLocal,
                                 onChanged: (value) {
-                                  widget.webrtcService.setSignalingMode(useLocal: value);
+                                  widget.webrtcService.setSignalingMode(
+                                    useLocal: value,
+                                  );
                                 },
                                 activeColor: Colors.blue,
                                 inactiveThumbColor: Colors.green,
@@ -2192,12 +2035,14 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            isLocal 
-                              ? 'Local (WiFi/Hotspot) - No internet needed'
-                              : 'Remote (Internet) - Works anywhere',
+                            isLocal
+                                ? 'Local (WiFi/Hotspot) - No internet needed'
+                                : 'Remote (Internet) - Works anywhere',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isLocal ? Colors.blue.shade700 : Colors.green.shade700,
+                              color: isLocal
+                                  ? Colors.blue.shade700
+                                  : Colors.green.shade700,
                             ),
                           ),
                         ],
@@ -2216,7 +2061,9 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                     valueListenable: widget.webrtcService.isHostMode,
                     builder: (context, isHost, _) {
                       return Card(
-                        color: isHost ? Colors.purple.shade50 : Colors.orange.shade50,
+                        color: isHost
+                            ? Colors.purple.shade50
+                            : Colors.orange.shade50,
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
@@ -2226,7 +2073,9 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                                 children: [
                                   Icon(
                                     isHost ? Icons.router : Icons.link,
-                                    color: isHost ? Colors.purple : Colors.orange,
+                                    color: isHost
+                                        ? Colors.purple
+                                        : Colors.orange,
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
@@ -2234,7 +2083,9 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                                       'Connection Role',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: isHost ? Colors.purple.shade900 : Colors.orange.shade900,
+                                        color: isHost
+                                            ? Colors.purple.shade900
+                                            : Colors.orange.shade900,
                                       ),
                                     ),
                                   ),
@@ -2247,29 +2098,39 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                                   segments: const [
                                     ButtonSegment(
                                       value: true,
-                                      label: Text('Host', style: TextStyle(fontSize: 13)),
+                                      label: Text(
+                                        'Host',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
                                       icon: Icon(Icons.router, size: 18),
                                     ),
                                     ButtonSegment(
                                       value: false,
-                                      label: Text('Join', style: TextStyle(fontSize: 13)),
+                                      label: Text(
+                                        'Join',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
                                       icon: Icon(Icons.link, size: 18),
                                     ),
                                   ],
                                   selected: {isHost},
                                   onSelectionChanged: (Set<bool> selected) {
-                                    widget.webrtcService.setHostMode(selected.first);
+                                    widget.webrtcService.setHostMode(
+                                      selected.first,
+                                    );
                                   },
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                isHost 
-                                  ? 'Create the room and share your IP with peers'
-                                  : 'Join an existing room - host IP auto-detected',
+                                isHost
+                                    ? 'Create the room and share your IP with peers'
+                                    : 'Join an existing room - host IP auto-detected',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isHost ? Colors.purple.shade700 : Colors.orange.shade700,
+                                  color: isHost
+                                      ? Colors.purple.shade700
+                                      : Colors.orange.shade700,
                                 ),
                               ),
                             ],
@@ -2283,7 +2144,7 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
               const SizedBox(height: 12),
             ],
             // Step 1: Network Check
-            _buildStatusIndicator(
+            StatusIndicator(
               icon: (_networkName != null && _networkName != 'Not Connected')
                   ? Icons.wifi
                   : Icons.wifi_off,
@@ -2299,21 +2160,21 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
             ),
             const SizedBox(height: 12),
             // Signaling Backend Indicator
-            _buildStatusIndicator(
+            StatusIndicator(
               icon: Icons.cloud,
               text: 'Signaling Backend',
               status: widget.webrtcService.useFirestoreSignaling
-                ? 'Firestore (Firebase)'
-                : (widget.webrtcService.isLocalMode.value
-                  ? 'Local WebSocket'
-                  : 'Socket.IO Remote'),
+                  ? 'Firestore (Firebase)'
+                  : (widget.webrtcService.isLocalMode.value
+                        ? 'Local WebSocket'
+                        : 'Socket.IO Remote'),
               isComplete: true,
               color: Colors.indigo,
             ),
             const SizedBox(height: 12),
             // Discovery status (for join mode)
             if (_isDiscovering) ...[
-              _buildStatusIndicator(
+              StatusIndicator(
                 icon: Icons.search,
                 text: 'Finding Host',
                 status: 'Scanning local network for WebRTC host...',
@@ -2332,12 +2193,11 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
               const SizedBox(height: 12),
               TextField(
                 controller: _peerIdController,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.black87,
-                ),
+                style: const TextStyle(fontSize: 16, color: Colors.black87),
                 decoration: InputDecoration(
-                  hintText: kIsWeb ? 'Enter room ID (e.g., "1234")' : 'Enter room ID (e.g., "1234-192-p8081")',
+                  hintText: kIsWeb
+                      ? 'Enter room ID (e.g., "1234")'
+                      : 'Enter room ID (e.g., "1234-192-p8081")',
                   hintStyle: TextStyle(color: Colors.grey.shade400),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -2349,14 +2209,26 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 2,
+                    ),
                   ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
-                  prefixIcon: const Icon(Icons.meeting_room, color: AppColors.primary),
+                  prefixIcon: const Icon(
+                    Icons.meeting_room,
+                    color: AppColors.primary,
+                  ),
                   helperText: 'Both devices must use the same room ID',
-                  helperStyle: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  helperStyle: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                 ),
                 enabled: !_isConnecting,
                 onSubmitted: (_) => _connectToPeer(),
@@ -2372,9 +2244,15 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                               setState(() => _isConnecting = true);
                               try {
                                 // Ensure Firestore (remote) signaling for web sharing
-                                widget.webrtcService.setSignalingMode(useLocal: false);
+                                widget.webrtcService.setSignalingMode(
+                                  useLocal: false,
+                                );
                                 widget.webrtcService.setHostMode(false);
-                                final id = await widget.webrtcService.createAutoRoomAndConnect(length: 4, alphanumeric: false);
+                                final id = await widget.webrtcService
+                                    .createAutoRoomAndConnect(
+                                      length: 4,
+                                      alphanumeric: false,
+                                    );
                                 if (!mounted) return;
                                 setState(() {
                                   _peerIdController.text = id;
@@ -2388,7 +2266,9 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                                 widget.onError(e.toString());
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Failed to start web sharing: $e'),
+                                    content: Text(
+                                      'Failed to start web sharing: $e',
+                                    ),
                                     backgroundColor: Colors.red.shade700,
                                   ),
                                 );
@@ -2398,7 +2278,9 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                       label: const Text('Start Web Sharing (auto room)'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -2427,13 +2309,17 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : Icon(isHost ? Icons.router : Icons.link, size: 24),
                       label: Text(
-                        _isConnecting 
-                            ? (isHost ? 'Starting Server...' : 'Joining Room...') 
+                        _isConnecting
+                            ? (isHost
+                                  ? 'Starting Server...'
+                                  : 'Joining Room...')
                             : (isHost ? 'Start Hosting' : 'Join Room'),
                         style: const TextStyle(
                           fontSize: 16,
@@ -2446,7 +2332,7 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
               ),
               const SizedBox(height: 8),
             ] else ...[
-              _buildStatusIndicator(
+              StatusIndicator(
                 icon: Icons.meeting_room,
                 text: 'Room Joined',
                 status: 'Room: $_currentRoomId',
@@ -2468,7 +2354,11 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.share, color: Colors.purple.shade700, size: 20),
+                          Icon(
+                            Icons.share,
+                            color: Colors.purple.shade700,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Share This Room ID',
@@ -2492,11 +2382,16 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                         children: [
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.purple.shade200),
+                                border: Border.all(
+                                  color: Colors.purple.shade200,
+                                ),
                               ),
                               child: SelectableText(
                                 _detectedHostIp!,
@@ -2515,7 +2410,9 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                             onPressed: () {
                               // Copy to clipboard
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('IP copied to clipboard')),
+                                const SnackBar(
+                                  content: Text('IP copied to clipboard'),
+                                ),
                               );
                             },
                             tooltip: 'Copy IP',
@@ -2539,7 +2436,7 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
                       }
                     });
                   }
-                  return _buildStatusIndicator(
+                  return StatusIndicator(
                     icon: isConnected
                         ? Icons.check_circle
                         : Icons.hourglass_empty,
@@ -2558,61 +2455,6 @@ class _WebRTCConnectionBottomSheetState extends State<WebRTCConnectionBottomShee
             ],
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatusIndicator({
-    required IconData icon,
-    required String text,
-    required String status,
-    required bool isComplete,
-    required Color color,
-    bool isLoading = false,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          if (isLoading)
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-              ),
-            )
-          else
-            Icon(icon, color: color, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  text,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  status,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                ),
-              ],
-            ),
-          ),
-          if (isComplete) Icon(Icons.check, color: color, size: 20),
-        ],
       ),
     );
   }

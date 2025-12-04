@@ -10,7 +10,7 @@ import 'features/home/presentation/home_screen.dart';
 import 'features/chat/presentation/chat_screen.dart';
 import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
-import 'features/webshare/presentation/webshare_screen.dart';
+import 'features/webshare/presentation/web_room_entry_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'firebase_options.dart';
 import 'services/firebase_initializer.dart';
@@ -47,11 +47,7 @@ class MainApp extends StatelessWidget {
         '/': (context) => const PermissionWrapper(),
         '/setup': (context) => const DeviceNameSetupScreen(),
         '/home': (context) => const HomeWrapper(),
-        '/webshare': (context) => const WebShareScreen(
-          deviceName: 'Default Device', // You can make this configurable later
-          customServiceName: null,
-          discoveryService: null,
-        ),
+        '/webshare': (context) => const WebRoomEntryScreen(),
       },
       builder: (context, child) {
         final content = Container(

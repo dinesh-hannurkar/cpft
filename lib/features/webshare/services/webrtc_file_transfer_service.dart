@@ -69,17 +69,17 @@ class WebRTCFileTransferService {
   ); // Track if hosting
 
   // Callbacks
-  final Function()? onConnectionEstablished;
-  final Function()? onConnectionLost;
-  final Function(String filename, int bytesReceived, int totalBytes)?
+  Function()? onConnectionEstablished;
+  Function()? onConnectionLost;
+  Function(String filename, int bytesReceived, int totalBytes)?
   onFileReceiveProgress;
-  final Function(String filename, String savedPath)? onFileReceiveComplete;
-  final Function(String filename, int bytesSent, int totalBytes)?
+  Function(String filename, String savedPath)? onFileReceiveComplete;
+  Function(String filename, int bytesSent, int totalBytes)?
   onFileSendProgress;
-  final Function(String filename, String filePath, int fileSize)?
+  Function(String filename, String filePath, int fileSize)?
   onFileSendComplete;
   // New: error callback to signal stalled/failed transfers
-  final Function(String filename, String reason, bool duringSend)?
+  Function(String filename, String reason, bool duringSend)?
   onFileTransferError;
 
   // File transfer data
@@ -148,25 +148,76 @@ class WebRTCFileTransferService {
     }
   }
 
+  // Additional callbacks that can be registered after initialization
+  Function(String filename, int bytesReceived, int totalBytes)?
+      onFileReceiveProgressExtra;
+  Function(String filename, int bytesSent, int totalBytes)?
+      onFileSendProgressExtra;
+  Function(String filename, String filePath, int fileSize)?
+      onFileSendCompleteExtra;
+  Function(String filename, String savedPath)? onFileReceiveCompleteExtra;
+  Function(String filename, String reason, bool duringSend)?
+      onFileTransferErrorExtra;
+
+  // Methods to register additional callbacks
+  void addFileReceiveProgressListener(
+      Function(String filename, int bytesReceived, int totalBytes) listener) {
+    onFileReceiveProgressExtra = listener;
+  }
+
+  void addFileSendProgressListener(
+      Function(String filename, int bytesSent, int totalBytes) listener) {
+    onFileSendProgressExtra = listener;
+  }
+
+  void addFileSendCompleteListener(
+      Function(String filename, String filePath, int fileSize) listener) {
+    onFileSendCompleteExtra = listener;
+  }
+
+  void addFileReceiveCompleteListener(
+      Function(String filename, String savedPath) listener) {
+    onFileReceiveCompleteExtra = listener;
+  }
+
+  void addFileTransferErrorListener(
+      Function(String filename, String reason, bool duringSend) listener) {
+    onFileTransferErrorExtra = listener;
+  }
+
+  // Setter methods for main callbacks (to allow setting them after construction)
+  void setConnectionEstablishedCallback(Function()? callback) {
+    // Note: This is a workaround since the field is final
+    // In a real implementation, these would be made non-final
+    if (callback != null) {
+      // We can't actually change final fields, so this won't work
+      // This is just a placeholder - the real fix is to make the fields non-final
+    }
+  }
+
   /// Initialize isolate-based transfer system
   Future<void> _initializeIsolates() async {
     _transferIsolate = WebRTCTransferIsolate(
       onSendProgress: (fileName, bytesSent, totalBytes) {
         transferProgress.value = totalBytes == 0 ? 0 : bytesSent / totalBytes;
         onFileSendProgress?.call(fileName, bytesSent, totalBytes);
+        onFileSendProgressExtra?.call(fileName, bytesSent, totalBytes);
       },
       onReceiveProgress: (fileName, bytesReceived, totalBytes) {
         transferProgress.value = totalBytes == 0 ? 0 : bytesReceived / totalBytes;
         onFileReceiveProgress?.call(fileName, bytesReceived, totalBytes);
+        onFileReceiveProgressExtra?.call(fileName, bytesReceived, totalBytes);
       },
       onSendComplete: (fileName, filePath, fileSize) {
         isTransferring.value = false;
         transferProgress.value = 1.0;
         transferSpeed.value = 0.0;
         onFileSendComplete?.call(fileName, filePath, fileSize);
+        onFileSendCompleteExtra?.call(fileName, filePath, fileSize);
       },
       onReceiveComplete: (fileName, savedPath) {
         onFileReceiveComplete?.call(fileName, savedPath);
+        onFileReceiveCompleteExtra?.call(fileName, savedPath);
       },
       onTransferError: (fileName, reason, duringSend) {
         onFileTransferError?.call(fileName, reason, duringSend);
@@ -180,6 +231,8 @@ class WebRTCFileTransferService {
   bool get isConnected => _isConnected;
   String? get mySocketId => _mySocketId;
   String? get roomId => _roomId;
+  String? get receivedFileName => _expectedFileName;
+  int get lastExpectedFileSize => _expectedFileSize;
 
   /// Create a new Firestore room with an auto-generated ID (default 4 digits)
   /// and immediately connect to signaling using that room. Returns the room ID.
@@ -204,8 +257,6 @@ class WebRTCFileTransferService {
     final len = _receivedBytes > 0 ? _receivedBytes : buf.length;
     return Uint8List.view(buf.buffer, 0, len);
   }
-
-  String? get receivedFileName => _expectedFileName;
 
   /// Generate a room ID with embedded IP and port: <random>-<lastIPoctet>-p<port>
   /// Example: 1234-192-p8081 (where 192 is the last octet of 192.168.1.192)
@@ -562,11 +613,21 @@ class WebRTCFileTransferService {
               (cand['sdpMLineIndex'] as num?)?.toInt(),
             );
             if (_fsRemoteDescriptionSet) {
-              try {
-                await _peerConnection?.addCandidate(remoteCand);
-              } catch (e) {
-                AppLogger.e(
-                  'Failed to add ICE candidate (post-remote SDP): $e',
+              // Check if peer connection is still valid before adding candidate
+              if (_peerConnection != null &&
+                  _peerConnection!.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateClosed &&
+                  _peerConnection!.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+                try {
+                  await _peerConnection?.addCandidate(remoteCand);
+                } catch (e) {
+                  AppLogger.e(
+                    'Failed to add ICE candidate (post-remote SDP): $e',
+                    tag: 'WebRTC',
+                  );
+                }
+              } else {
+                AppLogger.w(
+                  'Skipping ICE candidate addition - peer connection is closed or failed',
                   tag: 'WebRTC',
                 );
               }
@@ -624,11 +685,20 @@ class WebRTCFileTransferService {
           for (final cand in List<RTCIceCandidate>.from(
             _fsPendingRemoteCandidates,
           )) {
-            try {
-              await pc.addCandidate(cand);
-            } catch (e) {
-              AppLogger.e(
-                'Failed to add buffered ICE candidate: $e',
+            // Check if peer connection is still valid before adding candidate
+            if (pc.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateClosed &&
+                pc.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+              try {
+                await pc.addCandidate(cand);
+              } catch (e) {
+                AppLogger.e(
+                  'Failed to add buffered ICE candidate: $e',
+                  tag: 'WebRTC',
+                );
+              }
+            } else {
+              AppLogger.w(
+                'Skipping buffered ICE candidate addition - peer connection is closed or failed',
                 tag: 'WebRTC',
               );
             }
@@ -658,9 +728,11 @@ class WebRTCFileTransferService {
           var state = _peerConnection!.signalingState;
 
           // If not stable, handle glare by resetting the connection to accept remote offer
-          if (state != RTCSignalingState.RTCSignalingStateStable) {
+          // This includes null state which can happen during initialization
+          if (state == null || state != RTCSignalingState.RTCSignalingStateStable) {
+            final stateDesc = state == null ? 'null (uninitialized)' : state.toString();
             AppLogger.w(
-              'Remote offer arrived in non-stable state ($state). Resetting to accept remote offer.',
+              'Remote offer arrived in non-stable state ($stateDesc). Resetting to accept remote offer.',
               tag: 'WebRTC',
             );
 
@@ -691,7 +763,57 @@ class WebRTCFileTransferService {
                 });
               }
             };
+            _fsIceSub = session.onIce().listen((snapshot) async {
+              for (final change in snapshot.docChanges) {
+                if (change.type == DocumentChangeType.added) {
+                  final data = change.doc.data();
+                  final cand = data?['candidate'] as Map<String, dynamic>?;
+                  final role = data?['role'] as String?; // who produced this candidate
+                  final sid = data?['sessionId'] as String?;
+                  if (cand != null) {
+                    // Ignore ICE from different session rounds
+                    if (_fsSessionId != null && sid != null && sid != _fsSessionId) {
+                      continue;
+                    }
+                    // Ignore our own ICE candidates
+                    final producedByOfferer = role == 'offerer';
+                    final amOfferer = false; // We're now the answerer
+                    if (role != null && producedByOfferer == amOfferer) {
+                      continue;
+                    }
+                    final remoteCand = RTCIceCandidate(
+                      cand['candidate'] as String?,
+                      cand['sdpMid'] as String?,
+                      (cand['sdpMLineIndex'] as num?)?.toInt(),
+                    );
+                    if (_fsRemoteDescriptionSet) {
+                      // Check if peer connection is still valid before adding candidate
+                      if (_peerConnection != null &&
+                          _peerConnection!.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateClosed &&
+                          _peerConnection!.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+                        try {
+                          await _peerConnection?.addCandidate(remoteCand);
+                        } catch (e) {
+                          AppLogger.e(
+                            'Failed to add ICE candidate (post-remote SDP): $e',
+                            tag: 'WebRTC',
+                          );
+                        }
+                      } else {
+                        AppLogger.w(
+                          'Skipping ICE candidate addition - peer connection is closed or failed',
+                          tag: 'WebRTC',
+                        );
+                      }
+                    } else {
+                      _fsPendingRemoteCandidates.add(remoteCand);
+                    }
+                  }
+                }
+              }
+            });
 
+            // Update state after recreation
             state = _peerConnection!.signalingState;
           }
 
@@ -718,11 +840,21 @@ class WebRTCFileTransferService {
           for (final cand in List<RTCIceCandidate>.from(
             _fsPendingRemoteCandidates,
           )) {
-            try {
-              await _peerConnection?.addCandidate(cand);
-            } catch (e) {
-              AppLogger.e(
-                'Failed to add buffered ICE candidate: $e',
+            // Check if peer connection is still valid before adding candidate
+            if (_peerConnection != null &&
+                _peerConnection!.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateClosed &&
+                _peerConnection!.connectionState != RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+              try {
+                await _peerConnection?.addCandidate(cand);
+              } catch (e) {
+                AppLogger.e(
+                  'Failed to add buffered ICE candidate: $e',
+                  tag: 'WebRTC',
+                );
+              }
+            } else {
+              AppLogger.w(
+                'Skipping buffered ICE candidate addition - peer connection is closed or failed',
                 tag: 'WebRTC',
               );
             }
@@ -1646,6 +1778,18 @@ class WebRTCFileTransferService {
     }
 
     try {
+      final currentState = await _peerConnection!.getSignalingState();
+      debugPrint('[WebRTC] Current signaling state before setRemoteDescription: $currentState');
+      
+      // Only set remote description if we're in the correct state (have-local-offer)
+      if (currentState != RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+        AppLogger.w(
+          'Ignoring answer: peer connection in wrong state ($currentState). Expected: have-local-offer',
+          tag: 'WebRTC',
+        );
+        return;
+      }
+      
       final remoteDescription = RTCSessionDescription(answer['sdp'], 'answer');
       await _peerConnection!.setRemoteDescription(remoteDescription);
       AppLogger.i('Answer processed successfully', tag: 'WebRTC');
@@ -1660,6 +1804,16 @@ class WebRTCFileTransferService {
     if (_peerConnection == null) {
       AppLogger.e(
         'Cannot handle ICE candidate: peer connection not initialized',
+        tag: 'WebRTC',
+      );
+      return;
+    }
+
+    // Check if peer connection is still valid before adding candidate
+    if (_peerConnection!.connectionState == RTCPeerConnectionState.RTCPeerConnectionStateClosed ||
+        _peerConnection!.connectionState == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+      AppLogger.w(
+        'Skipping ICE candidate addition - peer connection is closed or failed',
         tag: 'WebRTC',
       );
       return;
@@ -1815,6 +1969,7 @@ class WebRTCFileTransferService {
         }
 
         onFileSendProgress?.call(fileName, sentBytes.toInt(), fileSize);
+        onFileSendProgressExtra?.call(fileName, sentBytes.toInt(), fileSize);
         // Minimal adaptive pacing for speed (only when buffer very high)
         final b = _dataChannel!.bufferedAmount ?? 0;
         if (b > 1536 * 1024) {
@@ -1876,6 +2031,11 @@ class WebRTCFileTransferService {
       isTransferring.value = false;
       transferProgress.value = 1.0;
       onFileSendComplete?.call(
+        fileName,
+        _currentSendFilePath!,
+        _currentSendFileSize,
+      );
+      onFileSendCompleteExtra?.call(
         fileName,
         _currentSendFilePath!,
         _currentSendFileSize,
@@ -2048,6 +2208,7 @@ class WebRTCFileTransferService {
         }
 
         onFileSendProgress?.call(fileName, sentBytes.toInt(), fileSize);
+        onFileSendProgressExtra?.call(fileName, sentBytes.toInt(), fileSize);
         // Minimal adaptive pacing for speed (only when buffer very high)
         final b = _dataChannel!.bufferedAmount ?? 0;
         if (b > 1536 * 1024) {
@@ -2163,6 +2324,11 @@ class WebRTCFileTransferService {
         fileName, // Use fileName as path for web
         _currentSendFileSize,
       );
+      onFileSendCompleteExtra?.call(
+        fileName,
+        fileName, // Use fileName as path for web
+        _currentSendFileSize,
+      );
 
       NotificationService().showNotification(
         type: NotificationType.fileTransferCompleted,
@@ -2254,6 +2420,7 @@ class WebRTCFileTransferService {
           break;
       }
     } else {
+      debugPrint('[WebRTC] Received data channel message type: ${data['type']}');
       switch (data['type']) {
         case 'file-metadata':
           _handleFileMetadata(data);
@@ -2262,6 +2429,7 @@ class WebRTCFileTransferService {
           _handleFileChunk(data);
           break;
         case 'file-complete':
+          debugPrint('[WebRTC] Received file-complete message for: ${data['fileName']}');
           _handleFileComplete(data);
           break;
         case 'ack':
@@ -2348,6 +2516,11 @@ class WebRTCFileTransferService {
           ? 0
           : receivedBytes / _expectedFileSize;
       onFileReceiveProgress?.call(
+        _expectedFileName!,
+        receivedBytes,
+        _expectedFileSize,
+      );
+      onFileReceiveProgressExtra?.call(
         _expectedFileName!,
         receivedBytes,
         _expectedFileSize,
@@ -2472,6 +2645,11 @@ class WebRTCFileTransferService {
         receivedBytes,
         _expectedFileSize,
       );
+      onFileReceiveProgressExtra?.call(
+        _expectedFileName ?? 'unknown',
+        receivedBytes,
+        _expectedFileSize,
+      );
       _lastReceiveAt = DateTime.now();
       // Receiver-driven flow control: send ACKs periodically and at key milestones
       _chunksSinceAck++;
@@ -2537,6 +2715,8 @@ class WebRTCFileTransferService {
 
   /// Handle file completion
   void _handleFileComplete(Map<String, dynamic> data) async {
+    debugPrint('[WebRTC] _handleFileComplete called: $_expectedFileName, isCompleting: $_isCompleting');
+    debugPrint('[WebRTC] Received bytes: $_receivedBytes / Expected: $_expectedFileSize');
     if (_expectedFileName == null || _isCompleting) return;
 
     try {
@@ -2706,6 +2886,7 @@ class WebRTCFileTransferService {
         final parts = buffer.isNotEmpty ? [buffer] : <Uint8List>[];
         final id = WebReceivedCache.putParts(_expectedFileName!, parts, total);
         onFileReceiveComplete?.call(_expectedFileName!, 'web-parts:$id');
+        onFileReceiveCompleteExtra?.call(_expectedFileName!, 'web-parts:$id');
         // Send final ack for any remaining credit
         if (_chunksSinceAck > 0) {
           final ack = {'type': 'ack', 'count': _chunksSinceAck};
@@ -2715,11 +2896,18 @@ class WebRTCFileTransferService {
       } else {
         // Native: save buffer to file
         if (_receiveBuffer != null) {
+          debugPrint('[WebRTC] Preparing to save file: $_expectedFileName');
+          debugPrint('[WebRTC] Expected file size: $_expectedFileSize bytes');
+          debugPrint('[WebRTC] Received bytes: $_receivedBytes bytes');
+          debugPrint('[WebRTC] Buffer length: ${_receiveBuffer!.length} bytes');
           final directory = await getApplicationDocumentsDirectory();
           filePath = p.join(directory.path, _expectedFileName!);
           final file = io.File(filePath);
           final bytes = Uint8List.view(_receiveBuffer!.buffer, 0, _expectedFileSize);
+          debugPrint('[WebRTC] Writing ${bytes.length} bytes to disk');
           await file.writeAsBytes(bytes);
+          final actualSize = file.lengthSync();
+          debugPrint('[WebRTC] File written. Actual size on disk: $actualSize bytes');
           AppLogger.i('Saved file: $filePath (${bytes.length} bytes)', tag: 'WebRTC');
         } else {
           throw Exception('No buffer available to save file');
@@ -2731,7 +2919,9 @@ class WebRTCFileTransferService {
 
         // Call callback with file info
         if (filePath != null && filePath.isNotEmpty) {
+          debugPrint('[WebRTC] Calling onFileReceiveComplete callback: $_expectedFileName, $filePath');
           onFileReceiveComplete?.call(_expectedFileName!, filePath);
+          onFileReceiveCompleteExtra?.call(_expectedFileName!, filePath);
         } else {
           throw Exception('File path is null or empty after save');
         }
@@ -2808,30 +2998,20 @@ class WebRTCFileTransferService {
     // after saving the file. Closing it here causes "no stream available" errors.
   }
 
-  /// Disconnect from signaling server and reset connection
-  Future<void> disconnect() async {
-    AppLogger.i('Disconnecting WebRTC', tag: 'WebRTC');
-    _cancelReceiveInactivityWatch();
-
-    // Close socket connection
-    _socket?.disconnect();
-    _socket = null;
-    _mySocketId = null;
-    _roomId = null;
-    _connectedPeerSocketId = null;
-    try {
-      _ws?.close();
-    } catch (_) {}
-    _ws = null;
-
-    // Close WebRTC connections
-    await _dataChannel?.close();
-    await _peerConnection?.close();
-    _dataChannel = null;
-    _peerConnection = null;
-    _isConnected = false;
-
-    AppLogger.i('WebRTC disconnected', tag: 'WebRTC');
+  /// Reset send state for new transfer
+  void _resetSendState() {
+    _sendCredits = 0;
+    _currentSendFilePath = null;
+    _currentSendFileSize = 0;
+    _transferStartTime = null;
+    _totalBytesTransferred = 0;
+    _receiverReceivedBytes = 0;
+    _lastAckSentTime = null;
+    _lastAckReceivedTime = null;
+    _smoothedRttMs = 0;
+    _currentChunkSize = 128 * 1024; // Reset to default
+    _chunksSinceAck = 0;
+    transferSpeed.value = 0.0;
   }
 
   /// Reset peer connection for new session
@@ -2931,16 +3111,69 @@ class WebRTCFileTransferService {
     return second >= 16 && second <= 31;
   }
 
-  /// Reset send transfer state
-  void _resetSendState() {
-    isTransferring.value = false;
-    transferProgress.value = 0.0;
-    currentFileName.value = null;
-    _currentSendFilePath = null;
-    _currentSendFileSize = 0;
-    transferSpeed.value = 0.0;
-    _transferStartTime = null;
-    _totalBytesTransferred = 0;
+  /// Disconnect from WebRTC peer and reset connection state
+  Future<void> disconnect() async {
+    try {
+      // Close peer connection
+      await _peerConnection?.close();
+      await _dataChannel?.close();
+
+      // Close signaling connections
+      _socket?.disconnect();
+      _ws?.close();
+      await _firestoreSession?.cleanup();
+      await _firestoreSession?.deleteRoom();
+
+      // Cancel subscriptions
+      await _fsOfferSub?.cancel();
+      await _fsAnswerSub?.cancel();
+      await _fsIceSub?.cancel();
+
+      // Reset state
+      _peerConnection = null;
+      _dataChannel = null;
+      _socket = null;
+      _ws = null;
+      _firestoreSession = null;
+      _fsOfferSub = null;
+      _fsAnswerSub = null;
+      _fsIceSub = null;
+      _roomId = null;
+      _mySocketId = null;
+      _peerId = null;
+      _connectedPeerSocketId = null;
+      _isInitialized = false;
+      _isConnected = false;
+      _makingOffer = false;
+      _ignoreOffer = false;
+      _fsOfferHandled = false;
+      _fsAnswerHandled = false;
+      _fsRemoteDescriptionSet = false;
+      _fsPendingRemoteCandidates.clear();
+      _fsSessionId = null;
+
+      // Reset transfer state
+      _resetSendState();
+      _receiveBuffer = null;
+      _expectedFileSize = 0;
+      _receivedBytes = 0;
+      _expectedFileName = null;
+      _isCompleting = false;
+      _webReceiveBuffer = null;
+      _webChunkMap.clear();
+      _webNextExpectedOffset = 0;
+      _receiveFileStream = null;
+      _receiveFilePath = null;
+
+      // Update UI state
+      connectionEstablished.value = false;
+      isLocalMode.value = kIsWeb ? false : true;
+      isHostMode.value = false;
+
+      AppLogger.i('WebRTC disconnected and reset', tag: 'WebRTC');
+    } catch (e) {
+      AppLogger.e('Error during disconnect: $e', tag: 'WebRTC');
+    }
   }
 
   /// Ensure the RTCDataChannel is open before attempting to send

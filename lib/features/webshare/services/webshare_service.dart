@@ -785,6 +785,7 @@ class WebShareService {
   /// Add a file received via WebRTC to the received files list
   void addWebRTCReceivedFile(String filename, String path, int sizeBytes) {
     debugPrint('[WebShareService] Adding WebRTC received file: $filename');
+    debugPrint('[WebShareService] Current received files count: ${receivedFiles.value.length}');
     receivedFiles.value = [
       ReceivedFile(
         filename: filename,
@@ -794,6 +795,8 @@ class WebShareService {
       ),
       ...receivedFiles.value,
     ];
+    debugPrint('[WebShareService] New received files count: ${receivedFiles.value.length}');
+    debugPrint('[WebShareService] Notifying ${receivedFiles.hasListeners ? "YES" : "NO"} listeners');
   }
 
   /// Add a file sent via WebRTC to the shared files list
