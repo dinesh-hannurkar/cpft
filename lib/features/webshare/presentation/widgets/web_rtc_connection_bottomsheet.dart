@@ -48,6 +48,7 @@ class _WebRTCConnectionBottomSheetState
   bool _isDiscovering = false;
   bool _isStartingWebSharing = false;
   bool _didAutoRetry = false;
+  bool _codeExpired = false;
   String? _currentRoomId;
   String? _networkName;
   String? _detectedHostIp;
@@ -227,6 +228,9 @@ class _WebRTCConnectionBottomSheetState
           _isConnecting = false;
           _hasJoinedRoom = false;
           _isDiscovering = false;
+          // Detect expired/missing code
+          final msg = e.toString().toLowerCase();
+          _codeExpired = msg.contains('not found') || msg.contains('expired');
         });
       }
 
@@ -268,7 +272,7 @@ class _WebRTCConnectionBottomSheetState
       // For auto-connect from URL, show error but allow manual retry
       final msg = e.toString();
       final friendly = (msg.contains('Room') && msg.contains('not found'))
-            ? 'Code not found or expired. Start Link Share from the mobile app and try again.'
+          ? 'Code expired. Recreate a new code from mobile and try again.'
           : 'Auto-connect failed: $msg';
       if (_urlRoomId != null) {
         if (mounted) {
@@ -737,6 +741,56 @@ class _WebRTCConnectionBottomSheetState
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      if (_codeExpired) ...[
+                        const SizedBox(height: AppSizes.md),
+                        const Text(
+                          'Code expired. Create a new code to continue.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.red,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: AppSizes.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Recreate Code'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () async {
+                              try {
+                                setState(() => _isStartingWebSharing = true);
+                                // Ensure remote signaling and allow host mode on mobile
+                                widget.webrtcService.setSignalingMode(useLocal: false);
+                                widget.webrtcService.setHostMode(false);
+                                final newId = await widget.webrtcService.createAutoRoomAndConnect();
+                                if (mounted) {
+                                  setState(() {
+                                    _currentRoomId = newId;
+                                    _codeExpired = false;
+                                    _isStartingWebSharing = false;
+                                  });
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  setState(() => _isStartingWebSharing = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to recreate code: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

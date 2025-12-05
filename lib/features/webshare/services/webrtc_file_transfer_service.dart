@@ -395,8 +395,8 @@ class WebRTCFileTransferService {
       );
 
       // Set up event handlers
-      _socket!.on('connect', (_) {
-        _mySocketId = _socket!.id;
+      _socket?.on('connect', (_) {
+        _mySocketId = _socket?.id ?? '';
         AppLogger.i(
           'Connected to signaling server with socket ID: $_mySocketId',
           tag: 'WebRTC',
@@ -405,7 +405,7 @@ class WebRTCFileTransferService {
         // Join the room with full payload matching server expectations
         AppLogger.i('Joining room: "$_roomId"', tag: 'WebRTC');
         if (_roomId != null && _roomId!.isNotEmpty) {
-          _socket!.emit('join-room', {
+          _socket?.emit('join-room', {
             'roomId': _roomId,
             'role': 'peer',
             'deviceInfo': {
@@ -425,7 +425,7 @@ class WebRTCFileTransferService {
         }
       });
 
-      _socket!.on('existing-peers', (data) {
+      _socket?.on('existing-peers', (data) {
         AppLogger.i('Received existing-peers: $data', tag: 'WebRTC');
         final Map<String, dynamic> response = Map<String, dynamic>.from(
           data as Map,
@@ -445,7 +445,7 @@ class WebRTCFileTransferService {
         }
       });
 
-      _socket!.on('peer-joined', (data) async {
+      _socket?.on('peer-joined', (data) async {
         final Map<String, dynamic> peerInfo = Map<String, dynamic>.from(
           data as Map,
         );
@@ -611,7 +611,8 @@ class WebRTCFileTransferService {
     );
 
     // ICE exchange
-    _peerConnection!.onIceCandidate = (c) {
+    if (_peerConnection != null) {
+      _peerConnection!.onIceCandidate = (c) {
       if (c.candidate != null) {
         session.addIce({
           'candidate': c.candidate,
@@ -622,7 +623,10 @@ class WebRTCFileTransferService {
           'sessionId': _fsSessionId,
         });
       }
-    };
+      };
+    } else {
+      AppLogger.w('PeerConnection is null; skipping ICE handler assignment', tag: 'WebRTC');
+    }
     _fsIceSub = session.onIce().listen((snapshot) async {
       for (final change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added) {
@@ -786,17 +790,21 @@ class WebRTCFileTransferService {
             );
 
             // Reattach Firestore ICE emission for the new connection (role: answerer)
-            _peerConnection!.onIceCandidate = (c) {
-              if (c.candidate != null) {
-                session.addIce({
-                  'candidate': c.candidate,
-                  'sdpMid': c.sdpMid,
-                  'sdpMLineIndex': c.sdpMLineIndex,
-                  'role': 'answerer',
-                  'sessionId': _fsSessionId,
-                });
-              }
-            };
+            if (_peerConnection != null) {
+              _peerConnection!.onIceCandidate = (c) {
+                if (c.candidate != null) {
+                  session.addIce({
+                    'candidate': c.candidate,
+                    'sdpMid': c.sdpMid,
+                    'sdpMLineIndex': c.sdpMLineIndex,
+                    'role': 'answerer',
+                    'sessionId': _fsSessionId,
+                  });
+                }
+              };
+            } else {
+              AppLogger.w('PeerConnection is null; skipping ICE handler assignment', tag: 'WebRTC');
+            }
             _fsIceSub = session.onIce().listen((snapshot) async {
               for (final change in snapshot.docChanges) {
                 if (change.type == DocumentChangeType.added) {
@@ -2958,13 +2966,12 @@ class WebRTCFileTransferService {
         transferSpeed.value = 0.0;
 
         // Call callback with file info
-        if (filePath != null && filePath.isNotEmpty) {
-          debugPrint('[WebRTC] Calling onFileReceiveComplete callback: $_expectedFileName, $filePath');
-          onFileReceiveComplete?.call(_expectedFileName!, filePath);
-          onFileReceiveCompleteExtra?.call(_expectedFileName!, filePath);
-        } else {
+        debugPrint('[WebRTC] Calling onFileReceiveComplete callback: $_expectedFileName, $filePath');
+        if (filePath.isEmpty) {
           throw Exception('File path is null or empty after save');
         }
+        onFileReceiveComplete?.call(_expectedFileName!, filePath);
+        onFileReceiveCompleteExtra?.call(_expectedFileName!, filePath);
       }
 
       NotificationService().showNotification(

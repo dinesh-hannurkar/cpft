@@ -6,6 +6,7 @@ import 'package:cpft/utils/file_saver.dart';
 import 'package:cpft/features/webshare/services/web_download.dart';
 import 'package:cpft/features/webshare/services/web_received_cache.dart';
 import 'package:cpft/utils/mime_utils.dart';
+import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 
 /// Utility class for handling file actions across different screens
 class FileActionHandler {
@@ -93,59 +94,56 @@ class FileActionHandler {
 
   /// Shows native file action bottom sheet
   static Future<void> _showNativeFileActions(BuildContext context, String filename, String path) async {
-    await showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.open_in_new),
-              title: const Text('Open'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                try {
-                  await OpenFilex.open(path);
-                } catch (_) {}
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.save_alt),
-              title: const Text('Save to device…'),
-              subtitle: const Text('Choose a location to save this file'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                await FileSaver.saveToDevicePicker(
-                  context: context,
-                  filename: filename,
-                  sourcePath: path,
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: const Text('Share / Export'),
-              onTap: () async {
-                Navigator.of(context).pop();
-                final box = context.findRenderObject() as RenderBox?;
-                final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-                final size = box?.size ?? Size.zero;
-                await Share.shareXFiles(
-                  [XFile(path)],
-                  sharePositionOrigin: Rect.fromLTWH(
-                    position.dx,
-                    position.dy,
-                    size.width,
-                    size.height,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+      title: 'File Options',
+      subtitle: filename,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.open_in_new),
+            title: const Text('Open'),
+            onTap: () async {
+              Navigator.of(context).pop();
+              try {
+                await OpenFilex.open(path);
+              } catch (_) {}
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.save_alt),
+            title: const Text('Save to device…'),
+            subtitle: const Text('Choose a location to save this file'),
+            onTap: () async {
+              Navigator.of(context).pop();
+              await FileSaver.saveToDevicePicker(
+                context: context,
+                filename: filename,
+                sourcePath: path,
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.ios_share),
+            title: const Text('Share / Export'),
+            onTap: () async {
+              Navigator.of(context).pop();
+              final box = context.findRenderObject() as RenderBox?;
+              final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+              final size = box?.size ?? Size.zero;
+              await Share.shareXFiles(
+                [XFile(path)],
+                sharePositionOrigin: Rect.fromLTWH(
+                  position.dx,
+                  position.dy,
+                  size.width,
+                  size.height,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
