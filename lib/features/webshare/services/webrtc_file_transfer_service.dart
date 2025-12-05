@@ -23,6 +23,24 @@ import 'package:cpft/features/webshare/services/webrtc_transfer_isolate.dart';
 class WebRTCFileTransferService {
   RTCPeerConnection? _peerConnection;
   RTCDataChannel? _dataChannel;
+    // Text chat callbacks
+    void Function(String message)? onTextMessageReceived;
+    void Function(String message)? onTextMessageSent;
+
+    /// Send a plain text chat message over the data channel
+    void sendTextMessage(String message) {
+      if (_dataChannel == null) {
+        AppLogger.w('Cannot send text: data channel is null', tag: 'WebRTC');
+        return;
+      }
+      final payload = {
+        'type': 'text-message',
+        'message': message,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+      _dataChannel!.send(RTCDataChannelMessage(jsonEncode(payload)));
+      onTextMessageSent?.call(message);
+    }
   IO.Socket? _socket;
   WsClient? _ws; // Local WebSocket signaling connection (cross-platform)
   // Firestore signaling state
@@ -2431,6 +2449,12 @@ class WebRTCFileTransferService {
         case 'file-complete':
           debugPrint('[WebRTC] Received file-complete message for: ${data['fileName']}');
           _handleFileComplete(data);
+          break;
+        case 'text-message':
+          final msg = '${data['message'] ?? ''}';
+          if (msg.isNotEmpty) {
+            onTextMessageReceived?.call(msg);
+          }
           break;
         case 'ack':
           // Receiver reports it processed some chunks; increase send credits

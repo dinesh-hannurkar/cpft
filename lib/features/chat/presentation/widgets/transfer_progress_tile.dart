@@ -17,8 +17,8 @@ class TransferProgressTile extends StatelessWidget {
     final stalled = now.difference(tp.lastUpdate).inSeconds >= 10 && tp.progress > 0 && (tp.total == 0 || tp.progress < tp.total);
     final failed = now.difference(tp.lastUpdate).inSeconds >= 60 && tp.progress > 0 && (tp.total == 0 || tp.progress < tp.total);
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.only(left: 12, right: 0, top: 0, bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+      padding: const EdgeInsets.only(left: 12, right: 0, top: 12, bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -78,7 +78,7 @@ class TransferProgressTile extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(6),
               child: Padding(
-                padding: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.only(right: 12, top: 8),
                 child: LinearProgressIndicator(
                   minHeight: 6,
                   value: tp.total > 0 ? (tp.progress / tp.total).clamp(0.0, 1.0) : null,

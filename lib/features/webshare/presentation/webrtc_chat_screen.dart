@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io' as io;
+import 'package:cpft/features/chat/models/connection_state.dart';
+import 'package:cpft/features/chat/presentation/widgets/message_bubble.dart';
 import 'package:cpft/utils/file_saver.dart';
 import 'package:cpft/utils/mime_utils.dart';
 import 'package:flutter/foundation.dart';
@@ -22,6 +24,8 @@ import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
 import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:cpft/features/webshare/presentation/widgets/file_card.dart';
 import 'package:cpft/features/webshare/services/file_action_handler.dart';
+import 'package:cpft/services/background_service.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Chat-like screen for WebRTC file sharing
 class WebRTCChatScreen extends StatefulWidget {
@@ -77,6 +81,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   void initState() {
     super.initState();
 
+    // Initialize background service for keeping connection alive
+    BackgroundService.initialize();
+
     // Clear received files for this WebRTC session to start fresh
     if (widget.webShareService != null) {
       widget.webShareService!.receivedFiles.value = [];
@@ -130,8 +137,13 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       if (!mounted) return;
       // Update progress for incoming transfers
       setState(() {
-        _incomingProgress.putIfAbsent('incoming_$filename', () => TransferProgress(name: filename, total: total));
-        _incomingProgress['incoming_$filename']!.updateProgress(received.toDouble());
+        _incomingProgress.putIfAbsent(
+          'incoming_$filename',
+          () => TransferProgress(name: filename, total: total),
+        );
+        _incomingProgress['incoming_$filename']!.updateProgress(
+          received.toDouble(),
+        );
       });
     };
 
@@ -139,8 +151,13 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       if (!mounted) return;
       // Update progress for outgoing transfers
       setState(() {
-        _outgoingProgress.putIfAbsent('outgoing_$filename', () => TransferProgress(name: filename, total: total));
-        _outgoingProgress['outgoing_$filename']!.updateProgress(sent.toDouble());
+        _outgoingProgress.putIfAbsent(
+          'outgoing_$filename',
+          () => TransferProgress(name: filename, total: total),
+        );
+        _outgoingProgress['outgoing_$filename']!.updateProgress(
+          sent.toDouble(),
+        );
       });
     };
 
@@ -155,7 +172,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
     widget.webrtcService.onFileReceiveComplete = (filename, savedPath) {
       if (!mounted) return;
-      debugPrint('[WebRTCChatScreen] WebRTC receive complete: $filename at $savedPath');
+      debugPrint(
+        '[WebRTCChatScreen] WebRTC receive complete: $filename at $savedPath',
+      );
       setState(() {
         _incomingProgress.remove('incoming_$filename');
       });
@@ -165,7 +184,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
     widget.webrtcService.onFileTransferError = (filename, reason, duringSend) {
       if (!mounted) return;
-      debugPrint('[WebRTCChatScreen] ❌ WebRTC transfer error: $filename | $reason');
+      debugPrint(
+        '[WebRTCChatScreen] ❌ WebRTC transfer error: $filename | $reason',
+      );
 
       // Clean up progress on error
       setState(() {
@@ -178,10 +199,40 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     };
 
     // Set up additional callbacks for chat updates
-    widget.webrtcService.addFileReceiveCompleteListener(_onWebRTCFileReceiveComplete);
+    widget.webrtcService.addFileReceiveCompleteListener(
+      _onWebRTCFileReceiveComplete,
+    );
+
+    // Text chat: received and sent callbacks
+    widget.webrtcService.onTextMessageReceived = (message) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+          content: message,
+          type: MessageType.textReceived,
+          timestamp: DateTime.now(),
+        ));
+      });
+      _scrollToBottom();
+    };
+    widget.webrtcService.onTextMessageSent = (message) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+          content: message,
+          type: MessageType.textSent,
+          timestamp: DateTime.now(),
+        ));
+      });
+      _scrollToBottom();
+    };
 
     // Listen for connection changes
-    widget.webrtcService.connectionEstablished.addListener(_onConnectionChanged);
+    widget.webrtcService.connectionEstablished.addListener(
+      _onConnectionChanged,
+    );
   }
 
   void _onConnectionChanged() {
@@ -193,6 +244,24 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       _isConnected = isConnected;
     });
 
+    // Manage background service to keep connection alive
+    if (isConnected) {
+      BackgroundService.start().then((started) {
+        if (started) {
+          BackgroundService.updateNotification(
+            title: 'WebRTC Connected',
+            text: 'Maintaining WebRTC connection to ${widget.roomId}',
+          );
+        }
+      });
+      // Enable wakelock to prevent device sleep during connection
+      WakelockPlus.enable();
+    } else {
+      BackgroundService.stop();
+      // Disable wakelock when disconnected
+      WakelockPlus.disable();
+    }
+
     // Removed system messages
     // if (isConnected) {
     //   _addSystemMessage('Connected successfully');
@@ -203,7 +272,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
   void _onWebRTCFileReceiveComplete(String filename, String savedPath) {
     if (!mounted) return;
-    debugPrint('[WebRTCChatScreen] WebRTC receive complete: $filename at $savedPath');
+    debugPrint(
+      '[WebRTCChatScreen] WebRTC receive complete: $filename at $savedPath',
+    );
 
     // Add file to WebShareService
     if (widget.webShareService != null) {
@@ -212,12 +283,20 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
         if (savedPath.startsWith('web-parts:')) {
           final id = savedPath.substring('web-parts:'.length);
           final total = WebReceivedCache.length(id);
-          widget.webShareService!.addWebRTCReceivedFile(filename, savedPath, total);
+          widget.webShareService!.addWebRTCReceivedFile(
+            filename,
+            savedPath,
+            total,
+          );
         } else if (savedPath.startsWith('web-bytes:')) {
           final id = savedPath.substring('web-bytes:'.length);
           final data = WebReceivedCache.get(id);
           final len = data?.length ?? 0;
-          widget.webShareService!.addWebRTCReceivedFile(filename, savedPath, len);
+          widget.webShareService!.addWebRTCReceivedFile(
+            filename,
+            savedPath,
+            len,
+          );
         } else {
           // Fallback: use service's received file data
           final bytes = widget.webrtcService.receivedFileBytes;
@@ -234,12 +313,20 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
         try {
           final file = io.File(savedPath);
           final fileSize = file.lengthSync();
-          widget.webShareService!.addWebRTCReceivedFile(filename, savedPath, fileSize);
+          widget.webShareService!.addWebRTCReceivedFile(
+            filename,
+            savedPath,
+            fileSize,
+          );
         } catch (e) {
           debugPrint('[WebRTCChatScreen] Error getting file size: $e');
           // Fallback to expected size
           final fileSize = widget.webrtcService.lastExpectedFileSize;
-          widget.webShareService!.addWebRTCReceivedFile(filename, savedPath, fileSize);
+          widget.webShareService!.addWebRTCReceivedFile(
+            filename,
+            savedPath,
+            fileSize,
+          );
         }
       }
     }
@@ -330,14 +417,24 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // Update progress map for UI progress bar
     setState(() {
       final transferId = 'outgoing_$filename';
-      _outgoingProgress.putIfAbsent(
-        transferId,
-        () => TransferProgress(
+      // If we already seeded an entry with unknown total (0), and now we
+      // have a known total, replace the entry so UI stops showing preparing.
+      final existing = _outgoingProgress[transferId];
+      if (existing == null) {
+        _outgoingProgress[transferId] = TransferProgress(
           name: filename,
           total: total,
           mime: MimeUtils.guessMime(filename.split('.').last),
-        ),
-      );
+        );
+      } else if (existing.total == 0 && total > 0) {
+        final newTp = TransferProgress(
+          name: existing.name,
+          total: total,
+          mime: existing.mime,
+        );
+        newTp.updateProgress(existing.progress);
+        _outgoingProgress[transferId] = newTp;
+      }
       _outgoingProgress[transferId]!.updateProgress(sent.toDouble());
     });
   }
@@ -456,6 +553,21 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           if (hasData) {
             // Add sending message to chat immediately
             _addFileMessage(file.name, file.size, true);
+
+            // Seed an outgoing progress entry to show a preparing indicator
+            // until the actual send progress callbacks provide totals.
+            setState(() {
+              final transferId = 'outgoing_${file.name}';
+              _outgoingProgress.putIfAbsent(
+                transferId,
+                () => TransferProgress(
+                  name: file.name,
+                  total: 0,
+                  mime: MimeUtils.guessMime(file.name.split('.').last),
+                ),
+              );
+              _outgoingProgress[transferId]!.updateProgress(0);
+            });
 
             try {
               // Match WebShareScreen behavior: use bytes on web, path on native
@@ -793,6 +905,12 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // Note: dispose() is async but we can't await in widget dispose
     widget.webrtcService.dispose();
 
+    // Stop background service
+    BackgroundService.stop();
+
+    // Disable wakelock
+    WakelockPlus.disable();
+
     super.dispose();
   }
 
@@ -895,7 +1013,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                     itemBuilder: (context, index) {
                       if (index < _messages.length) {
                         final msg = _messages[index];
-                        return _buildMessageBubble(msg);
+                            return _buildMessageBubble(msg);
                       }
                       final extra = index - _messages.length;
                       // First render incoming progress tiles
@@ -943,10 +1061,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
               MessageInputBar(
                 controller: _messageController,
                 focusNode: _inputFocus,
-                onSend: () {
-                  // For now, just clear
-                  _messageController.clear();
-                },
+                onSend: _handleSendPressed,
                 enabled: _isConnected,
               ),
             ],
@@ -962,12 +1077,89 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     );
     switch (message.type) {
       case MessageType.fileSent:
+        // Avoid rendering a duplicate file card while the outgoing transfer
+        // is still in progress. Show only the progress tile. If transfer
+        // hasn't started (no total yet), show a small preparing indicator.
+        TransferProgress? preparing;
+        final hasOngoing = _outgoingProgress.values.any((tp) {
+          final sameName = tp.name == message.content;
+          final inProgress = tp.total == 0 || tp.progress < tp.total;
+          if (sameName && tp.total == 0) preparing = tp;
+          return sameName && inProgress;
+        });
+        if (hasOngoing) {
+          debugPrint('[WebRTCChatScreen] Skipping file card (outgoing in progress)');
+          // If we're still preparing (no total yet), show a subtle loading row
+          if (preparing != null && preparing!.total == 0 && preparing!.progress == 0) {
+            return Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.sm),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+                  ],
+                  border: Border.all(color: Colors.blue.shade50),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue.shade400),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Preparing ${message.content}…',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }
         debugPrint('[WebRTCChatScreen] Rendering file SENT card');
         return _buildFileCard(message: message, isMine: true);
 
       case MessageType.fileReceived:
         debugPrint('[WebRTCChatScreen] Rendering file RECEIVED card');
         return _buildFileCard(message: message, isMine: false);
+      case MessageType.textSent:
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSizes.md),
+          child: MessageBubble(
+            message: DeviceMessage(
+              content: message.content,
+              type: 'text',
+              timestamp: message.timestamp,
+              senderName: '',
+            ),
+            isMine: true,
+          ),
+        );
+      case MessageType.textReceived:
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSizes.md),
+          child: MessageBubble(
+            message: DeviceMessage(
+              content: message.content,
+              type: 'text',
+              timestamp: message.timestamp,
+              senderName: '',
+            ),
+            isMine: false,
+          ),
+        );
     }
   }
 
@@ -989,12 +1181,13 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: EdgeInsets.only(
-          left: isMine ? 64 : 16,
-          right: isMine ? 16 : 64,
-          bottom: 8,
+          top: AppSizes.sm,
+          left: isMine ? 0 : 0,
+          right: isMine ? 0 : 0,
+          bottom: AppSizes.sm,
         ),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
+          maxWidth: MediaQuery.of(context).size.width * 0.8,
         ),
         child: FileCard(
           filename: message.content,
@@ -1012,9 +1205,17 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       ),
     );
   }
+
+  void _handleSendPressed() {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+    _messageController.clear();
+    _inputFocus.requestFocus();
+    widget.webrtcService.sendTextMessage(text);
+  }
 }
 
-enum MessageType { fileSent, fileReceived }
+enum MessageType { fileSent, fileReceived, textSent, textReceived }
 
 class ChatMessage {
   final String id;
@@ -1031,3 +1232,4 @@ class ChatMessage {
     this.fileSize,
   });
 }
+  
