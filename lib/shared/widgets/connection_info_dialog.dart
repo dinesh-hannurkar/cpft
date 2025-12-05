@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/shared/widgets/app_action_button.dart';
 import 'package:cpft/utils/network_utils.dart';
 
 /// Dialog widget for displaying WebRTC connection information
@@ -106,19 +105,6 @@ class _ConnectionInfoDialogState extends State<ConnectionInfoDialog> {
               icon: Icons.link,
               label: 'Connection ID',
               value: widget.networkName,
-            ),
-            const SizedBox(height: AppSizes.lg),
-            // Disconnect button
-            AppActionButton(
-              text: 'Disconnect',
-              onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-                widget.onDisconnect(); // Disconnect
-              },
-              backgroundColor: AppColors.red.withValues(alpha: 0.09),
-              textColor: AppColors.red,
-              borderColor: AppColors.white,
-              shadowColor: AppColors.red.withValues(alpha: 0.3),
             ),
           ],
         ),

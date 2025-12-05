@@ -26,7 +26,9 @@ class NetworkIndicator extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           (_networkName != null && _networkName != 'Not Connected')
-              ? 'Connected to $_networkName'
+              ? (_networkName?.toLowerCase().contains('local') == true
+                  ? 'Personal Hotspot is active'
+                  : 'Connected to $_networkName')
               : 'Not connected',
           style: TextStyle(
             color: (_networkName != null && _networkName != 'Not Connected')

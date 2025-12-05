@@ -46,6 +46,7 @@ class _WebRTCConnectionBottomSheetState
   bool _hasJoinedRoom = false;
   bool _isDiscovering = false;
   bool _isStartingWebSharing = false;
+  bool _didAutoRetry = false;
   String? _currentRoomId;
   String? _networkName;
   String? _detectedHostIp;
@@ -228,6 +229,41 @@ class _WebRTCConnectionBottomSheetState
         });
       }
 
+      // One-shot auto-retry: refresh signaling and try again
+      if (!_didAutoRetry) {
+        _didAutoRetry = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Connection failed. Refreshing room and retrying…',
+                style: TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          setState(() => _isConnecting = true);
+        }
+        try {
+          // Ensure clean state then retry
+          widget.webrtcService.disconnect();
+          await Future.delayed(const Duration(milliseconds: 300));
+          await widget.webrtcService.connectToSignalingServer(_currentRoomId ?? '');
+          if (mounted) {
+            setState(() {
+              _hasJoinedRoom = true;
+              _isConnecting = false;
+            });
+          }
+          return; // success after retry
+        } catch (e2) {
+          // Fall through to normal error handling below
+        } finally {
+          if (mounted) setState(() => _isConnecting = false);
+        }
+      }
+
       // For auto-connect from URL, show error but allow manual retry
       if (_urlRoomId != null) {
         if (mounted) {
@@ -261,6 +297,27 @@ class _WebRTCConnectionBottomSheetState
           children: [
             // Network status - simple one-line format like home screen
             NetworkIndicator(networkName: _networkName),
+
+            const SizedBox(height: 8),
+            // Clear instruction about network requirements
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, size: 16, color: Colors.blueGrey),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Ensure both devices are on the same Wi‑Fi or Personal Hotspot network for the fastest and most reliable connection.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.blueGrey,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
 
             // Discovery status (for join mode)
             if (_isDiscovering) ...[

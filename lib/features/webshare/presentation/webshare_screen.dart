@@ -1220,8 +1220,10 @@ class _WebShareScreenState extends State<WebShareScreen>
                                   Text(
                                     (_networkName != null &&
                                             _networkName != 'Not Connected')
-                                        ? 'Connected to local network'
-                                        : 'No network connection',
+                                        ? (_networkName?.toLowerCase().contains('local') == true
+                                            ? 'Personal Hotspot is active'
+                                            : 'Connected to $_networkName')
+                                        : 'Not connected',
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           color:
@@ -2151,8 +2153,10 @@ class _WebRTCConnectionBottomSheetState
                   : Icons.wifi_off,
               text: 'Network Check',
               status: (_networkName != null && _networkName != 'Not Connected')
-                  ? 'Connected to local network'
-                  : 'No network connection',
+                  ? (_networkName?.toLowerCase().contains('local') == true
+                      ? 'Personal Hotspot is active'
+                      : 'Connected to $_networkName')
+                  : 'Not connected',
               isComplete:
                   _networkName != null && _networkName != 'Not Connected',
               color: (_networkName != null && _networkName != 'Not Connected')

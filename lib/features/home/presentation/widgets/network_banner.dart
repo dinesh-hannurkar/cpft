@@ -108,7 +108,11 @@ class NetworkBanner extends StatelessWidget {
     final isConnected = networkName != null && networkName != 'Not Connected';
     final color = isConnected ? const Color(0xFF00C853) : AppColors.red;
     final icon = isConnected ? Icons.wifi : Icons.wifi_off;
-    final text = isConnected ? 'Connected to $networkName' : 'Not connected';
+    final text = isConnected
+      ? (networkName?.toLowerCase().contains('local') == true
+        ? 'Personal Hotspot is active'
+        : 'Connected to $networkName')
+      : 'Not connected';
     
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),

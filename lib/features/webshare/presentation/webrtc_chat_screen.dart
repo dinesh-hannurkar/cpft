@@ -19,6 +19,7 @@ import 'package:cpft/features/webshare/services/web_received_cache.dart';
 import 'package:cpft/shared/widgets/primary_app_bar.dart';
 import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
+import 'package:cpft/shared/widgets/app_action_button.dart';
 import 'package:cpft/features/chat/models/transfer_progress.dart';
 import 'package:cpft/features/chat/presentation/widgets/transfer_progress_tile.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
@@ -56,7 +57,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _peerName;
-  String? _localName;
   final FocusNode _inputFocus = FocusNode();
   final List<ChatMessage> _messages = [];
   bool _isConnected = true;
@@ -127,9 +127,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       final prefs = await SharedPreferences.getInstance();
       final name = (prefs.getString('device_name') ?? '').trim();
       if (name.isNotEmpty && mounted) {
-        setState(() {
-          _localName = name;
-        });
+        // _localName is no longer used
       }
     } catch (e) {
       debugPrint('[WebRTCChatScreen] Failed to load local device name: $e');
@@ -727,7 +725,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           ? ListView.separated(
               itemCount: widget.webShareService!.receivedFiles.value.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              padding: const EdgeInsets.symmetric(vertical: 12,),
+              padding: const EdgeInsets.symmetric(vertical: 12),
               itemBuilder: (context, index) {
                 final file = widget.webShareService!.receivedFiles.value[index];
                 return FileCard(
@@ -976,157 +974,254 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     super.dispose();
   }
 
+  Future<bool> _onWillPop() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(AppSizes.md),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSizes.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header with title and close icon
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Close Connection?',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.close_rounded, size: 24),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey.shade100,
+                      padding: const EdgeInsets.all(10),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSizes.spaceBtwInputFields),
+              // Content
+              Text(
+                'Are you sure you want to close the connection and go back? '
+                'This will disconnect and stops any ongoing transfers.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.darkPrimary,
+                      height: 1.4,
+                    ),
+              ),
+              const SizedBox(height: AppSizes.lg),
+              // Single action button
+              AppActionButton(
+                text: 'Close & Go Back',
+                onPressed: () {
+                  if (mounted) {
+                    Navigator.of(context).pop(true);
+                  }
+                },
+                backgroundColor: AppColors.red.withOpacity(0.1),
+                textColor: AppColors.red,
+                borderColor: AppColors.white,
+                shadowColor: AppColors.red.withOpacity(0.2),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: PrimaryAppBar(
-        leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
-        titleWidget: Padding(
-          padding: const EdgeInsets.only(left: AppSizes.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                (_peerName?.isNotEmpty == true ? _peerName! : 'WebRTC'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
-              ),
-              Text(
-                _isConnected
-                    ? '${widget.roomId} • Connected'
-                    : '${widget.roomId} • Disconnected',
-                style: const TextStyle(fontSize: 11, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-        centerTitle: false,
-        trailing: [
-          if (widget.webShareService != null)
-            AppIconButton(
-              onPressed: _showReceivedFiles,
-              icon: Icons.folder_open,
-            ),
-          AppIconButton(
-            onPressed: _showConnectionInfo,
-            icon: _isConnected ? Icons.wifi : Icons.wifi_off,
-          ),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
+        _onWillPop().then((shouldPop) {
+          if (shouldPop && mounted) {
+            Navigator.of(context).pop();
+          }
+        });
+      },
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-            stops: [0.0, 1.0],
+        appBar: PrimaryAppBar(
+          leading: BackButtonChip(
+            onPressed: () async {
+              final shouldPop = await _onWillPop();
+              if (shouldPop && mounted) {
+                Navigator.of(context).pop();
+              }
+            },
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: (() {
-                  final totalItems =
-                      _messages.length +
-                      _incomingProgress.length +
-                      _outgoingProgress.length;
-                  if (totalItems == 0) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.chat_bubble_outline,
-                            size: 64,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No messages yet',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Send files to start sharing',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: AppSizes.sm),
-                    itemCount: totalItems,
-                    itemBuilder: (context, index) {
-                      if (index < _messages.length) {
-                        final msg = _messages[index];
-                        return _buildMessageBubble(msg);
-                      }
-                      final extra = index - _messages.length;
-                      // First render incoming progress tiles
-                      final incomingKeys = _incomingProgress.keys.toList();
-                      if (extra < incomingKeys.length) {
-                        final tId = incomingKeys[extra];
-                        return TransferProgressTile(
-                          progress: _incomingProgress[tId]!,
-                          onCancel: () {
-                            setState(() {
-                              _incomingProgress.remove(tId);
-                            });
-                          },
-                        );
-                      }
-                      // Then render outgoing tiles
-                      final outExtra = extra - incomingKeys.length;
-                      final outKeys = _outgoingProgress.keys.toList();
-                      if (outExtra < outKeys.length) {
-                        final tId = outKeys[outExtra];
-                        return TransferProgressTile(
-                          progress: _outgoingProgress[tId]!,
-                          onCancel: () {
-                            // Remove from local progress list
-                            setState(() {
-                              _outgoingProgress.remove(tId);
-                            });
-                          },
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  );
-                })(),
-              ),
-              if (_isConnected)
-                FileTaglineBar(
-                  onTapMain: _pickAndSendFile,
-                  onTapFab: _pickAndSendFile,
-                  pulseController: _fileIconPulse!,
-                  fileIcons: _fileIcons,
-                  fileIconIndex: _fileIconIndex,
-                  slideFromLeft: _slideFromLeft,
+          titleWidget: Padding(
+            padding: const EdgeInsets.only(left: AppSizes.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                    (_peerName?.isNotEmpty == true
+                      ? _peerName!
+                        .split(RegExp(r'\s+'))
+                        .map((w) => w.isEmpty
+                          ? w
+                          : '${w[0].toUpperCase()}${w.substring(1)}')
+                        .join(' ')
+                      : 'WebRTC'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
                 ),
-              MessageInputBar(
-                controller: _messageController,
-                focusNode: _inputFocus,
-                onSend: _handleSendPressed,
-                enabled: _isConnected,
+                Text(
+                  _isConnected
+                      ? '${widget.roomId} • Connected'
+                      : '${widget.roomId} • Disconnected',
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          centerTitle: false,
+          trailing: [
+            if (widget.webShareService != null)
+              AppIconButton(
+                onPressed: _showReceivedFiles,
+                icon: Icons.folder_open,
               ),
-            ],
+            AppIconButton(
+              onPressed: _showConnectionInfo,
+              icon: _isConnected ? Icons.wifi : Icons.wifi_off,
+            ),
+          ],
+          backgroundColor: Colors.transparent,
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+              stops: [0.0, 1.0],
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: (() {
+                    final totalItems =
+                        _messages.length +
+                        _incomingProgress.length +
+                        _outgoingProgress.length;
+                    if (totalItems == 0) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No messages yet',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Send files to start sharing',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSizes.sm,
+                      ),
+                      itemCount: totalItems,
+                      itemBuilder: (context, index) {
+                        if (index < _messages.length) {
+                          final msg = _messages[index];
+                          return _buildMessageBubble(msg);
+                        }
+                        final extra = index - _messages.length;
+                        // First render incoming progress tiles
+                        final incomingKeys = _incomingProgress.keys.toList();
+                        if (extra < incomingKeys.length) {
+                          final tId = incomingKeys[extra];
+                          return TransferProgressTile(
+                            progress: _incomingProgress[tId]!,
+                            onCancel: () {
+                              setState(() {
+                                _incomingProgress.remove(tId);
+                              });
+                            },
+                          );
+                        }
+                        // Then render outgoing tiles
+                        final outExtra = extra - incomingKeys.length;
+                        final outKeys = _outgoingProgress.keys.toList();
+                        if (outExtra < outKeys.length) {
+                          final tId = outKeys[outExtra];
+                          return TransferProgressTile(
+                            progress: _outgoingProgress[tId]!,
+                            onCancel: () {
+                              // Remove from local progress list
+                              setState(() {
+                                _outgoingProgress.remove(tId);
+                              });
+                            },
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    );
+                  })(),
+                ),
+                if (_isConnected)
+                  FileTaglineBar(
+                    onTapMain: _pickAndSendFile,
+                    onTapFab: _pickAndSendFile,
+                    pulseController: _fileIconPulse!,
+                    fileIcons: _fileIcons,
+                    fileIconIndex: _fileIconIndex,
+                    slideFromLeft: _slideFromLeft,
+                  ),
+                MessageInputBar(
+                  controller: _messageController,
+                  focusNode: _inputFocus,
+                  onSend: _handleSendPressed,
+                  enabled: _isConnected,
+                ),
+              ],
+            ),
           ),
         ),
       ),

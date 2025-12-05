@@ -22,6 +22,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
   final WebShareService _webShareService = WebShareService(deviceName: 'WebClient');
   bool _isJoining = false;
   bool _serviceTransferred = false;
+  bool _didAutoRetry = false;
 
   @override
   void initState() {
@@ -66,7 +67,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
       // Navigate to WebRTC chat screen
       if (!mounted) return;
       _serviceTransferred = true; // Mark service as transferred
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => WebRTCChatScreen(
             webrtcService: _webrtcService,
@@ -81,6 +82,43 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         ),
       );
     } catch (e) {
+      // One-shot auto-retry on failure
+      if (!_didAutoRetry) {
+        _didAutoRetry = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Joining failed. Refreshing room and retrying…',
+                style: TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        try {
+          _webrtcService.disconnect();
+          await Future.delayed(const Duration(milliseconds: 300));
+          await _webrtcService.connectToSignalingServer(roomId);
+          if (!mounted) return;
+          _serviceTransferred = true;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => WebRTCChatScreen(
+                webrtcService: _webrtcService,
+                webShareService: _webShareService,
+                roomId: roomId,
+                deviceName: null,
+                onDisconnect: () => Navigator.of(context).pop(),
+              ),
+            ),
+          );
+          return;
+        } catch (e2) {
+          // fall through to show final failure
+        }
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
