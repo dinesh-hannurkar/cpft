@@ -63,8 +63,7 @@ class MainApp extends StatelessWidget {
         );
         return Stack(
           children: [
-            content,
-            const Positioned(top: 0, right: 0, child: FirebaseStatusBanner()),
+            content
           ],
         );
       },
@@ -246,11 +245,18 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     _deviceName = await _getDeviceName();
     AppLogger.d('Device name loaded: $_deviceName', tag: 'PermWrap');
     
-    // Navigate based on device name after initialization is complete
+    // If device name not set: on web, use a dummy name; on mobile, navigate to setup.
     if (_deviceName == null) {
-      AppLogger.d('Navigating to setup screen', tag: 'PermWrap');
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/setup');
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('device_name', 'WebClient');
+        _deviceName = 'WebClient';
+        AppLogger.d('Web: using dummy device name WebClient', tag: 'PermWrap');
+      } else {
+        AppLogger.d('Navigating to setup screen', tag: 'PermWrap');
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/setup');
+        }
       }
     }
     
@@ -302,6 +308,8 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     if (name != null && name.isNotEmpty) {
       return name;
     }
+    // On web, prefer a dummy without forcing navigation
+    if (kIsWeb) return null; // handled in _initialize
     return null;
   }
 

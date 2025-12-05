@@ -1,6 +1,7 @@
 import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/services/discovery_service.dart';
@@ -34,6 +35,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _deviceName = widget.currentDeviceName;
     _loadVersion();
+    _loadDeviceNameFromPrefs();
+  }
+
+  Future<void> _loadDeviceNameFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name = (prefs.getString('device_name') ?? '').trim();
+      if (name.isNotEmpty && name != _deviceName && mounted) {
+        setState(() => _deviceName = name);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadVersion() async {
@@ -193,8 +205,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       globalDiscoveryService = null;
 
       if (!mounted) return;
-      // Replace stack so wrappers rebuild using new name
-      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+      // Replace stack based on platform
+      // On web: return to webshare single-page flow
+      // On mobile: go to home wrapper to rebuild discovery
+      if (kIsWeb) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/webshare', (route) => false);
+      } else {
+        Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

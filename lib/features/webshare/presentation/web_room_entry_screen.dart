@@ -6,7 +6,10 @@ import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dar
 import 'package:cpft/features/webshare/services/webshare_service.dart';
 import 'package:cpft/features/webshare/presentation/webrtc_chat_screen.dart';
 import 'package:cpft/shared/widgets/primary_app_bar.dart';
+import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
+import 'package:cpft/features/settings/presentation/settings_screen.dart';
 import 'package:cpft/utils/web_url_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Web-only screen for entering WebRTC share codes and handling URL parameters
 class WebRoomEntryScreen extends StatefulWidget {
@@ -19,7 +22,8 @@ class WebRoomEntryScreen extends StatefulWidget {
 class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
   final TextEditingController _roomIdController = TextEditingController();
   late WebRTCFileTransferService _webrtcService;
-  final WebShareService _webShareService = WebShareService(deviceName: 'WebClient');
+  WebShareService _webShareService = WebShareService(deviceName: 'WebClient');
+  String _deviceName = 'WebClient';
   bool _isJoining = false;
   bool _serviceTransferred = false;
   bool _didAutoRetry = false;
@@ -29,6 +33,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
   void initState() {
     super.initState();
     _webrtcService = WebRTCFileTransferService();
+    _loadDeviceName();
 
     // Check for share code from URL parameters
     final roomIdFromUrl = WebUrlUtils.getRoomIdFromUrl();
@@ -43,6 +48,19 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         });
       });
     }
+  }
+
+  Future<void> _loadDeviceName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name = (prefs.getString('device_name') ?? '').trim();
+      if (name.isNotEmpty && name != _deviceName) {
+        setState(() {
+          _deviceName = name;
+          _webShareService = WebShareService(deviceName: _deviceName);
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -177,7 +195,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         titleWidget: const Padding(
           padding: EdgeInsets.only(left: AppSizes.sm),
           child: Text(
-            'Direct File Transfer',
+            'CPFT',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               color: AppColors.primary,
@@ -185,6 +203,20 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           ),
         ),
         centerTitle: false,
+        trailing: [
+          AppIconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SettingsScreen(
+                    currentDeviceName: _deviceName,
+                  ),
+                ),
+              ).then((_) => _loadDeviceName());
+            },
+            icon: Icons.settings,
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -196,149 +228,187 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Join with Code',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: AppSizes.md),
-                if (_errorText != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSizes.md),
-                    margin: const EdgeInsets.only(bottom: AppSizes.sm),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade700),
-                        const SizedBox(width: AppSizes.sm),
-                        Expanded(
-                          child: Text(
-                            _errorText!,
-                            style: TextStyle(color: Colors.red.shade800),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => setState(() => _errorText = null),
-                          icon: const Icon(Icons.close),
-                          color: Colors.red.shade700,
-                          tooltip: 'Dismiss',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const Text(
-                  'Enter a code to join an existing session, or get a code from someone else to share files.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: AppSizes.xl),
-                TextField(
-                  controller: _roomIdController,
-                  decoration: InputDecoration(
-                    labelText: 'Code',
-                    hintText: 'Enter code (e.g., ABC123)',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon: const Icon(Icons.meeting_room),
-                  ),
-                  textCapitalization: TextCapitalization.characters,
-                  enabled: !_isJoining,
-                ),
-                const SizedBox(height: AppSizes.lg),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _isJoining
-                        ? null
-                        : () {
-                            final roomId = _roomIdController.text.trim();
-                            if (roomId.isNotEmpty) {
-                              _joinWebRTCRoom(roomId);
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isJoining
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                          'Join',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: AppSizes.xl),
-                Container(
-                  padding: const EdgeInsets.all(AppSizes.md),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSizes.lg),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Container(
+                  padding: const EdgeInsets.all(AppSizes.lg),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.shade200),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        children: [
-                          Icon(Icons.info, color: Colors.blue.shade700, size: 20),
-                          const SizedBox(width: AppSizes.sm),
+                        children: const [
+                          Icon(Icons.link, color: AppColors.primary),
+                          SizedBox(width: AppSizes.sm),
                           Text(
-                            'How it works',
+                            'Join with Code',
                             style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: Colors.blue.shade700,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: AppSizes.sm),
-                      Text(
-                        '• Share the code with others to let them join\n'
-                        '• Files are transferred directly between devices\n'
-                        '• No files are stored on servers\n'
-                        '• Works best on the same local network',
+                      const Text(
+                        'Enter a code to join an existing session and start sharing files directly between devices.',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.blue.shade800,
-                          height: 1.4,
+                          fontSize: 15,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: AppSizes.md),
+                      if (_errorText != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSizes.md),
+                          margin: const EdgeInsets.only(bottom: AppSizes.sm),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.red.shade700),
+                              const SizedBox(width: AppSizes.sm),
+                              Expanded(
+                                child: Text(
+                                  _errorText!,
+                                  style: TextStyle(color: Colors.red.shade800),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => setState(() => _errorText = null),
+                                icon: const Icon(Icons.close),
+                                color: Colors.red.shade700,
+                                tooltip: 'Dismiss',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      TextField(
+                        controller: _roomIdController,
+                        style: const TextStyle(fontSize: 16, color: Colors.black87),
+                        decoration: InputDecoration(
+                          labelText: 'Code',
+                          hintText: 'Enter code (e.g., ABC123)',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          prefixIcon: const Icon(Icons.key, color: AppColors.primary),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        textCapitalization: TextCapitalization.characters,
+                        enabled: !_isJoining,
+                        onSubmitted: (_) {
+                          final roomId = _roomIdController.text.trim();
+                          if (roomId.isNotEmpty) {
+                            _joinWebRTCRoom(roomId);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: AppSizes.md),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _isJoining
+                              ? null
+                              : () {
+                                  final roomId = _roomIdController.text.trim();
+                                  if (roomId.isNotEmpty) {
+                                    _joinWebRTCRoom(roomId);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Please enter a code'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          icon: _isJoining
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Icon(Icons.login, size: 22),
+                          label: Text(
+                            _isJoining ? 'Joining…' : 'Join',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSizes.md),
+                      Container(
+                        padding: const EdgeInsets.all(AppSizes.md),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue.shade700),
+                            const SizedBox(width: AppSizes.sm),
+                            Expanded(
+                              child: Text(
+                                'For the fastest and most reliable connection, ensure both devices are on the same Wi‑Fi or Personal Hotspot.',
+                                style: TextStyle(fontSize: 13, color: Colors.blue.shade900, height: 1.4),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
