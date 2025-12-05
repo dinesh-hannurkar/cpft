@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         debugPrint('[HomeScreen] 🎉 WebRTC Connection Established!');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('WebRTC Connected! Ready to transfer files.'),
+            content: Text('WebRTC Connected! Ready to transfer files.', style: TextStyle(color: Colors.white),),
             backgroundColor: Colors.green,
           ),
         );

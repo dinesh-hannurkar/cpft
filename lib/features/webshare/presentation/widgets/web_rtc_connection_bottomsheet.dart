@@ -7,9 +7,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:cpft/features/webshare/services/html_stub.dart'
-    if (dart.library.html) 'dart:html' as html;
+    if (dart.library.html) 'dart:html'
+    as html;
 import 'package:cpft/features/webshare/services/webshare_service.dart';
 import 'package:cpft/features/webshare/presentation/webrtc_chat_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// WebRTC Connection Bottom Sheet
 class WebRTCConnectionBottomSheet extends StatefulWidget {
@@ -19,6 +21,7 @@ class WebRTCConnectionBottomSheet extends StatefulWidget {
   final WebShareService? webShareService;
   final String? roomId;
   final VoidCallback? onDisconnect;
+  final String? deviceName;
 
   const WebRTCConnectionBottomSheet({
     super.key,
@@ -28,6 +31,7 @@ class WebRTCConnectionBottomSheet extends StatefulWidget {
     this.webShareService,
     this.roomId,
     this.onDisconnect,
+    this.deviceName,
   });
 
   @override
@@ -52,6 +56,37 @@ class _WebRTCConnectionBottomSheetState
     super.initState();
     _checkNetworkStatus();
     _extractRoomIdFromUrl();
+    // After connection is established, send our device name to the peer.
+    widget.webrtcService.connectionEstablished.addListener(
+      _sendNameIfConnected,
+    );
+  }
+
+  void _sendNameIfConnected() async {
+    try {
+      if (widget.webrtcService.connectionEstablished.value != true) return;
+      final prefs = await SharedPreferences.getInstance();
+      final saved = (prefs.getString('device_name') ?? '').trim();
+      final fallback = (widget.deviceName ?? '').trim();
+      String localName = saved.isNotEmpty ? saved : fallback;
+      // If still empty, use a default based on platform
+      if (localName.isEmpty) {
+        localName = kIsWeb ? 'Web User' : 'Mobile User';
+      }
+      if (localName.isEmpty) return;
+      final message = 'peer-info: $localName';
+      widget.webrtcService.sendTextMessage(message);
+      // Retry shortly once for reliability
+      Future.delayed(const Duration(milliseconds: 400), () {
+        try {
+          widget.webrtcService.sendTextMessage(message);
+        } catch (_) {}
+      });
+      // Remove listener after first successful send to avoid duplicates on reconnections
+      widget.webrtcService.connectionEstablished.removeListener(
+        _sendNameIfConnected,
+      );
+    } catch (_) {}
   }
 
   Future<void> _checkNetworkStatus() async {
@@ -98,6 +133,12 @@ class _WebRTCConnectionBottomSheetState
   @override
   void dispose() {
     _peerIdController.dispose();
+    // Clean up connection listener if still attached
+    try {
+      widget.webrtcService.connectionEstablished.removeListener(
+        _sendNameIfConnected,
+      );
+    } catch (_) {}
     super.dispose();
   }
 
@@ -115,9 +156,14 @@ class _WebRTCConnectionBottomSheetState
       // Join or remote mode: need room ID from user
       roomId = _peerIdController.text.trim();
       if (roomId.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Please enter a room ID')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please enter a room ID',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        );
         return;
       }
 
@@ -181,17 +227,17 @@ class _WebRTCConnectionBottomSheetState
           _isDiscovering = false;
         });
       }
-      
+
       // For auto-connect from URL, show error but allow manual retry
       if (_urlRoomId != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Auto-connect failed: ${e.toString()}'),
-              action: SnackBarAction(
-                label: 'Retry',
-                onPressed: _connectToPeer,
+              content: Text(
+                'Auto-connect failed: ${e.toString()}',
+                style: const TextStyle(color: Colors.red),
               ),
+              action: SnackBarAction(label: 'Retry', onPressed: _connectToPeer),
             ),
           );
         }
@@ -237,14 +283,18 @@ class _WebRTCConnectionBottomSheetState
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _isConnecting 
-                        ? Colors.blue.shade50 
-                        : (_hasJoinedRoom ? Colors.green.shade50 : Colors.red.shade50),
+                      color: _isConnecting
+                          ? Colors.blue.shade50
+                          : (_hasJoinedRoom
+                                ? Colors.green.shade50
+                                : Colors.red.shade50),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: _isConnecting 
-                          ? Colors.blue.shade200 
-                          : (_hasJoinedRoom ? Colors.green.shade200 : Colors.red.shade200)
+                        color: _isConnecting
+                            ? Colors.blue.shade200
+                            : (_hasJoinedRoom
+                                  ? Colors.green.shade200
+                                  : Colors.red.shade200),
                       ),
                     ),
                     child: Column(
@@ -257,7 +307,9 @@ class _WebRTCConnectionBottomSheetState
                                 height: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.blue,
+                                  ),
                                 ),
                               ),
                             ] else if (_hasJoinedRoom) ...[
@@ -279,29 +331,35 @@ class _WebRTCConnectionBottomSheetState
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _isConnecting 
-                                      ? 'Joining Room' 
-                                      : (_hasJoinedRoom ? 'Room Joined' : 'Connection Failed'),
+                                    _isConnecting
+                                        ? 'Joining Room'
+                                        : (_hasJoinedRoom
+                                              ? 'Room Joined'
+                                              : 'Connection Failed'),
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
-                                      color: _isConnecting 
-                                        ? Colors.blue.shade900 
-                                        : (_hasJoinedRoom ? Colors.green.shade900 : Colors.red.shade900),
+                                      color: _isConnecting
+                                          ? Colors.blue.shade900
+                                          : (_hasJoinedRoom
+                                                ? Colors.green.shade900
+                                                : Colors.red.shade900),
                                       fontSize: 16,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     _isConnecting
-                                      ? 'Automatically joining room $_urlRoomId...'
-                                      : (_hasJoinedRoom 
-                                        ? 'Successfully joined room $_urlRoomId'
-                                        : 'Failed to join room $_urlRoomId. Tap retry to try again.'),
+                                        ? 'Automatically joining room $_urlRoomId...'
+                                        : (_hasJoinedRoom
+                                              ? 'Successfully joined room $_urlRoomId'
+                                              : 'Failed to join room $_urlRoomId. Tap retry to try again.'),
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: _isConnecting 
-                                        ? Colors.blue.shade700 
-                                        : (_hasJoinedRoom ? Colors.green.shade700 : Colors.red.shade700),
+                                      color: _isConnecting
+                                          ? Colors.blue.shade700
+                                          : (_hasJoinedRoom
+                                                ? Colors.green.shade700
+                                                : Colors.red.shade700),
                                     ),
                                   ),
                                 ],
@@ -630,7 +688,7 @@ class _WebRTCConnectionBottomSheetState
                 _buildStatusIndicator(
                   icon: Icons.meeting_room,
                   text: 'Room Joined',
-                  status: 'Room: $_currentRoomId',
+                  status: '$_currentRoomId',
                   isComplete: true,
                   color: Colors.green,
                 ),
@@ -706,7 +764,10 @@ class _WebRTCConnectionBottomSheetState
                               // Copy to clipboard
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('IP copied to clipboard'),
+                                  content: Text(
+                                    'IP copied to clipboard',
+                                    style: TextStyle(color: Colors.black),
+                                  ),
                                 ),
                               );
                             },
@@ -728,6 +789,24 @@ class _WebRTCConnectionBottomSheetState
                     Future.delayed(const Duration(milliseconds: 1500), () {
                       if (mounted) {
                         widget.onConnected();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => WebRTCChatScreen(
+                              webrtcService: widget.webrtcService,
+                              webShareService: widget.webShareService,
+                              roomId:
+                                  widget.roomId ??
+                                  widget.webrtcService.roomId ??
+                                  'unknown',
+                              deviceName: widget.deviceName,
+                              onDisconnect:
+                                  widget.onDisconnect ??
+                                  () => Navigator.pop(context),
+                            ),
+                          ),
+                        );
                       }
                     });
                   }
@@ -761,8 +840,14 @@ class _WebRTCConnectionBottomSheetState
                                   builder: (_) => WebRTCChatScreen(
                                     webrtcService: widget.webrtcService,
                                     webShareService: widget.webShareService,
-                                    roomId: widget.roomId ?? widget.webrtcService.roomId ?? 'unknown',
-                                    onDisconnect: widget.onDisconnect ?? () => Navigator.pop(context),
+                                    roomId:
+                                        widget.roomId ??
+                                        widget.webrtcService.roomId ??
+                                        'unknown',
+                                    deviceName: widget.deviceName,
+                                    onDisconnect:
+                                        widget.onDisconnect ??
+                                        () => Navigator.pop(context),
                                   ),
                                 ),
                               );

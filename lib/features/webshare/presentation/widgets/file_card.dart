@@ -11,6 +11,7 @@ class FileCard extends StatelessWidget {
   final VoidCallback? onTap;
   final void Function(BuildContext)? onAction;
   final IconData? actionIcon;
+  final EdgeInsetsGeometry? margin;
 
   const FileCard({
     super.key,
@@ -20,6 +21,7 @@ class FileCard extends StatelessWidget {
     this.onTap,
     this.onAction,
     this.actionIcon,
+    this.margin
   });
 
   @override
@@ -36,7 +38,7 @@ class FileCard extends StatelessWidget {
             ? SystemMouseCursors.click
             : SystemMouseCursors.basic,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: AppSizes.md),
+          margin: margin ?? const EdgeInsets.symmetric(horizontal: AppSizes.md),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -132,7 +134,7 @@ class FileCard extends StatelessWidget {
                           actionIcon ?? Icons.delete_forever,
                           color: actionIcon == Icons.download
                               ? AppColors.primary
-                              : const Color(0xFFD32F2F),
+                              : AppColors.darkPrimary,
                           size: 22,
                         ),
                         onPressed: () => onAction!.call(buttonContext),

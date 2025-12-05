@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' as io;
 import 'package:cpft/features/chat/models/connection_state.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_bubble.dart';
+import 'package:cpft/shared/widgets/connection_info_dialog.dart';
 import 'package:cpft/utils/file_saver.dart';
 import 'package:cpft/utils/mime_utils.dart';
 import 'package:flutter/foundation.dart';
@@ -25,7 +26,9 @@ import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:cpft/features/webshare/presentation/widgets/file_card.dart';
 import 'package:cpft/features/webshare/services/file_action_handler.dart';
 import 'package:cpft/services/background_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 
 /// Chat-like screen for WebRTC file sharing
 class WebRTCChatScreen extends StatefulWidget {
@@ -33,6 +36,7 @@ class WebRTCChatScreen extends StatefulWidget {
   final WebShareService? webShareService;
   final String roomId;
   final VoidCallback onDisconnect;
+  final String? deviceName;
 
   const WebRTCChatScreen({
     super.key,
@@ -40,6 +44,7 @@ class WebRTCChatScreen extends StatefulWidget {
     this.webShareService,
     required this.roomId,
     required this.onDisconnect,
+    this.deviceName,
   });
 
   @override
@@ -50,6 +55,8 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  String? _peerName;
+  String? _localName;
   final FocusNode _inputFocus = FocusNode();
   final List<ChatMessage> _messages = [];
   bool _isConnected = true;
@@ -110,6 +117,23 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
     // Check focus
     _inputFocus.addListener(() => setState(() {}));
+
+    // Load local saved device name for initial title until peer arrives
+    _loadLocalDeviceName();
+  }
+
+  Future<void> _loadLocalDeviceName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name = (prefs.getString('device_name') ?? '').trim();
+      if (name.isNotEmpty && mounted) {
+        setState(() {
+          _localName = name;
+        });
+      }
+    } catch (e) {
+      debugPrint('[WebRTCChatScreen] Failed to load local device name: $e');
+    }
   }
 
   void _setupWebRTCCallbacks() {
@@ -120,6 +144,21 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       setState(() {
         _isConnected = true;
       });
+      // Auto-exchange names when connected (after a short delay to ensure channel ready)
+      if (kIsWeb) {
+        // Delay on web to let mobile's chat screen open first
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted && widget.webrtcService.connectionEstablished.value) {
+            _sendLocalNameToPeer();
+          }
+        });
+      } else {
+        Future.delayed(const Duration(milliseconds: 250), () {
+          if (mounted && widget.webrtcService.connectionEstablished.value) {
+            _sendLocalNameToPeer();
+          }
+        });
+      }
       // Removed: _addSystemMessage('Connected successfully');
     };
 
@@ -206,25 +245,40 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // Text chat: received and sent callbacks
     widget.webrtcService.onTextMessageReceived = (message) {
       if (!mounted) return;
+      // Check for peer-info plain text message
+      if (message.startsWith('peer-info: ')) {
+        setState(() {
+          _peerName = message.substring(11).trim();
+        });
+        return; // Do not add a chat bubble for metadata
+      }
       setState(() {
-        _messages.add(ChatMessage(
-          id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-          content: message,
-          type: MessageType.textReceived,
-          timestamp: DateTime.now(),
-        ));
+        _messages.add(
+          ChatMessage(
+            id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+            content: message,
+            type: MessageType.textReceived,
+            timestamp: DateTime.now(),
+          ),
+        );
       });
       _scrollToBottom();
     };
     widget.webrtcService.onTextMessageSent = (message) {
       if (!mounted) return;
+      // Ignore local peer-info from showing as a bubble
+      if (message.startsWith('peer-info: ')) {
+        return;
+      }
       setState(() {
-        _messages.add(ChatMessage(
-          id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-          content: message,
-          type: MessageType.textSent,
-          timestamp: DateTime.now(),
-        ));
+        _messages.add(
+          ChatMessage(
+            id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+            content: message,
+            type: MessageType.textSent,
+            timestamp: DateTime.now(),
+          ),
+        );
       });
       _scrollToBottom();
     };
@@ -233,6 +287,46 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     widget.webrtcService.connectionEstablished.addListener(
       _onConnectionChanged,
     );
+
+    // If already connected (e.g., on web), send name immediately
+    if (widget.webrtcService.connectionEstablished.value) {
+      if (kIsWeb) {
+        // Delay on web to let mobile's chat screen open first
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) _sendLocalNameToPeer();
+        });
+      } else {
+        _sendLocalNameToPeer();
+      }
+    }
+  }
+
+  Future<void> _sendLocalNameToPeer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Prefer saved name; fall back to injected deviceName if missing
+      final saved = (prefs.getString('device_name') ?? '').trim();
+      final fallback = (widget.deviceName ?? '').trim();
+      String localName = saved.isNotEmpty ? saved : fallback;
+      // On web, if still empty, use a default
+      if (localName.isEmpty && kIsWeb) {
+        localName = 'Web User';
+      }
+      if (localName.isNotEmpty) {
+        final message = 'peer-info: $localName';
+        widget.webrtcService.sendTextMessage(message);
+        // If we don't receive a peer name within a second, retry once
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted && (_peerName == null || _peerName!.isEmpty)) {
+            try {
+              widget.webrtcService.sendTextMessage(message);
+            } catch (_) {}
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[WebRTCChatScreen] Failed to send local name: $e');
+    }
   }
 
   void _onConnectionChanged() {
@@ -625,254 +719,222 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   }
 
   void _showReceivedFiles() {
-    showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey, width: 0.5),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Received Files',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: widget.webShareService != null
-                    ? ListView.separated(
-                        controller: scrollController,
-                        itemCount:
-                            widget.webShareService!.receivedFiles.value.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        itemBuilder: (context, index) {
-                          final file = widget
-                              .webShareService!
-                              .receivedFiles
-                              .value[index];
-                          return FileCard(
-                            filename: file.filename,
-                            sizeBytes: file.sizeBytes,
-                            timestamp: file.receivedAt,
-                            onTap: () async {
-                              if (kIsWeb &&
-                                  (file.path.startsWith('web-bytes:') ||
-                                      file.path.startsWith('web-parts:'))) {
-                                // On web cached items, trigger the same action as the download button
-                                try {
-                                  // Reuse the action handler
-                                  // ignore: use_build_context_synchronously
-                                  await Future.microtask(() => {});
-                                  // Call the same logic as onAction
-                                  // Note: onAction is non-null in this callsite
-                                  // ignore: unnecessary_lambdas
-                                  // ignore: inference_failure_on_untyped_parameter
-                                  // ignore: avoid_dynamic_calls
-                                  // We directly duplicate the download logic below to avoid context quirks
-                                  final path = file.path;
-                                  if (path.startsWith('web-bytes:')) {
-                                    final id = path.substring(
-                                      'web-bytes:'.length,
-                                    );
-                                    final data = WebReceivedCache.get(id);
-                                    if (data != null) {
-                                      final ext = (file.filename.contains('.')
-                                          ? file.filename
-                                                .split('.')
-                                                .last
-                                                .toLowerCase()
-                                          : '');
-                                      final mime = MimeUtils.guessMime(ext);
-                                      WebDownload.saveBytes(
-                                        file.filename,
-                                        data,
-                                        contentType: mime,
-                                      );
-                                      return;
-                                    }
-                                  } else if (path.startsWith('web-parts:')) {
-                                    final id = path.substring(
-                                      'web-parts:'.length,
-                                    );
-                                    final parts = WebReceivedCache.getParts(id);
-                                    if (parts != null) {
-                                      final ext = (file.filename.contains('.')
-                                          ? file.filename
-                                                .split('.')
-                                                .last
-                                                .toLowerCase()
-                                          : '');
-                                      final mime = MimeUtils.guessMime(ext);
-                                      WebDownload.saveParts(
-                                        file.filename,
-                                        parts,
-                                        contentType: mime,
-                                      );
-                                      return;
-                                    }
-                                  }
-                                } catch (_) {}
-                                return;
-                              }
-                              try {
-                                await OpenFilex.open(file.path);
-                              } catch (_) {}
-                            },
-                            onAction: (context) async {
-                              if (kIsWeb &&
-                                  file.path.startsWith('web-bytes:')) {
-                                final id = file.path.substring(
-                                  'web-bytes:'.length,
-                                );
-                                final data = WebReceivedCache.get(id);
-                                if (data != null) {
-                                  final ext = (file.filename.contains('.')
-                                      ? file.filename
-                                            .split('.')
-                                            .last
-                                            .toLowerCase()
-                                      : '');
-                                  final mime = MimeUtils.guessMime(ext);
-                                  WebDownload.saveBytes(
-                                    file.filename,
-                                    data,
-                                    contentType: mime,
-                                  );
-                                  return;
-                                }
-                              }
-                              if (kIsWeb &&
-                                  file.path.startsWith('web-parts:')) {
-                                final id = file.path.substring(
-                                  'web-parts:'.length,
-                                );
-                                final parts = WebReceivedCache.getParts(id);
-                                if (parts != null) {
-                                  final ext = (file.filename.contains('.')
-                                      ? file.filename
-                                            .split('.')
-                                            .last
-                                            .toLowerCase()
-                                      : '');
-                                  final mime = MimeUtils.guessMime(ext);
-                                  WebDownload.saveParts(
-                                    file.filename,
-                                    parts.cast(),
-                                    contentType: mime,
-                                  );
-                                  return;
-                                }
-                              }
-                              // Native: show actions - Open, Save to device…, Share
-                              if (!kIsWeb) {
-                                // ignore: use_build_context_synchronously
-                                await showModalBottomSheet(
-                                  context: context,
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(16),
-                                    ),
-                                  ),
-                                  builder: (_) => SafeArea(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        ListTile(
-                                          leading: const Icon(
-                                            Icons.open_in_new,
-                                          ),
-                                          title: const Text('Open'),
-                                          onTap: () async {
-                                            Navigator.of(context).pop();
-                                            try {
-                                              await OpenFilex.open(file.path);
-                                            } catch (_) {}
-                                          },
-                                        ),
-                                        ListTile(
-                                          leading: const Icon(Icons.save_alt),
-                                          title: const Text('Save to device…'),
-                                          subtitle: const Text(
-                                            'Choose a location to save this file',
-                                          ),
-                                          onTap: () async {
-                                            Navigator.of(context).pop();
-                                            await FileSaver.saveToDevicePicker(
-                                              context: context,
-                                              filename: file.filename,
-                                              sourcePath: file.path,
-                                            );
-                                          },
-                                        ),
-                                        ListTile(
-                                          leading: const Icon(Icons.ios_share),
-                                          title: const Text('Share / Export'),
-                                          onTap: () async {
-                                            Navigator.of(context).pop();
-                                            final box =
-                                                context.findRenderObject()
-                                                    as RenderBox?;
-                                            final position =
-                                                box?.localToGlobal(
-                                                  Offset.zero,
-                                                ) ??
-                                                Offset.zero;
-                                            final size = box?.size ?? Size.zero;
-                                            await Share.shareXFiles(
-                                              [XFile(file.path)],
-                                              sharePositionOrigin:
-                                                  Rect.fromLTWH(
-                                                    position.dx,
-                                                    position.dy,
-                                                    size.width,
-                                                    size.height,
-                                                  ),
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-                            },
-                          );
-                        },
-                      )
-                    : const Center(child: Text('Received files not available')),
-              ),
-            ],
-          ),
-        ),
-      ),
+      title: 'Received Files',
+      subtitle: 'Files received during this session',
+      child: widget.webShareService != null
+          ? ListView.separated(
+              itemCount: widget.webShareService!.receivedFiles.value.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              padding: const EdgeInsets.symmetric(vertical: 12,),
+              itemBuilder: (context, index) {
+                final file = widget.webShareService!.receivedFiles.value[index];
+                return FileCard(
+                  filename: file.filename,
+                  sizeBytes: file.sizeBytes,
+                  timestamp: file.receivedAt,
+                  margin: EdgeInsets.all(0),
+                  onTap: () async {
+                    if (kIsWeb &&
+                        (file.path.startsWith('web-bytes:') ||
+                            file.path.startsWith('web-parts:'))) {
+                      // On web cached items, trigger the same action as the download button
+                      try {
+                        // Reuse the action handler
+                        // ignore: use_build_context_synchronously
+                        await Future.microtask(() => {});
+                        // Call the same logic as onAction
+                        // Note: onAction is non-null in this callsite
+                        // ignore: unnecessary_lambdas
+                        // ignore: inference_failure_on_untyped_parameter
+                        // ignore: avoid_dynamic_calls
+                        // We directly duplicate the download logic below to avoid context quirks
+                        final path = file.path;
+                        if (path.startsWith('web-bytes:')) {
+                          final id = path.substring('web-bytes:'.length);
+                          final data = WebReceivedCache.get(id);
+                          if (data != null) {
+                            final ext = (file.filename.contains('.')
+                                ? file.filename.split('.').last.toLowerCase()
+                                : '');
+                            final mime = MimeUtils.guessMime(ext);
+                            WebDownload.saveBytes(
+                              file.filename,
+                              data,
+                              contentType: mime,
+                            );
+                            return;
+                          }
+                        } else if (path.startsWith('web-parts:')) {
+                          final id = path.substring('web-parts:'.length);
+                          final parts = WebReceivedCache.getParts(id);
+                          if (parts != null) {
+                            final ext = (file.filename.contains('.')
+                                ? file.filename.split('.').last.toLowerCase()
+                                : '');
+                            final mime = MimeUtils.guessMime(ext);
+                            WebDownload.saveParts(
+                              file.filename,
+                              parts,
+                              contentType: mime,
+                            );
+                            return;
+                          }
+                        }
+                      } catch (_) {}
+                      return;
+                    }
+                    try {
+                      await OpenFilex.open(file.path);
+                    } catch (_) {}
+                  },
+                  onAction: (context) async {
+                    if (kIsWeb && file.path.startsWith('web-bytes:')) {
+                      final id = file.path.substring('web-bytes:'.length);
+                      final data = WebReceivedCache.get(id);
+                      if (data != null) {
+                        final ext = (file.filename.contains('.')
+                            ? file.filename.split('.').last.toLowerCase()
+                            : '');
+                        final mime = MimeUtils.guessMime(ext);
+                        WebDownload.saveBytes(
+                          file.filename,
+                          data,
+                          contentType: mime,
+                        );
+                        return;
+                      }
+                    }
+                    if (kIsWeb && file.path.startsWith('web-parts:')) {
+                      final id = file.path.substring('web-parts:'.length);
+                      final parts = WebReceivedCache.getParts(id);
+                      if (parts != null) {
+                        final ext = (file.filename.contains('.')
+                            ? file.filename.split('.').last.toLowerCase()
+                            : '');
+                        final mime = MimeUtils.guessMime(ext);
+                        WebDownload.saveParts(
+                          file.filename,
+                          parts.cast(),
+                          contentType: mime,
+                        );
+                        return;
+                      }
+                    }
+                    // Native: show actions - Open, Save to device…, Share
+                    if (!kIsWeb) {
+                      // ignore: use_build_context_synchronously
+                      final RenderBox button =
+                          context.findRenderObject() as RenderBox;
+                      final RenderBox overlay =
+                          Navigator.of(
+                                context,
+                              ).overlay!.context.findRenderObject()
+                              as RenderBox;
+                      final RelativeRect position = RelativeRect.fromRect(
+                        Rect.fromPoints(
+                          button.localToGlobal(
+                            button.size.bottomRight(Offset.zero),
+                            ancestor: overlay,
+                          ),
+                          button.localToGlobal(
+                            button.size.bottomRight(Offset.zero),
+                            ancestor: overlay,
+                          ),
+                        ),
+                        Offset.zero & overlay.size,
+                      );
+
+                      await showMenu<String>(
+                        context: context,
+                        position: position,
+                        color: AppColors.white,
+                        elevation: 8,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        items: [
+                          PopupMenuItem<String>(
+                            value: 'open',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.open_in_new, size: 20),
+                                const SizedBox(width: 12),
+                                const Text('Open'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'save',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.save_alt, size: 20),
+                                const SizedBox(width: 12),
+                                const Text('Save to device…'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.ios_share, size: 20),
+                                const SizedBox(width: 12),
+                                const Text('Share / Export'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ).then((value) async {
+                        switch (value) {
+                          case 'open':
+                            try {
+                              await OpenFilex.open(file.path);
+                            } catch (_) {}
+                            break;
+                          case 'save':
+                            await FileSaver.saveToDevicePicker(
+                              context: context,
+                              filename: file.filename,
+                              sourcePath: file.path,
+                            );
+                            break;
+                          case 'share':
+                            final box =
+                                context.findRenderObject() as RenderBox?;
+                            final position =
+                                box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                            final size = box?.size ?? Size.zero;
+                            await Share.shareXFiles(
+                              [XFile(file.path)],
+                              sharePositionOrigin: Rect.fromLTWH(
+                                position.dx,
+                                position.dy,
+                                size.width,
+                                size.height,
+                              ),
+                            );
+                            break;
+                        }
+                      });
+                      return;
+                    }
+                  },
+                  actionIcon: kIsWeb ? Icons.download : Icons.more_vert,
+                );
+              },
+            )
+          : const Center(child: Text('Received files not available')),
+    );
+  }
+
+  void _showConnectionInfo() {
+    showConnectionInfoDialog(
+      context: context,
+      peerName: _peerName,
+      networkName: widget.roomId,
+      onDisconnect: widget.onDisconnect,
     );
   }
 
@@ -927,7 +989,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'WebRTC Chat',
+                (_peerName?.isNotEmpty == true ? _peerName! : 'WebRTC'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -937,8 +999,8 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
               ),
               Text(
                 _isConnected
-                    ? 'Room: ${widget.roomId} • Connected'
-                    : 'Room: ${widget.roomId} • Disconnected',
+                    ? '${widget.roomId} • Connected'
+                    : '${widget.roomId} • Disconnected',
                 style: const TextStyle(fontSize: 11, color: Colors.black54),
               ),
             ],
@@ -952,7 +1014,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
               icon: Icons.folder_open,
             ),
           AppIconButton(
-            onPressed: widget.onDisconnect,
+            onPressed: _showConnectionInfo,
             icon: _isConnected ? Icons.wifi : Icons.wifi_off,
           ),
         ],
@@ -1013,7 +1075,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                     itemBuilder: (context, index) {
                       if (index < _messages.length) {
                         final msg = _messages[index];
-                            return _buildMessageBubble(msg);
+                        return _buildMessageBubble(msg);
                       }
                       final extra = index - _messages.length;
                       // First render incoming progress tiles
@@ -1088,19 +1150,33 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           return sameName && inProgress;
         });
         if (hasOngoing) {
-          debugPrint('[WebRTCChatScreen] Skipping file card (outgoing in progress)');
+          debugPrint(
+            '[WebRTCChatScreen] Skipping file card (outgoing in progress)',
+          );
           // If we're still preparing (no total yet), show a subtle loading row
-          if (preparing != null && preparing!.total == 0 && preparing!.progress == 0) {
+          if (preparing != null &&
+              preparing!.total == 0 &&
+              preparing!.progress == 0) {
             return Align(
               alignment: Alignment.centerRight,
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.sm),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: AppSizes.md,
+                  vertical: AppSizes.sm,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
                   border: Border.all(color: Colors.blue.shade50),
                 ),
@@ -1111,14 +1187,20 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                     SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue.shade400),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.blue.shade400,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
                         'Preparing ${message.content}…',
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
                       ),
                     ),
                   ],
@@ -1232,4 +1314,3 @@ class ChatMessage {
     this.fileSize,
   });
 }
-  

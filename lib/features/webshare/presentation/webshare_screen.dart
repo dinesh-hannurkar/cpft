@@ -671,6 +671,7 @@ class _WebShareScreenState extends State<WebShareScreen>
             webrtcService: _webrtcService,
             webShareService: _webShareService,
             roomId: roomId,
+            deviceName: widget.deviceName,
             onDisconnect: () {
               // Handle disconnect - go back to room joining screen
               Navigator.of(context).pop();

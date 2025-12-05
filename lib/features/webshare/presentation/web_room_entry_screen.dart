@@ -72,6 +72,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
             webrtcService: _webrtcService,
             webShareService: _webShareService,
             roomId: roomId,
+            deviceName: null,
             onDisconnect: () {
               // Go back to room entry screen
               Navigator.of(context).pop();
