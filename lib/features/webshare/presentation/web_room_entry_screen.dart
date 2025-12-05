@@ -8,7 +8,7 @@ import 'package:cpft/features/webshare/presentation/webrtc_chat_screen.dart';
 import 'package:cpft/shared/widgets/primary_app_bar.dart';
 import 'package:cpft/utils/web_url_utils.dart';
 
-/// Web-only screen for entering WebRTC room IDs and handling URL parameters
+/// Web-only screen for entering WebRTC share codes and handling URL parameters
 class WebRoomEntryScreen extends StatefulWidget {
   const WebRoomEntryScreen({super.key});
 
@@ -18,21 +18,23 @@ class WebRoomEntryScreen extends StatefulWidget {
 
 class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
   final TextEditingController _roomIdController = TextEditingController();
-  final WebRTCFileTransferService _webrtcService = WebRTCFileTransferService();
+  late WebRTCFileTransferService _webrtcService;
   final WebShareService _webShareService = WebShareService(deviceName: 'WebClient');
   bool _isJoining = false;
   bool _serviceTransferred = false;
   bool _didAutoRetry = false;
+  String? _errorText;
 
   @override
   void initState() {
     super.initState();
+    _webrtcService = WebRTCFileTransferService();
 
-    // Check for room ID from URL parameters
+    // Check for share code from URL parameters
     final roomIdFromUrl = WebUrlUtils.getRoomIdFromUrl();
     if (roomIdFromUrl != null && roomIdFromUrl.isNotEmpty) {
       _roomIdController.text = roomIdFromUrl;
-      // Auto-join the room after a short delay to allow UI to build
+      // Auto-join after a short delay to allow UI to build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
@@ -58,6 +60,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
 
     setState(() {
       _isJoining = true;
+      _errorText = null;
     });
 
     try {
@@ -67,13 +70,14 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
       // Navigate to WebRTC chat screen
       if (!mounted) return;
       _serviceTransferred = true; // Mark service as transferred
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => WebRTCChatScreen(
             webrtcService: _webrtcService,
             webShareService: _webShareService,
             roomId: roomId,
             deviceName: null,
+            disposeServiceOnClose: true,
             onDisconnect: () {
               // Go back to room entry screen
               Navigator.of(context).pop();
@@ -81,7 +85,26 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           ),
         ),
       );
+      // After returning from chat, reset local state and reinitialize service
+      if (mounted) {
+        setState(() {
+          _isJoining = false;
+          _didAutoRetry = false;
+          _serviceTransferred = false;
+          _webrtcService = WebRTCFileTransferService();
+        });
+      }
     } catch (e) {
+        // Prepare friendly error message for missing codes (web is join-only)
+      final message = e.toString();
+        final friendly = message.contains('not found')
+          ? 'Code not found or expired. Start Link Share from the mobile app and try again.'
+          : 'Failed to join: $message';
+      if (mounted) {
+        setState(() {
+          _errorText = friendly;
+        });
+      }
       // One-shot auto-retry on failure
       if (!_didAutoRetry) {
         _didAutoRetry = true;
@@ -89,7 +112,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Joining failed. Refreshing room and retrying…',
+                'Joining failed. Refreshing and retrying…',
                 style: TextStyle(color: Colors.white),
               ),
               backgroundColor: Colors.orange,
@@ -103,17 +126,27 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           await _webrtcService.connectToSignalingServer(roomId);
           if (!mounted) return;
           _serviceTransferred = true;
-          Navigator.of(context).push(
+          await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => WebRTCChatScreen(
                 webrtcService: _webrtcService,
                 webShareService: _webShareService,
                 roomId: roomId,
                 deviceName: null,
+                disposeServiceOnClose: true,
                 onDisconnect: () => Navigator.of(context).pop(),
               ),
             ),
           );
+          // After returning from chat, reset local state and reinitialize service
+          if (mounted) {
+            setState(() {
+              _isJoining = false;
+              _didAutoRetry = false;
+              _serviceTransferred = false;
+              _webrtcService = WebRTCFileTransferService();
+            });
+          }
           return;
         } catch (e2) {
           // fall through to show final failure
@@ -123,7 +156,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Failed to join room: $e',
+              friendly,
               style: const TextStyle(color: Colors.white),
             ),
             backgroundColor: Colors.red,
@@ -144,7 +177,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         titleWidget: const Padding(
           padding: EdgeInsets.only(left: AppSizes.sm),
           child: Text(
-            'WebRTC File Transfer',
+            'Direct File Transfer',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               color: AppColors.primary,
@@ -169,7 +202,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Join WebRTC Room',
+                  'Join with Code',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -177,8 +210,39 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSizes.md),
+                if (_errorText != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSizes.md),
+                    margin: const EdgeInsets.only(bottom: AppSizes.sm),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red.shade700),
+                        const SizedBox(width: AppSizes.sm),
+                        Expanded(
+                          child: Text(
+                            _errorText!,
+                            style: TextStyle(color: Colors.red.shade800),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => setState(() => _errorText = null),
+                          icon: const Icon(Icons.close),
+                          color: Colors.red.shade700,
+                          tooltip: 'Dismiss',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const Text(
-                  'Enter a room ID to join an existing WebRTC session, or get a room ID from someone else to share files.',
+                  'Enter a code to join an existing session, or get a code from someone else to share files.',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.black87,
@@ -188,8 +252,8 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                 TextField(
                   controller: _roomIdController,
                   decoration: InputDecoration(
-                    labelText: 'Room ID',
-                    hintText: 'Enter room ID (e.g., ABC123)',
+                    labelText: 'Code',
+                    hintText: 'Enter code (e.g., ABC123)',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -230,7 +294,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                             ),
                           )
                         : const Text(
-                            'Join Room',
+                          'Join',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                           ),
                   ),
@@ -261,7 +325,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                       ),
                       const SizedBox(height: AppSizes.sm),
                       Text(
-                        '• Share the room ID with others to let them join\n'
+                        '• Share the code with others to let them join\n'
                         '• Files are transferred directly between devices\n'
                         '• No files are stored on servers\n'
                         '• Works best on the same local network',

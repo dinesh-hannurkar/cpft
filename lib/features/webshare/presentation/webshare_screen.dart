@@ -8,19 +8,18 @@ import 'package:cpft/features/webshare/presentation/widgets/upload_progress.dart
 import 'package:cpft/features/webshare/presentation/widgets/uploading_file_item.dart';
 import 'package:cpft/features/webshare/services/web_server.dart';
 import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
-import 'package:cpft/utils/file_saver.dart';
-import 'package:cpft/utils/mime_utils.dart';
+// Removed unused imports flagged by analyzer
 import 'package:cpft/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
-import 'package:cpft/features/webshare/services/web_download.dart';
+// import 'package:cpft/features/webshare/services/web_download.dart';
 import 'package:cpft/features/webshare/services/web_received_cache.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'dart:io'
     if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
 import 'dart:async';
-import 'package:open_filex/open_filex.dart';
-import 'package:share_plus/share_plus.dart';
+// import 'package:open_filex/open_filex.dart';
+// import 'package:share_plus/share_plus.dart';
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_action_button.dart';
 import '../../../shared/widgets/app_bottom_sheet.dart';
@@ -82,17 +81,18 @@ class _WebShareScreenState extends State<WebShareScreen>
   // Room joining state for web
   final TextEditingController _roomIdController = TextEditingController();
   bool _isJoiningRoom = false;
+  String? _joinErrorMessage;
 
   @override
   void initState() {
     super.initState();
 
-    // On web, check for room ID from URL parameters
+    // On web, check for code from URL parameters
     if (kIsWeb) {
       final roomIdFromUrl = WebUrlUtils.getRoomIdFromUrl();
       if (roomIdFromUrl != null && roomIdFromUrl.isNotEmpty) {
         _roomIdController.text = roomIdFromUrl;
-        // Auto-join the room after a short delay to allow UI to build
+        // Auto-join after a short delay to allow UI to build
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) {
@@ -125,7 +125,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                     Icon(Icons.check_circle, color: Colors.white, size: 20),
                     SizedBox(width: 8),
                     Text(
-                      'WebRTC Connected!',
+                      'Connected!',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -145,7 +145,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                 if (_webrtcService.roomId != null) ...[
                   const SizedBox(height: 2),
                   Text(
-                    'Room: ${_webrtcService.roomId}',
+                    'Code: ${_webrtcService.roomId}',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 12,
@@ -170,7 +170,7 @@ class _WebShareScreenState extends State<WebShareScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'WebRTC connection lost',
+              'Connection lost',
               style: TextStyle(color: Colors.white),
             ),
             backgroundColor: Colors.red,
@@ -640,13 +640,13 @@ class _WebShareScreenState extends State<WebShareScreen>
     }
   }
 
-  // Join WebRTC room and navigate to chat screen
+  // Join via code and navigate to chat screen
   Future<void> _joinWebRTCRoom(String roomId) async {
     if (roomId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Please enter a room ID',
+            'Please enter a code',
             style: TextStyle(color: Colors.white),
           ),
           backgroundColor: Colors.red,
@@ -657,6 +657,7 @@ class _WebShareScreenState extends State<WebShareScreen>
 
     setState(() {
       _isJoiningRoom = true;
+      _joinErrorMessage = null;
     });
 
     try {
@@ -672,6 +673,7 @@ class _WebShareScreenState extends State<WebShareScreen>
             webShareService: _webShareService,
             roomId: roomId,
             deviceName: widget.deviceName,
+            disposeServiceOnClose: false,
             onDisconnect: () {
               // Handle disconnect - go back to room joining screen
               Navigator.of(context).pop();
@@ -681,10 +683,17 @@ class _WebShareScreenState extends State<WebShareScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      final message = e.toString();
+      final friendly = message.contains('not found')
+          ? 'Code not found or expired. Start Link Share from the mobile app and try again.'
+          : 'Failed to join: $message';
+      setState(() {
+        _joinErrorMessage = friendly;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to join room: ${e.toString()}',
+            friendly,
             style: const TextStyle(color: Colors.white),
           ),
           backgroundColor: Colors.red,
@@ -729,7 +738,7 @@ class _WebShareScreenState extends State<WebShareScreen>
               const SizedBox(height: AppSizes.lg),
               // Title
               Text(
-                'Join WebRTC Room',
+                'Join with Code',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.bold,
@@ -737,16 +746,47 @@ class _WebShareScreenState extends State<WebShareScreen>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSizes.md),
+              if (_joinErrorMessage != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSizes.md),
+                  margin: const EdgeInsets.only(bottom: AppSizes.sm),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red.shade700),
+                      const SizedBox(width: AppSizes.sm),
+                      Expanded(
+                        child: Text(
+                          _joinErrorMessage!,
+                          style: TextStyle(color: Colors.red.shade800),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => setState(() => _joinErrorMessage = null),
+                        icon: const Icon(Icons.close),
+                        color: Colors.red.shade700,
+                        tooltip: 'Dismiss',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               // Description
               Text(
-                'Enter a room ID to connect with another device for peer-to-peer file sharing.',
+                'Enter a code to connect with another device for peer-to-peer file sharing.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.greyDark,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSizes.xl),
-              // Room ID input
+              // Code input
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -762,7 +802,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                 child: TextField(
                   controller: _roomIdController,
                   decoration: InputDecoration(
-                    hintText: 'Enter room ID',
+                    hintText: 'Enter code',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide.none,
@@ -812,7 +852,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                           ),
                         )
                       : const Text(
-                          'Join Room',
+                          'Join',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -823,7 +863,7 @@ class _WebShareScreenState extends State<WebShareScreen>
               const SizedBox(height: AppSizes.md),
               // Helper text
               Text(
-                'Both devices must enter the same room ID to connect.',
+                'Both devices must enter the same code to connect.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.greyLight,
                 ),
@@ -1321,7 +1361,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                                                 null) ...[
                                               const SizedBox(height: 2),
                                               Text(
-                                                'Room: ${_webrtcService.roomId}',
+                                                'Code: ${_webrtcService.roomId}',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall
@@ -1350,7 +1390,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                                                 null) ...[
                                               const SizedBox(height: 2),
                                               Text(
-                                                'Current room: ${_webrtcService.roomId}',
+                                                'Current code: ${_webrtcService.roomId}',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall
@@ -1915,7 +1955,7 @@ class _WebRTCConnectionBottomSheetState
       if (roomId.isEmpty) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Please enter a room ID')));
+        ).showSnackBar(const SnackBar(content: Text('Please enter a code')));
         return;
       }
 
@@ -2192,7 +2232,7 @@ class _WebRTCConnectionBottomSheetState
             // Step 2: Room Input/Joined
             if (!_hasJoinedRoom) ...[
               const Text(
-                'Enter a room ID that both devices will join:',
+                'Enter a code that both devices will join:',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 12),
@@ -2201,8 +2241,8 @@ class _WebRTCConnectionBottomSheetState
                 style: const TextStyle(fontSize: 16, color: Colors.black87),
                 decoration: InputDecoration(
                   hintText: kIsWeb
-                      ? 'Enter room ID (e.g., "1234")'
-                      : 'Enter room ID (e.g., "1234-192-p8081")',
+                      ? 'Enter code (e.g., "1234")'
+                      : 'Enter code (e.g., "1234-192-p8081")',
                   hintStyle: TextStyle(color: Colors.grey.shade400),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -2225,7 +2265,7 @@ class _WebRTCConnectionBottomSheetState
                     Icons.meeting_room,
                     color: AppColors.primary,
                   ),
-                  helperText: 'Both devices must use the same room ID',
+                  helperText: 'Both devices must use the same code',
                   helperStyle: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,
@@ -2325,7 +2365,7 @@ class _WebRTCConnectionBottomSheetState
                             ? (isHost
                                   ? 'Starting Server...'
                                   : 'Joining Room...')
-                            : (isHost ? 'Start Hosting' : 'Join Room'),
+                            : (isHost ? 'Start Hosting' : 'Join'),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -2340,7 +2380,7 @@ class _WebRTCConnectionBottomSheetState
               StatusIndicator(
                 icon: Icons.meeting_room,
                 text: 'Room Joined',
-                status: 'Room: $_currentRoomId',
+                status: 'Code: $_currentRoomId',
                 isComplete: true,
                 color: Colors.green,
               ),
@@ -2366,7 +2406,7 @@ class _WebRTCConnectionBottomSheetState
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Share This Room ID',
+                            'Share This Code',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.purple.shade900,
@@ -2376,7 +2416,7 @@ class _WebRTCConnectionBottomSheetState
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Other devices on the same WiFi can join using this Room ID:',
+                        'Other devices on the same WiFi can join using this code:',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.purple.shade700,

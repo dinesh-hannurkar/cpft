@@ -38,6 +38,7 @@ class WebRTCChatScreen extends StatefulWidget {
   final String roomId;
   final VoidCallback onDisconnect;
   final String? deviceName;
+  final bool disposeServiceOnClose;
 
   const WebRTCChatScreen({
     super.key,
@@ -46,6 +47,7 @@ class WebRTCChatScreen extends StatefulWidget {
     required this.roomId,
     required this.onDisconnect,
     this.deviceName,
+    this.disposeServiceOnClose = true,
   });
 
   @override
@@ -961,9 +963,11 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // Disconnect from WebRTC when leaving chat
     widget.webrtcService.disconnect();
 
-    // Dispose the WebRTC service when leaving chat screen completely
-    // Note: dispose() is async but we can't await in widget dispose
-    widget.webrtcService.dispose();
+    // Only dispose service if this screen owns it
+    if (widget.disposeServiceOnClose) {
+      // Note: dispose() is async but we can't await in widget dispose
+      widget.webrtcService.dispose();
+    }
 
     // Stop background service
     BackgroundService.stop();
@@ -1081,7 +1085,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                           ? w
                           : '${w[0].toUpperCase()}${w.substring(1)}')
                         .join(' ')
-                      : 'WebRTC'),
+                      : 'Direct Share'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(

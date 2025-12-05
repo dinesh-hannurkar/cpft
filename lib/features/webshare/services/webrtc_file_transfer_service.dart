@@ -61,6 +61,8 @@ class WebRTCFileTransferService {
   String? _mySocketId;
   String? _peerId; // Local WebSocket assigned id
   String? _connectedPeerSocketId; // Track which peer we're connected to
+  // When true (default on web), do not create new Firestore rooms; only join existing
+  bool _joinOnly = kIsWeb ? true : false;
   bool _isInitialized = false;
   bool _isConnected = false;
   bool _makingOffer = false; // Track if we're currently making an offer
@@ -258,6 +260,10 @@ class WebRTCFileTransferService {
     int length = 4,
     bool alphanumeric = false,
   }) async {
+    // Guard: Website must not create rooms
+    if (_joinOnly) {
+      throw Exception('Room creation is disabled on web. Start Link Share from the mobile app.');
+    }
     await FirebaseInitializer.ensure();
     final fs = FirestoreSignalingService(db: FirebaseFirestore.instance);
     final newId = await fs.createAutoRoomId(
@@ -539,7 +545,17 @@ class WebRTCFileTransferService {
     await FirebaseInitializer.ensure();
 
     final fs = FirestoreSignalingService(db: FirebaseFirestore.instance);
-    final session = await fs.createSession(roomId);
+    final db = FirebaseFirestore.instance;
+    final docRef = db.collection('webrtc_rooms').doc(roomId);
+    final snapExisting = await docRef.get();
+    // If running in join-only mode (e.g., website), refuse to create a new room
+    if (!snapExisting.exists && _joinOnly) {
+      throw Exception('Room "$roomId" not found. Please start Link Share from the mobile app and try again.');
+    }
+    // Create when allowed and not present; otherwise attach to existing doc
+    final session = snapExisting.exists
+        ? FirestoreSession(docRef, docRef.collection('ice'))
+        : await fs.createSession(roomId);
     _firestoreSession = session;
     _fsOfferHandled = false;
     _fsAnswerHandled = false;
