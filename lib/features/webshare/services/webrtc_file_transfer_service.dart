@@ -611,8 +611,7 @@ class WebRTCFileTransferService {
     );
 
     // ICE exchange
-    if (_peerConnection != null) {
-      _peerConnection!.onIceCandidate = (c) {
+    _peerConnection!.onIceCandidate = (c) {
       if (c.candidate != null) {
         session.addIce({
           'candidate': c.candidate,
@@ -623,10 +622,7 @@ class WebRTCFileTransferService {
           'sessionId': _fsSessionId,
         });
       }
-      };
-    } else {
-      AppLogger.w('PeerConnection is null; skipping ICE handler assignment', tag: 'WebRTC');
-    }
+    };
     _fsIceSub = session.onIce().listen((snapshot) async {
       for (final change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added) {
@@ -790,21 +786,17 @@ class WebRTCFileTransferService {
             );
 
             // Reattach Firestore ICE emission for the new connection (role: answerer)
-            if (_peerConnection != null) {
-              _peerConnection!.onIceCandidate = (c) {
-                if (c.candidate != null) {
-                  session.addIce({
-                    'candidate': c.candidate,
-                    'sdpMid': c.sdpMid,
-                    'sdpMLineIndex': c.sdpMLineIndex,
-                    'role': 'answerer',
-                    'sessionId': _fsSessionId,
-                  });
-                }
-              };
-            } else {
-              AppLogger.w('PeerConnection is null; skipping ICE handler assignment', tag: 'WebRTC');
-            }
+            _peerConnection!.onIceCandidate = (c) {
+              if (c.candidate != null) {
+                session.addIce({
+                  'candidate': c.candidate,
+                  'sdpMid': c.sdpMid,
+                  'sdpMLineIndex': c.sdpMLineIndex,
+                  'role': 'answerer',
+                  'sessionId': _fsSessionId,
+                });
+              }
+            };
             _fsIceSub = session.onIce().listen((snapshot) async {
               for (final change in snapshot.docChanges) {
                 if (change.type == DocumentChangeType.added) {

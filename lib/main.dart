@@ -63,7 +63,8 @@ class MainApp extends StatelessWidget {
         );
         return Stack(
           children: [
-            content
+            content, 
+            // FirebaseStatusBanner(),
           ],
         );
       },
