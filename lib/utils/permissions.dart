@@ -4,19 +4,35 @@ import 'package:cpft/core/logging/app_logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class AppPermissions {
+  // Guard to prevent concurrent permission requests on iOS
+  static bool _isRequestingPermissions = false;
+  
   static Future<bool> requestNetworkPermissions() async {
-    // On web, runtime permissions are handled by the browser; skip app-level requests
-    if (kIsWeb) {
-      AppLogger.i('Web platform detected: skipping app-level permission checks', tag: 'Permissions');
-      return true;
+    // Prevent concurrent permission requests on iOS
+    if (_isRequestingPermissions) {
+      AppLogger.w('Permission request already in progress, waiting...', tag: 'Permissions');
+      // Wait a bit and return current status instead of requesting again
+      await Future.delayed(const Duration(milliseconds: 500));
+      return await checkLocationPermission();
     }
+    
+    _isRequestingPermissions = true;
+    try {
+      // On web, runtime permissions are handled by the browser; skip app-level requests
+      if (kIsWeb) {
+        AppLogger.i('Web platform detected: skipping app-level permission checks', tag: 'Permissions');
+        return true;
+      }
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return await _requestAndroidPermissions();
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return await _requestIOSPermissions();
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        return await _requestAndroidPermissions();
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        return await _requestIOSPermissions();
+      }
+      return true; // Desktop platforms don't need special permissions
+    } finally {
+      _isRequestingPermissions = false;
     }
-    return true; // Desktop platforms don't need special permissions
   }
 
   static Future<bool> _requestAndroidPermissions() async {
@@ -84,39 +100,53 @@ class AppPermissions {
   }
 
   static Future<bool> _requestIOSPermissions() async {
-    // First check if location services are enabled on the device
-    final serviceEnabled = await isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      AppLogger.w('iOS: Location services disabled. User must enable in Settings.', tag: 'Permissions');
-      AppLogger.w('Instruction: Settings > Privacy & Security > Location Services', tag: 'Permissions');
+    try {
+      // First check if location services are enabled on the device
+      final serviceEnabled = await isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        AppLogger.w('iOS: Location services disabled. User must enable in Settings.', tag: 'Permissions');
+        AppLogger.w('Instruction: Settings > Privacy & Security > Location Services', tag: 'Permissions');
+        return false;
+      }
+      
+      // On iOS, we need location permission for WiFi information access
+      final locationStatus = await Permission.locationWhenInUse.status;
+      AppLogger.d('iOS Location permission status: $locationStatus', tag: 'Permissions');
+
+      if (locationStatus.isGranted) {
+        AppLogger.i('iOS location permission already granted', tag: 'Permissions');
+        return true;
+      }
+
+      if (locationStatus.isPermanentlyDenied) {
+        AppLogger.w('iOS location permission permanently denied.', tag: 'Permissions');
+        AppLogger.w('Guide: Settings > Privacy & Security > Location Services > [App] > Allow', tag: 'Permissions');
+        // Don't try to request again, just inform user
+        return false;
+      }
+
+      // Try to request permission
+      final requestResult = await Permission.locationWhenInUse.request();
+      AppLogger.d('iOS location permission request result: $requestResult', tag: 'Permissions');
+
+      if (requestResult.isGranted) {
+        AppLogger.i('iOS location permission granted', tag: 'Permissions');
+        return true;
+      } else {
+        AppLogger.w('iOS location permission denied or restricted', tag: 'Permissions');
+        return false;
+      }
+    } on PlatformException catch (e) {
+      if (e.code == 'ERROR_ALREADY_REQUESTING_PERMISSIONS') {
+        AppLogger.w('Permission request already in progress on iOS, returning current status', tag: 'Permissions');
+        // Return the current status instead of failing
+        final currentStatus = await Permission.locationWhenInUse.status;
+        return currentStatus.isGranted;
+      }
+      AppLogger.e('Error requesting iOS permissions: ${e.message}', tag: 'Permissions', error: e);
       return false;
-    }
-    
-    // On iOS, we need location permission for WiFi information access
-    final locationStatus = await Permission.locationWhenInUse.status;
-    AppLogger.d('iOS Location permission status: $locationStatus', tag: 'Permissions');
-
-    if (locationStatus.isGranted) {
-      AppLogger.i('iOS location permission already granted', tag: 'Permissions');
-      return true;
-    }
-
-    if (locationStatus.isPermanentlyDenied) {
-      AppLogger.w('iOS location permission permanently denied.', tag: 'Permissions');
-      AppLogger.w('Guide: Settings > Privacy & Security > Location Services > [App] > Allow', tag: 'Permissions');
-      // Don't try to request again, just inform user
-      return false;
-    }
-
-    // Try to request permission
-    final requestResult = await Permission.locationWhenInUse.request();
-    AppLogger.d('iOS location permission request result: $requestResult', tag: 'Permissions');
-
-    if (requestResult.isGranted) {
-      AppLogger.i('iOS location permission granted', tag: 'Permissions');
-      return true;
-    } else {
-      AppLogger.w('iOS location permission denied or restricted', tag: 'Permissions');
+    } catch (e) {
+      AppLogger.e('Unexpected error requesting iOS permissions', tag: 'Permissions', error: e);
       return false;
     }
   }

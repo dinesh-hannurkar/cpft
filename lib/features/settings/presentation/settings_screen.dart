@@ -10,6 +10,8 @@ import 'package:cpft/main.dart';
 import 'package:cpft/shared/widgets/primary_app_bar.dart';
 import 'package:cpft/shared/widgets/primary_text_field.dart';
 import 'package:cpft/shared/widgets/primary_button.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:cpft/shared/showcase/showcase_helper.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
@@ -36,6 +38,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _deviceName = widget.currentDeviceName;
     _loadVersion();
     _loadDeviceNameFromPrefs();
+    // Start settings showcase only on first visit
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeenShowcase = prefs.getBool('settings_showcase_seen') ?? false;
+      
+      if (!hasSeenShowcase && mounted) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            try {
+              ShowCaseWidget.of(context).startShowCase([
+                ShowcaseHelper.settingsIconKey,
+              ]);
+              prefs.setBool('settings_showcase_seen', true);
+            } catch (_) {}
+          }
+        });
+      }
+    });
   }
 
   Future<void> _loadDeviceNameFromPrefs() async {

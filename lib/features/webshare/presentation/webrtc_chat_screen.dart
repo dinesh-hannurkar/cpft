@@ -28,6 +28,8 @@ import 'package:cpft/features/webshare/presentation/widgets/file_card.dart';
 import 'package:cpft/features/webshare/services/file_action_handler.dart';
 import 'package:cpft/services/background_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:cpft/shared/showcase/showcase_helper.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 
@@ -58,6 +60,8 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _didStartShowcase = false;
+  
   String? _peerName;
   final FocusNode _inputFocus = FocusNode();
   final List<ChatMessage> _messages = [];
@@ -1050,20 +1054,41 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) {
-        if (didPop) return;
-        _onWillPop().then((shouldPop) {
-          if (shouldPop && mounted) {
-            Navigator.of(context).pop();
-          }
-        });
-      },
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: PrimaryAppBar(
-          leading: BackButtonChip(
+    // Kick off showcase only on first chat session with longer delay for web
+    if (!_didStartShowcase) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final prefs = await SharedPreferences.getInstance();
+        final hasSeenShowcase = prefs.getBool('chat_showcase_seen') ?? false;
+        
+        if (!hasSeenShowcase && mounted) {
+          // Use longer delay on web to ensure full layout completion
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted) {
+              try {
+                ShowcaseHelper.startForWebRTCChat(context);
+                prefs.setBool('chat_showcase_seen', true);
+              } catch (_) {}
+            }
+          });
+        }
+      });
+      _didStartShowcase = true;
+    }
+    return ShowCaseWidget(
+      builder: (context) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, dynamic result) {
+          if (didPop) return;
+          _onWillPop().then((shouldPop) {
+            if (shouldPop && mounted) {
+              Navigator.of(context).pop();
+            }
+          });
+        },
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: PrimaryAppBar(
+            leading: BackButtonChip(
             onPressed: () async {
               final shouldPop = await _onWillPop();
               if (shouldPop && mounted) {
@@ -1105,13 +1130,34 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           centerTitle: false,
           trailing: [
             if (widget.webShareService != null)
-              AppIconButton(
-                onPressed: _showReceivedFiles,
-                icon: Icons.folder_open,
+              Showcase(
+                key: ShowcaseHelper.receivedListKey,
+                disableBarrierInteraction: false,
+                targetPadding: const EdgeInsets.all(8),
+                title: 'Received Files',
+                description: 'Open the list of received files to download or open.',
+                tooltipBackgroundColor: Colors.white,
+                textColor: Colors.black,
+                descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+                titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                tooltipBorderRadius: BorderRadius.circular(12),
+                targetBorderRadius: BorderRadius.circular(12),
+                child: AppIconButton(
+                  onPressed: _showReceivedFiles,
+                  icon: Icons.folder_open,
+                ),
               ),
+            
             AppIconButton(
               onPressed: _showConnectionInfo,
               icon: _isConnected ? Icons.wifi : Icons.wifi_off,
+            ),AppIconButton(
+              onPressed: () {
+                try {
+                  ShowcaseHelper.startForWebRTCChat(context);
+                } catch (_) {}
+              },
+              icon: Icons.help_outline,
             ),
           ],
           backgroundColor: Colors.transparent,
@@ -1128,6 +1174,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           child: SafeArea(
             child: Column(
               children: [
+                
                 Expanded(
                   child: (() {
                     final totalItems =
@@ -1210,13 +1257,26 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                   })(),
                 ),
                 if (_isConnected)
-                  FileTaglineBar(
-                    onTapMain: _pickAndSendFile,
-                    onTapFab: _pickAndSendFile,
-                    pulseController: _fileIconPulse!,
-                    fileIcons: _fileIcons,
-                    fileIconIndex: _fileIconIndex,
-                    slideFromLeft: _slideFromLeft,
+                  Showcase(
+                    key: ShowcaseHelper.sendFileButtonKey,
+                    disableBarrierInteraction: false,
+                    targetPadding: const EdgeInsets.all(8),
+                    title: 'Send Files',
+                    description: 'Tap here to select and send files to the connected device.',
+                    tooltipBackgroundColor: Colors.white,
+                    textColor: Colors.black,
+                    descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+                    titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                    tooltipBorderRadius: BorderRadius.circular(12),
+                    targetBorderRadius: BorderRadius.circular(12),
+                    child: FileTaglineBar(
+                      onTapMain: _pickAndSendFile,
+                      onTapFab: _pickAndSendFile,
+                      pulseController: _fileIconPulse!,
+                      fileIcons: _fileIcons,
+                      fileIconIndex: _fileIconIndex,
+                      slideFromLeft: _slideFromLeft,
+                    ),
                   ),
                 MessageInputBar(
                   controller: _messageController,
@@ -1229,6 +1289,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           ),
         ),
       ),
+    ),
     );
   }
 

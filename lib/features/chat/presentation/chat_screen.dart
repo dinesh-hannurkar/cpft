@@ -27,6 +27,9 @@ import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
 import 'package:cpft/features/home/presentation/widgets/connected_devices_sheet.dart';
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:cpft/shared/showcase/showcase_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/connection_state.dart';
 import '../services/connection_service.dart';
@@ -84,6 +87,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   ConnectionInfo? _connectionInfo;
   bool _isConnecting = false;
+  bool _didStartShowcase = false;
 
   // Peer‑to‑peer port constant
   static const int p2pPort = 53318;
@@ -795,15 +799,49 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // Trigger showcase only on first chat session
+    if (!_didStartShowcase) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final prefs = await SharedPreferences.getInstance();
+        final hasSeenShowcase = prefs.getBool('p2p_chat_showcase_seen') ?? false;
+        
+        if (!hasSeenShowcase && mounted) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              try {
+                // Only showcase widgets that are guaranteed to be present
+                final showcaseKeys = <GlobalKey>[
+                  ShowcaseHelper.sendFileButtonKey,
+                ];
+                
+                // Add conditional showcases if widgets are present
+                if (_receivedFiles.isNotEmpty) {
+                  showcaseKeys.add(ShowcaseHelper.receivedListKey);
+                }
+                if (_connectionInfo?.status == ConnectionStatus.connected) {
+                  showcaseKeys.add(ShowcaseHelper.disconnectKey);
+                }
+                
+                ShowCaseWidget.of(context).startShowCase(showcaseKeys);
+                prefs.setBool('p2p_chat_showcase_seen', true);
+              } catch (_) {}
+            }
+          });
+        }
+      });
+      _didStartShowcase = true;
+    }
+    
     final isConnected = _connectionInfo?.status == ConnectionStatus.connected;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+    return ShowCaseWidget(
+      builder: (context) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
             stops: [0.0, 1.0],
           ),
         ),
@@ -942,13 +980,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 })(),
               ),
               if (isConnected)
-                FileTaglineBar(
-                  onTapMain: () => _connectionService.pickAndSendFile(),
-                  onTapFab: () => _connectionService.pickAndSendFile(),
-                  pulseController: _fileIconPulse!,
-                  fileIcons: _fileIcons,
-                  fileIconIndex: _fileIconIndex,
-                  slideFromLeft: _slideFromLeft,
+                Showcase(
+                  key: ShowcaseHelper.sendFileButtonKey,
+                  disableBarrierInteraction: false,
+                  targetPadding: const EdgeInsets.all(8),
+                  title: 'Send Files',
+                  description: 'Tap here to select and send files to the connected device.',
+                  tooltipBackgroundColor: Colors.white,
+                  textColor: Colors.black,
+                  descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+                  titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                  tooltipBorderRadius: BorderRadius.circular(12),
+                  targetBorderRadius: BorderRadius.circular(12),
+                  child: FileTaglineBar(
+                    onTapMain: () => _connectionService.pickAndSendFile(),
+                    onTapFab: () => _connectionService.pickAndSendFile(),
+                    pulseController: _fileIconPulse!,
+                    fileIcons: _fileIcons,
+                    fileIconIndex: _fileIconIndex,
+                    slideFromLeft: _slideFromLeft,
+                  ),
                 ),
               MessageInputBar(
                 controller: _messageController,
@@ -960,6 +1011,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
         ),
       ),
+    ),
     );
   }
 }

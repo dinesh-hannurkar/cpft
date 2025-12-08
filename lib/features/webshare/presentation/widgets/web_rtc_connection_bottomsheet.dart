@@ -254,7 +254,9 @@ class _WebRTCConnectionBottomSheetState
           // Ensure clean state then retry
           widget.webrtcService.disconnect();
           await Future.delayed(const Duration(milliseconds: 300));
-          await widget.webrtcService.connectToSignalingServer(_currentRoomId ?? '');
+          await widget.webrtcService.connectToSignalingServer(
+            _currentRoomId ?? '',
+          );
           if (mounted) {
             setState(() {
               _hasJoinedRoom = true;
@@ -278,7 +280,10 @@ class _WebRTCConnectionBottomSheetState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(friendly, style: const TextStyle(color: Colors.white)),
+              content: Text(
+                friendly,
+                style: const TextStyle(color: Colors.white),
+              ),
               backgroundColor: Colors.red,
               action: SnackBarAction(label: 'Retry', onPressed: _connectToPeer),
             ),
@@ -302,29 +307,36 @@ class _WebRTCConnectionBottomSheetState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            const SizedBox(height: AppSizes.spaceBtwInputFields * 0.5),
             // Network status - simple one-line format like home screen
             NetworkIndicator(networkName: _networkName),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSizes.spaceBtwItems),
             // Clear instruction about network requirements
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline, size: 16, color: Colors.blueGrey),
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSizes.xs * 0.4),
+                  child: const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.red,
+                  ),
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Ensure both devices are on the same Wi‑Fi or Personal Hotspot network for the fastest and most reliable connection.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.blueGrey,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.red),
                     textAlign: TextAlign.center,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
 
             // Discovery status (for join mode)
             if (_isDiscovering) ...[
@@ -666,7 +678,7 @@ class _WebRTCConnectionBottomSheetState
                                 size: 24,
                               ),
                         label: Text(
-                            _isConnecting
+                          _isConnecting
                               ? (isHost ? 'Starting Server...' : 'Joining...')
                               : (isHost ? 'Start Hosting' : 'Join'),
                           style: const TextStyle(
@@ -766,9 +778,12 @@ class _WebRTCConnectionBottomSheetState
                               try {
                                 setState(() => _isStartingWebSharing = true);
                                 // Ensure remote signaling and allow host mode on mobile
-                                widget.webrtcService.setSignalingMode(useLocal: false);
+                                widget.webrtcService.setSignalingMode(
+                                  useLocal: false,
+                                );
                                 widget.webrtcService.setHostMode(false);
-                                final newId = await widget.webrtcService.createAutoRoomAndConnect();
+                                final newId = await widget.webrtcService
+                                    .createAutoRoomAndConnect();
                                 if (mounted) {
                                   setState(() {
                                     _currentRoomId = newId;
@@ -781,7 +796,9 @@ class _WebRTCConnectionBottomSheetState
                                   setState(() => _isStartingWebSharing = false);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Failed to recreate code: $e'),
+                                      content: Text(
+                                        'Failed to recreate code: $e',
+                                      ),
                                       backgroundColor: Colors.red,
                                     ),
                                   );

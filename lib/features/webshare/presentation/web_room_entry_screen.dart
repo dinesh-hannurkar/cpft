@@ -10,6 +10,8 @@ import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
 import 'package:cpft/features/settings/presentation/settings_screen.dart';
 import 'package:cpft/utils/web_url_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:cpft/shared/showcase/showcase_helper.dart';
 
 /// Web-only screen for entering WebRTC share codes and handling URL parameters
 class WebRoomEntryScreen extends StatefulWidget {
@@ -34,6 +36,23 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
     super.initState();
     _webrtcService = WebRTCFileTransferService();
     _loadDeviceName();
+    // Start showcase only on first visit with longer delay for web layout
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeenShowcase = prefs.getBool('web_entry_showcase_seen') ?? false;
+      
+      if (!hasSeenShowcase && mounted) {
+        // Use longer delay on web to ensure full layout completion
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted) {
+            try {
+              ShowcaseHelper.startForWebEntry(context);
+              prefs.setBool('web_entry_showcase_seen', true);
+            } catch (_) {}
+          }
+        });
+      }
+    });
 
     // Check for share code from URL parameters
     final roomIdFromUrl = WebUrlUtils.getRoomIdFromUrl();
@@ -189,32 +208,54 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: PrimaryAppBar(
-        titleWidget: const Padding(
-          padding: EdgeInsets.only(left: AppSizes.sm),
-          child: Text(
-            'CPFT',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary,
+    return ShowCaseWidget(
+      builder: (context) => Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: PrimaryAppBar(
+          titleWidget: const Padding(
+            padding: EdgeInsets.only(left: AppSizes.sm),
+            child: Text(
+              'CPFT',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
             ),
           ),
         ),
         centerTitle: false,
         trailing: [
+          Showcase(
+            key: ShowcaseHelper.settingsIconKey,
+            disableBarrierInteraction: false,
+            targetPadding: const EdgeInsets.all(8),
+            title: 'Settings',
+            description: 'Change your device name and app preferences.',
+            tooltipBackgroundColor: Colors.white,
+            textColor: Colors.black,
+            descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+            titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+            tooltipBorderRadius: BorderRadius.circular(12),
+            targetBorderRadius: BorderRadius.circular(12),
+            child: AppIconButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SettingsScreen(
+                      currentDeviceName: _deviceName,
+                    ),
+                  ),
+                ).then((_) => _loadDeviceName());
+              },
+              icon: Icons.settings,
+            ),
+          ),
           AppIconButton(
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => SettingsScreen(
-                    currentDeviceName: _deviceName,
-                  ),
-                ),
-              ).then((_) => _loadDeviceName());
+              try {
+                ShowcaseHelper.startForWebEntry(context);
+              } catch (_) {}
             },
-            icon: Icons.settings,
+            icon: Icons.help_outline,
           ),
         ],
       ),
@@ -251,6 +292,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Tip helper moved to class scope
                       Row(
                         children: const [
                           Icon(Icons.link, color: AppColors.primary),
@@ -305,7 +347,19 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                           ),
                         ),
                       ],
-                      TextField(
+                      Showcase(
+                        key: ShowcaseHelper.joinCodeFieldKey,
+                        disableBarrierInteraction: false,
+                        targetPadding: const EdgeInsets.all(8),
+                        title: 'Join Code',
+                        description: 'Enter the code you received to join the session.',
+                        tooltipBackgroundColor: Colors.white,
+                        textColor: Colors.black,
+                        descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+                        titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                        tooltipBorderRadius: BorderRadius.circular(12),
+                        targetBorderRadius: BorderRadius.circular(12),
+                        child: TextField(
                         controller: _roomIdController,
                         style: const TextStyle(fontSize: 16, color: Colors.black87),
                         decoration: InputDecoration(
@@ -338,9 +392,22 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                             _joinWebRTCRoom(roomId);
                           }
                         },
+                        ),
                       ),
                       const SizedBox(height: AppSizes.md),
-                      SizedBox(
+                      Showcase(
+                        key: ShowcaseHelper.joinButtonKey,
+                        disableBarrierInteraction: false,
+                        targetPadding: const EdgeInsets.all(8),
+                        title: 'Join',
+                        description: 'Tap to join your session using the code.',
+                        tooltipBackgroundColor: Colors.white,
+                        textColor: Colors.black,
+                        descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+                        titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                        tooltipBorderRadius: BorderRadius.circular(12),
+                        targetBorderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton.icon(
@@ -382,6 +449,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                           ),
                         ),
+                        ),
                       ),
                       const SizedBox(height: AppSizes.md),
                       Container(
@@ -413,6 +481,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

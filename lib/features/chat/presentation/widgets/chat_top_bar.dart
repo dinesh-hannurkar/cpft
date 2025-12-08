@@ -4,6 +4,8 @@ import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
 import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:cpft/shared/widgets/primary_app_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:cpft/shared/showcase/showcase_helper.dart';
 import '../../services/connection_manager.dart';
 
 class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
@@ -40,10 +42,23 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (receivedFilesCount > 0) {
       actions.add(
-        AppIconButton(
-          // tooltip: 'Received files',
-          icon: Icons.folder_open,
-          onPressed: onShowReceivedFiles,
+        Showcase(
+          key: ShowcaseHelper.receivedListKey,
+          disableBarrierInteraction: false,
+          targetPadding: const EdgeInsets.all(8),
+          title: 'Received Files',
+          description: 'View all received files to download or open them.',
+          tooltipBackgroundColor: Colors.white,
+          textColor: Colors.black,
+          descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+          titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+          tooltipBorderRadius: BorderRadius.circular(12),
+          targetBorderRadius: BorderRadius.circular(12),
+          child: AppIconButton(
+            // tooltip: 'Received files',
+            icon: Icons.folder_open,
+            onPressed: onShowReceivedFiles,
+          ),
         ),
       );
     }
@@ -61,10 +76,23 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (isConnected && onDisconnect != null) {
       actions.add(
-        AppIconButton(
-          // tooltip: 'Disconnect',
-          icon: Icons.close,
-          onPressed: onDisconnect!,
+        Showcase(
+          key: ShowcaseHelper.disconnectKey,
+          disableBarrierInteraction: false,
+          targetPadding: const EdgeInsets.all(8),
+          title: 'Disconnect',
+          description: 'End the connection with this device.',
+          tooltipBackgroundColor: Colors.white,
+          textColor: Colors.black,
+          descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+          titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+          tooltipBorderRadius: BorderRadius.circular(12),
+          targetBorderRadius: BorderRadius.circular(12),
+          child: AppIconButton(
+            // tooltip: 'Disconnect',
+            icon: Icons.close,
+            onPressed: onDisconnect!,
+          ),
         ),
       );
     }

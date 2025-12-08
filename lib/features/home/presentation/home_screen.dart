@@ -33,6 +33,9 @@ import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dar
 import 'package:cpft/features/webshare/services/webshare_service.dart';
 import 'package:cpft/features/qr_scanner/presentation/qr_scanner_screen.dart';
 import 'package:cpft/features/chat/services/connection_service.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:cpft/shared/showcase/showcase_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
@@ -64,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       false; // Track if iOS user manually enabled hotspot
   late WebRTCFileTransferService _webrtcService;
   late WebShareService _webShareService;
+  bool _didStartShowcase = false;
 
   @override
   void initState() {
@@ -861,6 +865,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    // Trigger showcase only on first app launch
+    if (!_didStartShowcase) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final prefs = await SharedPreferences.getInstance();
+        final hasSeenShowcase = prefs.getBool('home_showcase_seen') ?? false;
+        
+        if (!hasSeenShowcase && mounted) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              try {
+                ShowcaseHelper.startForHome(context);
+                prefs.setBool('home_showcase_seen', true);
+              } catch (_) {}
+            }
+          });
+        }
+      });
+      _didStartShowcase = true;
+    }
+    
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -1132,7 +1156,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            LinkShareButton(
+            Showcase(
+              key: ShowcaseHelper.linkShareKey,
+              disableBarrierInteraction: false,
+              targetPadding: const EdgeInsets.all(8),
+              title: 'Link Share',
+              description: 'Share files via web without application.',
+              tooltipBackgroundColor: Colors.white,
+              textColor: Colors.black,
+              descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+              titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+              tooltipBorderRadius: BorderRadius.circular(12),
+              targetBorderRadius: BorderRadius.circular(12),
+              child: LinkShareButton(
               onPressed: () async {
                 if (!mounted) return;
 
@@ -1254,6 +1290,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 );
               },
+              ),
             ),
           ],
         ),

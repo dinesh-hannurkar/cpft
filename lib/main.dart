@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'utils/permissions.dart';
 import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
@@ -37,7 +38,8 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ShowCaseWidget(
+      builder: (context) => MaterialApp(
       title: 'CPFT',
       theme: AppTheme.lightTheme,
       navigatorKey: navigatorKey,
@@ -68,6 +70,7 @@ class MainApp extends StatelessWidget {
           ],
         );
       },
+    ),
     );
   }
 }
