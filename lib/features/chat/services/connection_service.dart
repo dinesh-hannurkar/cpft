@@ -32,6 +32,10 @@ class ConnectionService {
   final Map<String, FileOffer> _pendingOffers = {};
   // Backpressure: track outgoing transfers waiting for ACKs
   final Map<String, _OutgoingTransfer> _outgoingTransfers = {};
+  // Flow control thresholds
+  static const int _maxPendingChunks = 8; // sender waits when >= this many unacked chunks
+  // Serialize socket writes to avoid StreamSink binding errors
+  Future<void> _sendChain = Future.value();
 
   ConnectionService({required this.deviceName}) {
     debugPrint('[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName ($hashCode)');
@@ -266,29 +270,34 @@ class ConnectionService {
       debugPrint('[ConnectionService] ❌ No active connection');
       return false;
     }
-
     try {
-      final json = jsonEncode(message.toJson());
-      final data = '$json\n'; // Add newline as delimiter
-      final bytes = utf8.encode(data);
-      _socket!.add(bytes);
-      await _socket!.flush();
-      debugPrint('[ConnectionService] 📤 Sent message: ${message.type} to $deviceName');
+      bool ok = true;
+      _sendChain = _sendChain.then((_) async {
+        final json = jsonEncode(message.toJson());
+        final data = '$json\n'; // Add newline as delimiter
+        final bytes = utf8.encode(data);
+        _socket!.add(bytes);
+        await _socket!.flush();
+        debugPrint('[ConnectionService] 📤 Sent message: ${message.type} to $deviceName');
 
-      // Add outgoing message to history (not via listener to avoid duplicate notification)
-      const historyTypes = {'text', 'file_complete', 'file_offer', 'goodbye'};
-      if (historyTypes.contains(message.type)) {
-        _messageHistory.add(message);
-      }
+        // Add outgoing message to history (not via listener to avoid duplicate notification)
+        const historyTypes = {'text', 'file_complete', 'file_offer', 'goodbye'};
+        if (historyTypes.contains(message.type)) {
+          _messageHistory.add(message);
+        }
 
-      // Reset error count on successful send
-      if (_consecutiveErrors > 0) {
-        debugPrint('[ConnectionService] ✅ Message sent successfully, resetting error count');
-        _consecutiveErrors = 0;
-        _errorResetTimer?.cancel();
-      }
-
-      return true;
+        // Reset error count on successful send
+        if (_consecutiveErrors > 0) {
+          debugPrint('[ConnectionService] ✅ Message sent successfully, resetting error count');
+          _consecutiveErrors = 0;
+          _errorResetTimer?.cancel();
+        }
+      }).catchError((e) {
+        ok = false;
+        debugPrint('[ConnectionService] ❌ Failed to send message in chain: $e');
+      });
+      await _sendChain; // ensure ordering for caller when needed
+      return ok;
     } catch (e) {
       debugPrint('[ConnectionService] ❌ Failed to send message: $e');
       return false;
@@ -385,6 +394,11 @@ class ConnectionService {
                   outgoing.sentBytes += outgoing.chunkSizes[i] ?? 0;
                 }
                 outgoing.lastAckIndex = newIndex;
+                // Release permit if waiting (covers initial handshake and flow control)
+                if (outgoing.chunkPermit != null && !outgoing.chunkPermit!.isCompleted) {
+                  outgoing.chunkPermit!.complete();
+                  outgoing.chunkPermit = null;
+                }
                 // Emit progress for UI
                 _notifyMessageListeners(DeviceMessage(
                   type: 'file_progress',
@@ -500,6 +514,17 @@ class ConnectionService {
               final incoming = _incomingFiles[chunk.transferId];
               if (incoming == null) {
                 debugPrint('[ConnectionService] ⚠️ No state for transfer ${chunk.transferId}');
+                // Ask sender to resend the file_offer so we can create state
+                try {
+                  await sendMessage(DeviceMessage(
+                    type: 'file_offer_request',
+                    content: chunk.transferId,
+                    senderName: deviceName,
+                  ));
+                  debugPrint('[ConnectionService] 📥 Requested offer resend for ${chunk.transferId}');
+                } catch (e) {
+                  debugPrint('[ConnectionService] ⚠️ Failed to request offer resend: $e');
+                }
               } else {
                 await incoming.processChunk(chunk);
 
@@ -578,14 +603,71 @@ class ConnectionService {
                     body: 'Successfully received ${incoming.offer.fileName}',
                   );
 
-                  // Send final completion ack
-                  final completionAck = FileAck(transferId: chunk.transferId, nextExpectedIndex: chunk.index + 1, completed: true);
-                  await sendMessage(DeviceMessage(type: 'file_ack', content: jsonEncode(completionAck.toJson()), senderName: deviceName));
+                  // Send final completion ack using current next expected index
+                  final completionAck = FileAck(
+                    transferId: chunk.transferId,
+                    nextExpectedIndex: incoming.nextIndex,
+                    completed: true,
+                  );
+                  await sendMessage(DeviceMessage(
+                    type: 'file_ack',
+                    content: jsonEncode(completionAck.toJson()),
+                    senderName: deviceName,
+                  ));
+                }
+              // Handle request from receiver to resend file_offer
+              if (message.type == 'file_offer_request') {
+                try {
+                  final reqTransferId = message.content;
+                  final ot = _outgoingTransfers[reqTransferId];
+                  if (ot != null) {
+                    final offer = FileOffer(
+                      transferId: reqTransferId,
+                      fileName: ot.fileName,
+                      fileSize: ot.totalSize,
+                      mimeType: ot.mime ?? 'application/octet-stream',
+                      sha256: null,
+                    );
+                    await sendMessage(DeviceMessage(
+                      type: 'file_offer',
+                      content: ot.fileName,
+                      senderName: deviceName,
+                      metadata: {
+                        'payload': offer.toJson(),
+                        'name': ot.fileName,
+                      },
+                    ));
+                    debugPrint('[ConnectionService] 🔄 Resent file_offer for $reqTransferId');
+                  } else {
+                    debugPrint('[ConnectionService] ⚠️ Offer request: no outgoing state for $reqTransferId');
+                  }
+                } catch (e) {
+                  debugPrint('[ConnectionService] ⚠️ Failed to handle file_offer_request: $e');
+                }
+                continue;
+              }
+              }
+              // Smart ACK: send when contiguous progress or buffer pressure
+              final inc2 = _incomingFiles[chunk.transferId];
+              if (inc2 != null) {
+                final bufferSize = inc2._chunkBuffer.length;
+                final advancedContiguously = (chunk.index == inc2.nextIndex - 1);
+                final shouldAck = advancedContiguously || bufferSize > (_maxPendingChunks ~/ 2);
+                debugPrint('[ConnectionService] 📥 Chunk ${chunk.index} received: nextIndex=${inc2.nextIndex}, bufferSize=$bufferSize, shouldAck=$shouldAck');
+                if (shouldAck) {
+                  final ack = FileAck(
+                    transferId: chunk.transferId,
+                    nextExpectedIndex: inc2.nextIndex,
+                    completed: false,
+                  );
+                  await sendMessage(DeviceMessage(
+                    type: 'file_ack',
+                    content: jsonEncode(ack.toJson()),
+                    senderName: deviceName,
+                  ));
+                  debugPrint('[ConnectionService] 📤 ACK sent for nextExpectedIndex=${inc2.nextIndex}');
                 }
               }
-              // Send ack for this chunk (never completed here - completion ack sent after processing)
-              final ack = FileAck(transferId: chunk.transferId, nextExpectedIndex: chunk.index + 1, completed: false);
-              await sendMessage(DeviceMessage(type: 'file_ack', content: jsonEncode(ack.toJson()), senderName: deviceName));
             } catch (e) {
               debugPrint('[ConnectionService] ⚠️ Failed to parse file_chunk: $e');
             }

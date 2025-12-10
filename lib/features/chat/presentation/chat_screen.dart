@@ -30,6 +30,7 @@ import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:cpft/shared/showcase/showcase_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/connection_state.dart';
 import '../services/connection_service.dart';
@@ -147,6 +148,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _messageController.dispose();
     _scrollController.dispose();
     _inputFocus.dispose();
+    
+    // Disable wake lock when leaving chat
+    WakelockPlus.disable();
+    
     super.dispose();
   }
 
@@ -207,6 +212,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       case 'file_complete':
         final tId = message.metadata?['transferId'] as String?;
         final path = message.metadata?['path'] as String?;
+        final isOutgoing = message.metadata?['outgoing'] as bool? ?? false;
         setState(() {
           if (!_messages.any(
             (m) =>
@@ -219,7 +225,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             _incomingProgress.remove(tId);
             _outgoingProgress.remove(tId);
           }
-          if (path != null && path.isNotEmpty) {
+          // Only add received files (not sent files) to the received files list
+          if (path != null && path.isNotEmpty && !isOutgoing) {
             _receivedFiles.add(
               ReceivedFile(
                 name: message.content,
@@ -408,7 +415,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
 
     if (accept == true && transferId != null) {
-      final saveDir = await _chooseSaveDirEveryTime(context);
+      // On Android and iOS, auto-accept to temp directory for speed
+      // User can save/move file later from the completed file card
+      String? saveDir;
+      if (Theme.of(context).platform == TargetPlatform.macOS ||
+          Theme.of(context).platform == TargetPlatform.linux ||
+          Theme.of(context).platform == TargetPlatform.windows) {
+        saveDir = await _chooseSaveDirEveryTime(context);
+      }
+      // For mobile (Android/iOS), saveDir remains null -> uses Documents directory
       await _connectionService.acceptFileOffer(transferId, saveDir: saveDir);
       setState(() {
         _incomingProgress[transferId] = TransferProgress(
@@ -436,25 +451,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Future<String?> _chooseSaveDirEveryTime(BuildContext context) async {
     String? chosen;
     try {
+      // Only ask for directory on desktop platforms
       if (Theme.of(context).platform == TargetPlatform.macOS ||
           Theme.of(context).platform == TargetPlatform.linux ||
-          Theme.of(context).platform == TargetPlatform.windows ||
-          Theme.of(context).platform == TargetPlatform.android) {
+          Theme.of(context).platform == TargetPlatform.windows) {
         final dir = await FilePicker.platform.getDirectoryPath(
           dialogTitle: 'Choose a folder for received files',
         );
         if (dir != null) chosen = dir;
       }
     } catch (_) {}
+    // Fallback to default directories
     if (chosen == null) {
-      if (Theme.of(context).platform == TargetPlatform.iOS ||
-          Theme.of(context).platform == TargetPlatform.android) {
-        final docs = await getApplicationDocumentsDirectory();
-        chosen = docs.path;
-      } else {
-        final downloads = await getDownloadsDirectory();
-        chosen = (downloads ?? await getApplicationDocumentsDirectory()).path;
-      }
+      final downloads = await getDownloadsDirectory();
+      chosen = (downloads ?? await getApplicationDocumentsDirectory()).path;
     }
     return chosen;
   }
@@ -465,7 +475,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() => _connectionInfo = info);
     });
+    
+    // Manage wake lock based on connection status
     if (info.status == ConnectionStatus.connected) {
+      WakelockPlus.enable();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -482,6 +495,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         );
       });
     } else if (info.status == ConnectionStatus.disconnected) {
+      WakelockPlus.disable();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -612,46 +626,29 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _saveAs(String sourcePath, String originalName) async {
-    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
     final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
-    if (isAndroid) {
-      final status = await Permission.storage.request();
-      if (!status.isGranted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Storage permission denied',
-                style: TextStyle(color: AppColors.white),
-              ),
-            ),
-          );
-        }
-        return;
-      }
-    }
-    String? targetDir;
-    try {
-      if (isAndroid || !isIOS) {
-        targetDir = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: 'Choose destination folder',
-        );
-      }
-    } catch (_) {}
-    if (isIOS && (targetDir == null || targetDir.isEmpty)) {
+    
+    // On iOS, use Share sheet for better UX
+    if (isIOS) {
       await Share.shareXFiles([XFile(sourcePath)], text: originalName);
       return;
     }
-    if (targetDir == null || targetDir.isEmpty) {
-      if (isAndroid || isIOS) {
-        final docs = await getApplicationDocumentsDirectory();
-        targetDir = docs.path;
-      } else {
-        final downloads = await getDownloadsDirectory();
-        targetDir =
-            (downloads ?? await getApplicationDocumentsDirectory()).path;
-      }
+    
+    // On Android and Desktop, use directory picker (no storage permission needed with SAF)
+    String? targetDir;
+    try {
+      targetDir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Choose destination folder',
+      );
+    } catch (e) {
+      debugPrint('[SaveAs] Directory picker error: $e');
     }
+    
+    // User cancelled the picker
+    if (targetDir == null || targetDir.isEmpty) {
+      return;
+    }
+    
     final safeName = originalName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
     String destPath = '$targetDir/$safeName';
     int dup = 1;
@@ -667,7 +664,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       dup++;
     }
     try {
-      await io.File(sourcePath).copy(destPath);
+      final sourceFile = io.File(sourcePath);
+      
+      // Use move instead of copy to avoid duplicating storage
+      // If move fails (cross-partition), fall back to copy
+      try {
+        await sourceFile.rename(destPath);
+        debugPrint('[SaveAs] File moved to: $destPath');
+      } catch (moveError) {
+        debugPrint('[SaveAs] Move failed, falling back to copy: $moveError');
+        await sourceFile.copy(destPath);
+        // Delete temp file after successful copy
+        try {
+          await sourceFile.delete();
+          debugPrint('[SaveAs] Temp file deleted after copy');
+        } catch (e) {
+          debugPrint('[SaveAs] Failed to delete temp file: $e');
+        }
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -917,12 +932,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         final msg = _messages[index];
                         final isMine = msg.senderName == widget.myDeviceName;
                         if (msg.type == 'file_complete') {
+                          // Use 'outgoing' metadata for file transfers to be more reliable
+                          final isOutgoing = msg.metadata?['outgoing'] as bool? ?? isMine;
                           final savedPath = msg.metadata?['path'] as String?;
                           return CompletedFileCard(
                             message: msg,
-                            isMine: isMine,
+                            isMine: isOutgoing,
                             savedPath: savedPath,
                             onOpen: (p, n) => _openFile(p, n),
+                            onSaveAs: (p, n) => _saveAs(p, n),
                           );
                         }
                         if (msg.type == 'file_offer') {

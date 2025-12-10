@@ -82,8 +82,8 @@ class BackgroundService {
         channelId: 'cpft_foreground_service',
         channelName: 'CPFT Background Service',
         channelDescription: 'Keeps the app running to maintain connections and transfers',
-        channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
+        channelImportance: NotificationChannelImportance.DEFAULT,
+        priority: NotificationPriority.DEFAULT,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: false,

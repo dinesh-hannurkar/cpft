@@ -8,7 +8,8 @@ class CompletedFileCard extends StatelessWidget {
   final bool isMine;
   final String? savedPath;
   final void Function(String path, String name)? onOpen;
-  const CompletedFileCard({super.key, required this.message, required this.isMine, required this.savedPath, this.onOpen});
+  final void Function(String path, String name)? onSaveAs;
+  const CompletedFileCard({super.key, required this.message, required this.isMine, required this.savedPath, this.onOpen, this.onSaveAs});
 
   @override
   Widget build(BuildContext context) {
@@ -16,21 +17,11 @@ class CompletedFileCard extends StatelessWidget {
     final size = message.metadata?['size'] as int?;
     final mime = message.metadata?['mime'] as String?;
     return Align(
-      alignment: isMine ? Alignment.centerLeft : Alignment.centerRight,
+      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
+        child: GestureDetector(
           onTap: savedPath != null ? () => onOpen?.call(savedPath!, name) : null,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMine ? 4 : 16),
-            bottomRight: Radius.circular(isMine ? 16 : 4),
-          ),
-          splashColor: Colors.blue.withValues(alpha: 0.08),
-          highlightColor: Colors.blue.withValues(alpha: 0.04),
-          hoverColor: Colors.blue.withValues(alpha: 0.03),
-          mouseCursor: savedPath != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.only(left: 12, right: 12, top: 10, bottom: 6),
@@ -90,6 +81,24 @@ class CompletedFileCard extends StatelessWidget {
                       ),
                   ]),
                 ),
+                // Show 3-dot menu for received files (not sent files)
+                if (!isMine && savedPath != null)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, size: 20, color: Colors.black54),
+                    color: Colors.white,
+                    padding: EdgeInsets.zero,
+                    onSelected: (value) async {
+                      if (value == 'open') {
+                        onOpen?.call(savedPath!, name);
+                      } else if (value == 'saveas') {
+                        onSaveAs?.call(savedPath!, name);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem<String>(value: 'open', child: Text('Open')),
+                      PopupMenuItem<String>(value: 'saveas', child: Text('Save As')),
+                    ],
+                  ),
               ]),
               const SizedBox(height: 6),
             ]),

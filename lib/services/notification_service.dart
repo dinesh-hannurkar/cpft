@@ -1,5 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
 
 /// Types of notifications the app can send
 enum NotificationType {
@@ -334,6 +336,13 @@ class NotificationService {
   Future<bool> requestPermissions() async {
     // Web: handled by browser, nothing to request here
     if (kIsWeb) return true;
+
+    // Android 13+ (API 33+): Request POST_NOTIFICATIONS permission
+    if (Platform.isAndroid) {
+      final status = await Permission.notification.request();
+      debugPrint('[NotificationService] Android notification permission: $status');
+      return status.isGranted;
+    }
 
     if (defaultTargetPlatform != TargetPlatform.iOS &&
         defaultTargetPlatform != TargetPlatform.macOS) {
