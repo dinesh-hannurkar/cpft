@@ -33,9 +33,25 @@ class ConnectionService {
   // Backpressure: track outgoing transfers waiting for ACKs
   final Map<String, _OutgoingTransfer> _outgoingTransfers = {};
   // Flow control thresholds
-  static const int _maxPendingChunks = 8; // sender waits when >= this many unacked chunks
+  static const int _maxPendingChunks = 16; // balanced for speed and reliability
   // Serialize socket writes to avoid StreamSink binding errors
   Future<void> _sendChain = Future.value();
+  int _flushCounter = 0; // batch flushes for high-throughput chunk sending
+
+  Future<void> _sendRaw(DeviceMessage message, {bool forceFlush = false}) async {
+    // Low-level sender for hot paths (file_chunk). Batches flushes.
+    _sendChain = _sendChain.then((_) async {
+      final jsonStr = jsonEncode(message.toJson());
+      final line = '$jsonStr\n';
+      final bytes = utf8.encode(line);
+      _socket!.add(bytes);
+      _flushCounter++;
+      if (forceFlush || _flushCounter % 12 == 0) {
+        await _socket!.flush();
+      }
+    });
+    await _sendChain;
+  }
 
   ConnectionService({required this.deviceName}) {
     debugPrint('[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName ($hashCode)');
@@ -394,6 +410,7 @@ class ConnectionService {
                   outgoing.sentBytes += outgoing.chunkSizes[i] ?? 0;
                 }
                 outgoing.lastAckIndex = newIndex;
+                outgoing.resetWatchdog(); // Reset watchdog on ACK
                 // Release permit if waiting (covers initial handshake and flow control)
                 if (outgoing.chunkPermit != null && !outgoing.chunkPermit!.isCompleted) {
                   outgoing.chunkPermit!.complete();
@@ -414,6 +431,7 @@ class ConnectionService {
                 ));
                 // Complete if finished
                 if (ack.completed) {
+                  outgoing.watchdogTimer?.cancel(); // Stop watchdog
                   outgoing.completer?.complete();
                   _outgoingTransfers.remove(ack.transferId);
                   _notifyMessageListeners(DeviceMessage(
@@ -592,8 +610,10 @@ class ConnectionService {
                       'size': incoming.offer.fileSize,
                       'mime': incoming.offer.mimeType,
                       'received': incoming.receivedBytes,
+                      'outgoing': false,
                     },
                   ));
+                  incoming.watchdogTimer?.cancel(); // Stop watchdog
                   _incomingFiles.remove(chunk.transferId);
 
                   // Show notification for completed file transfer
@@ -602,6 +622,13 @@ class ConnectionService {
                     title: 'File Received',
                     body: 'Successfully received ${incoming.offer.fileName}',
                   );
+
+                  // Clean up old files on Android after each transfer (async, don't await)
+                  if (Platform.isAndroid) {
+                    cleanupOldReceivedFiles().catchError((e) {
+                      debugPrint('[ConnectionService] Background cleanup error: $e');
+                    });
+                  }
 
                   // Send final completion ack using current next expected index
                   final completionAck = FileAck(
@@ -646,13 +673,39 @@ class ConnectionService {
                 }
                 continue;
               }
+
+              // Handle request for ACK resend (auto-resume)
+              if (message.type == 'request_ack') {
+                try {
+                  final reqTransferId = message.content;
+                  final inc = _incomingFiles[reqTransferId];
+                  if (inc != null) {
+                    final ack = FileAck(
+                      transferId: reqTransferId,
+                      nextExpectedIndex: inc.nextIndex,
+                      completed: false,
+                    );
+                    await sendMessage(DeviceMessage(
+                      type: 'file_ack',
+                      content: jsonEncode(ack.toJson()),
+                      senderName: deviceName,
+                    ));
+                    debugPrint('[ConnectionService] 🔄 Resent ACK for $reqTransferId at index ${inc.nextIndex}');
+                  }
+                } catch (e) {
+                  debugPrint('[ConnectionService] ⚠️ Failed to resend ACK: $e');
+                }
+                continue;
+              }
               }
               // Smart ACK: send when contiguous progress or buffer pressure
               final inc2 = _incomingFiles[chunk.transferId];
               if (inc2 != null) {
                 final bufferSize = inc2._chunkBuffer.length;
                 final advancedContiguously = (chunk.index == inc2.nextIndex - 1);
-                final shouldAck = advancedContiguously || bufferSize > (_maxPendingChunks ~/ 2);
+                // Send ACK more frequently: every 2nd contiguous chunk or when buffer reaches half
+                final shouldAck = bufferSize > (_maxPendingChunks ~/ 2) || 
+                                  (advancedContiguously && inc2.nextIndex % 2 == 0);
                 debugPrint('[ConnectionService] 📥 Chunk ${chunk.index} received: nextIndex=${inc2.nextIndex}, bufferSize=$bufferSize, shouldAck=$shouldAck');
                 if (shouldAck) {
                   final ack = FileAck(
@@ -769,7 +822,7 @@ class ConnectionService {
       ));
 
       // Stream chunks
-      const chunkSize = 64 * 1024; // 64KB per chunk
+      const chunkSize = 256 * 1024; // 256KB per chunk for maximum throughput
       int index = 0;
       final stream = file.readStream;
       if (stream == null) continue;
@@ -810,7 +863,23 @@ class ConnectionService {
       final starter = _outgoingTransfers[transferId];
       if (starter != null) {
         starter.chunkPermit = Completer<void>();
-        await starter.chunkPermit!.future;
+        debugPrint('[ConnectionService] ⏳ Waiting for initial ACK for transfer $transferId');
+        try {
+          await starter.chunkPermit!.future.timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('[ConnectionService] ⚠️ Initial ACK timeout for $transferId');
+              throw TimeoutException('No initial ACK received');
+            },
+          );
+          debugPrint('[ConnectionService] ✅ Initial ACK received, starting chunk stream for $transferId');
+          // Start watchdog for sender side
+          _startOutgoingWatchdog(transferId);
+        } catch (e) {
+          debugPrint('[ConnectionService] ❌ Initial ACK error: $e');
+          _outgoingTransfers.remove(transferId);
+          rethrow;
+        }
       }
 
       await for (final data in stream) {
@@ -821,10 +890,15 @@ class ConnectionService {
           // Wait for permit if previous chunk not acked
           final ot = _outgoingTransfers[transferId];
           if (ot == null) break; // Cancelled
-          if (ot.lastAckIndex != index - 1) {
+          
+          final pendingChunks = index - ot.lastAckIndex - 1;
+          if (pendingChunks >= _maxPendingChunks) {
             ot.chunkPermit = Completer<void>();
+            debugPrint('[ConnectionService] ⏳ Flow control: waiting at chunk $index (pending=$pendingChunks, lastAck=${ot.lastAckIndex})');
             await ot.chunkPermit!.future;
+            debugPrint('[ConnectionService] ✅ Flow control released at chunk $index');
           }
+          
           // Record chunk size for accurate progress
           ot.chunkSizes[index] = slice.length;
           final chunk = FileChunk(
@@ -833,15 +907,18 @@ class ConnectionService {
             dataBase64: base64Encode(slice),
             isLast: false,
           );
-          await sendMessage(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': chunk.toJson()}));
+          await _sendRaw(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': chunk.toJson()}));
+          ot.resetWatchdog(); // Reset on successful chunk send
           offset = end;
         }
       }
       // Final marker
       final otFinal = _outgoingTransfers[transferId];
       if (otFinal != null) {
-        if (otFinal.lastAckIndex != index - 1) {
+        final pendingChunks = index - otFinal.lastAckIndex - 1;
+        if (pendingChunks >= _maxPendingChunks) {
           otFinal.chunkPermit = Completer<void>();
+          debugPrint('[ConnectionService] ⏳ Final: waiting for ACK (pending=$pendingChunks)');
           await otFinal.chunkPermit!.future;
         }
         final finalChunk = FileChunk(
@@ -851,7 +928,7 @@ class ConnectionService {
           isLast: true,
         );
         otFinal.completer = Completer<void>();
-        await sendMessage(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': finalChunk.toJson()}));
+        await _sendRaw(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': finalChunk.toJson()}), forceFlush: true);
         await otFinal.completer!.future; // Wait for final ack
       }
     }
@@ -917,6 +994,9 @@ class ConnectionService {
     // Send initial ack to let sender start
     final ack = FileAck(transferId: offer.transferId, nextExpectedIndex: 0, completed: false);
     await sendMessage(DeviceMessage(type: 'file_ack', content: jsonEncode(ack.toJson()), senderName: deviceName));
+    debugPrint('[ConnectionService] 📤 Initial ACK sent for transfer ${offer.transferId}');
+    // Start watchdog for receiver side
+    _startIncomingWatchdog(offer.transferId);
   }
 
   /// Decline a pending incoming file offer
@@ -934,10 +1014,14 @@ class ConnectionService {
     // Clean local state
     final inc = _incomingFiles.remove(transferId);
     if (inc != null) {
+      inc.watchdogTimer?.cancel(); // Stop watchdog
       try { await inc.sink.close(); } catch (_) {}
     }
+    final out = _outgoingTransfers.remove(transferId);
+    if (out != null) {
+      out.watchdogTimer?.cancel(); // Stop watchdog
+    }
   _pendingOffers.remove(transferId);
-    _outgoingTransfers.remove(transferId);
   }
 
   /// Ask the peer (receiver) to resend its last ACK for a stuck outgoing transfer
@@ -1088,6 +1172,14 @@ class ConnectionService {
     _keepAliveTimer = null;
     debugPrint('[ConnectionService] 🛑 Keep-alive timer cancelled and nullified');
 
+    // Stop all watchdog timers
+    for (final transfer in _incomingFiles.values) {
+      transfer.watchdogTimer?.cancel();
+    }
+    for (final transfer in _outgoingTransfers.values) {
+      transfer.watchdogTimer?.cancel();
+    }
+
     // Close socket
     try {
       await _socket?.close();
@@ -1136,6 +1228,144 @@ class ConnectionService {
     debugPrint('[ConnectionService] 🔄 Keep-alive timer started successfully');
   }
 
+  /// Start watchdog for outgoing transfer - auto-resume if stalled
+  void _startOutgoingWatchdog(String transferId) {
+    final transfer = _outgoingTransfers[transferId];
+    if (transfer == null) return;
+
+    transfer.watchdogTimer?.cancel();
+    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      final ot = _outgoingTransfers[transferId];
+      if (ot == null) {
+        timer.cancel();
+        return;
+      }
+
+      final timeSinceActivity = DateTime.now().difference(ot.lastActivity).inSeconds;
+      if (timeSinceActivity > 5 && ot.chunkPermit != null && !ot.chunkPermit!.isCompleted) {
+        // Transfer appears stalled - auto-resume
+        ot.resumeAttempts++;
+        if (ot.resumeAttempts <= 3) {
+          debugPrint('[ConnectionService] 🔄 Auto-resuming stalled outgoing transfer $transferId (attempt ${ot.resumeAttempts})');
+          // Request receiver to resend ACK for current state
+          await sendMessage(DeviceMessage(
+            type: 'request_ack',
+            content: transferId,
+            senderName: deviceName,
+          ));
+          // Release permit to allow progress
+          if (ot.chunkPermit != null && !ot.chunkPermit!.isCompleted) {
+            ot.chunkPermit!.complete();
+            ot.chunkPermit = null;
+          }
+          ot.resetWatchdog();
+        } else {
+          debugPrint('[ConnectionService] ❌ Outgoing transfer $transferId failed after ${ot.resumeAttempts} resume attempts');
+          timer.cancel();
+        }
+      }
+    });
+  }
+
+  /// Start watchdog for incoming transfer - request resend if stalled
+  void _startIncomingWatchdog(String transferId) {
+    final transfer = _incomingFiles[transferId];
+    if (transfer == null) return;
+
+    transfer.watchdogTimer?.cancel();
+    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      final inc = _incomingFiles[transferId];
+      if (inc == null) {
+        timer.cancel();
+        return;
+      }
+
+      final timeSinceActivity = DateTime.now().difference(inc.lastActivity).inSeconds;
+      if (timeSinceActivity > 5) {
+        // No chunks received recently - request sender to resume
+        debugPrint('[ConnectionService] 🔄 Auto-resuming stalled incoming transfer $transferId');
+        // Send ACK with current nextIndex to tell sender where to resume
+        final ack = FileAck(
+          transferId: transferId,
+          nextExpectedIndex: inc.nextIndex,
+          completed: false,
+        );
+        await sendMessage(DeviceMessage(
+          type: 'file_ack',
+          content: jsonEncode(ack.toJson()),
+          senderName: deviceName,
+        ));
+        inc.resetWatchdog();
+      }
+    });
+  }
+
+  /// Clean up old received files on Android to prevent storage bloat
+  /// Removes files older than specified days from Documents directory
+  static Future<void> cleanupOldReceivedFiles({int olderThanDays = 1}) async {
+    if (!Platform.isAndroid) {
+      debugPrint('[ConnectionService] 🧹 Cleanup skipped - not Android');
+      return;
+    }
+    
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final now = DateTime.now();
+      int deletedCount = 0;
+      int deletedBytes = 0;
+      int totalFiles = 0;
+      
+      debugPrint('[ConnectionService] 🧹 Starting cleanup: files older than $olderThanDays days');
+      debugPrint('[ConnectionService] 📂 Directory: ${docsDir.path}');
+      debugPrint('[ConnectionService] 🕐 Current time: $now');
+      
+      await for (final entity in docsDir.list()) {
+        if (entity is File) {
+          totalFiles++;
+          try {
+            final stat = await entity.stat();
+            final age = now.difference(stat.modified).inDays;
+            final fileName = entity.path.split('/').last;
+            
+            debugPrint('[ConnectionService] 📄 File: $fileName, Modified: ${stat.modified}, Age: $age days');
+            
+            if (age > olderThanDays) {
+              final size = await entity.length();
+              await entity.delete();
+              deletedCount++;
+              deletedBytes += size;
+              debugPrint('[ConnectionService] ✅ Deleted: $fileName (${age} days old, ${(size / 1024 / 1024).toStringAsFixed(2)} MB)');
+            } else {
+              debugPrint('[ConnectionService] ⏭️  Kept: $fileName (only $age days old)');
+            }
+          } catch (e) {
+            debugPrint('[ConnectionService] ⚠️ Error processing file ${entity.path}: $e');
+          }
+        }
+      }
+      
+      debugPrint('[ConnectionService] 📊 Scan complete: $totalFiles files found');
+      
+      if (deletedCount > 0) {
+        final freedMB = deletedBytes / 1024 / 1024;
+        debugPrint('[ConnectionService] ✅ Cleanup complete: Deleted $deletedCount files, freed ${freedMB.toStringAsFixed(2)} MB');
+        
+        // Show notification if significant storage freed (>10 MB)
+        if (freedMB > 10) {
+          NotificationService().showNotification(
+            type: NotificationType.fileTransferCompleted,
+            title: 'Storage Cleanup',
+            body: 'Freed ${freedMB.toStringAsFixed(1)} MB by removing $deletedCount old files',
+          );
+        }
+      } else {
+        debugPrint('[ConnectionService] ✅ Cleanup complete: No old files to delete (scanned $totalFiles files)');
+      }
+    } catch (e) {
+      debugPrint('[ConnectionService] ⚠️ Cleanup failed: $e');
+    }
+  }
+
   /// Dispose the service
   Future<void> dispose() async {
     debugPrint('[ConnectionService] 🗑️  DISPOSE called for ${_currentConnection?.deviceName ?? deviceName} ($hashCode)');
@@ -1157,6 +1387,9 @@ class _IncomingFile {
   int nextIndex;
   final Map<int, Uint8List> _chunkBuffer = {}; // Buffer for out-of-order chunks
 
+  Timer? watchdogTimer;
+  DateTime lastActivity = DateTime.now();
+
   _IncomingFile({
     required this.offer,
     required this.path,
@@ -1165,9 +1398,14 @@ class _IncomingFile {
     required this.nextIndex,
   });
 
+  void resetWatchdog() {
+    lastActivity = DateTime.now();
+  }
+
   // Process a chunk, handling out-of-order arrival
   Future<void> processChunk(FileChunk chunk) async {
     final bytes = base64Decode(chunk.dataBase64);
+    resetWatchdog(); // Reset on any chunk receive
 
     if (chunk.index == nextIndex) {
       // This is the expected chunk, write it immediately
@@ -1207,10 +1445,17 @@ class _OutgoingTransfer {
   int sentBytes = 0; // bytes confirmed by ACKs
   Completer<void>? chunkPermit; // completed when next chunk may be sent
   Completer<void>? completer; // completed when transfer fully done
+  Timer? watchdogTimer;
+  DateTime lastActivity = DateTime.now();
+  int resumeAttempts = 0;
 
   // Optional metadata for better UI on sender side
   final String? mime;
   final String? path;
+
+  void resetWatchdog() {
+    lastActivity = DateTime.now();
+  }
 
   _OutgoingTransfer({
     required this.fileName,

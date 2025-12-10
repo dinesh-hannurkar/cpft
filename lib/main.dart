@@ -9,6 +9,7 @@ import 'services/discovery_service.dart';
 import 'services/notification_service.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/chat/presentation/chat_screen.dart';
+import 'features/chat/services/connection_service.dart';
 import 'common/theme/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
 import 'features/webshare/presentation/web_room_entry_screen.dart';
@@ -30,6 +31,12 @@ void main() async {
   try {
     await FirebaseInitializer.ensure();
   } catch (_) {}
+  
+  // Clean up old received files on Android (async, don't block app startup)
+  ConnectionService.cleanupOldReceivedFiles().catchError((e) {
+    debugPrint('[Main] Startup cleanup error: $e');
+  });
+  
   runApp(const MainApp());
 }
 
