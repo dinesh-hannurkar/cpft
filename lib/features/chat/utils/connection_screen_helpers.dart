@@ -29,16 +29,16 @@ class ConnectionScreenHelpers {
       await sourceFile.copy(destPath);
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved to: $destPath')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Saved to: $destPath')));
       }
     } catch (e) {
       debugPrint('[ConnectionScreen] Save-as error: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     }
   }
@@ -85,9 +85,7 @@ class ConnectionScreenHelpers {
   }
 
   /// Converts ReceivedFile to ReceivedFileItem for widget use
-  static List<ReceivedFileItem> convertToFileItems(
-    List<ReceivedFile> files,
-  ) {
+  static List<ReceivedFileItem> convertToFileItems(List<ReceivedFile> files) {
     return files
         .map(
           (f) => ReceivedFileItem(

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
-
 import '../models/connection_state.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
@@ -17,28 +16,24 @@ class ConnectionService {
   ConnectionInfo? _currentConnection;
   final List<Function(DeviceMessage)> _messageListeners = [];
   final List<Function(ConnectionInfo)> _statusListeners = [];
-  // Persist message history so reopening a chat screen shows prior conversation.
   final List<DeviceMessage> _messageHistory = [];
   StreamSubscription? _socketSubscription;
   final StringBuffer _messageBuffer = StringBuffer();
   Timer? _keepAliveTimer;
-  // Track consecutive socket errors to avoid premature disconnection
   int _consecutiveErrors = 0;
   static const int _maxConsecutiveErrors = 3;
   Timer? _errorResetTimer;
-  // Track incoming file transfers
   final Map<String, _IncomingFile> _incomingFiles = {};
-  // Pending offers awaiting user decision
   final Map<String, FileOffer> _pendingOffers = {};
-  // Backpressure: track outgoing transfers waiting for ACKs
   final Map<String, _OutgoingTransfer> _outgoingTransfers = {};
-  // Flow control thresholds
-  static const int _maxPendingChunks = 16; // balanced for speed and reliability
-  // Serialize socket writes to avoid StreamSink binding errors
+  static const int _maxPendingChunks = 16;
   Future<void> _sendChain = Future.value();
-  int _flushCounter = 0; // batch flushes for high-throughput chunk sending
+  int _flushCounter = 0;
 
-  Future<void> _sendRaw(DeviceMessage message, {bool forceFlush = false}) async {
+  Future<void> _sendRaw(
+    DeviceMessage message, {
+    bool forceFlush = false,
+  }) async {
     // Low-level sender for hot paths (file_chunk). Batches flushes.
     _sendChain = _sendChain.then((_) async {
       final jsonStr = jsonEncode(message.toJson());
@@ -54,14 +49,17 @@ class ConnectionService {
   }
 
   ConnectionService({required this.deviceName}) {
-    debugPrint('[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName ($hashCode)');
+    debugPrint(
+      '[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName ($hashCode)',
+    );
   }
 
   /// Get current connection info
   ConnectionInfo? get currentConnection => _currentConnection;
 
   /// Check if connected
-  bool get isConnected => _currentConnection?.status == ConnectionStatus.connected;
+  bool get isConnected =>
+      _currentConnection?.status == ConnectionStatus.connected;
 
   /// Get pending file offers
   Map<String, FileOffer> get pendingOffers => Map.unmodifiable(_pendingOffers);
@@ -88,15 +86,15 @@ class ConnectionService {
 
   /// Connect to a device
   Future<bool> connect(String deviceName, String ipAddress, int port) async {
-    debugPrint('[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port');
+    debugPrint(
+      '[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port',
+    );
 
     // Prevent duplicate connection attempts
     if (currentConnection?.status == ConnectionStatus.connecting) {
-      debugPrint('[ConnectionService] ⚠️ Already connecting to ${currentConnection?.deviceName}, ignoring duplicate connect()');
       return false;
     }
     if (currentConnection?.status == ConnectionStatus.connected) {
-      debugPrint('[ConnectionService] ⚠️ Already connected to ${currentConnection?.deviceName}, ignoring duplicate connect()');
       return true;
     }
 
@@ -106,12 +104,14 @@ class ConnectionService {
       await disconnect();
     }
 
-    _updateStatus(ConnectionInfo(
-      deviceName: deviceName,
-      ipAddress: ipAddress,
-      port: port,
-      status: ConnectionStatus.connecting,
-    ));
+    _updateStatus(
+      ConnectionInfo(
+        deviceName: deviceName,
+        ipAddress: ipAddress,
+        port: port,
+        status: ConnectionStatus.connecting,
+      ),
+    );
 
     try {
       // Attempt to connect with timeout
@@ -122,8 +122,6 @@ class ConnectionService {
       );
 
       debugPrint('[ConnectionService] ✅ Socket connected successfully');
-
-      // Configure socket options to keep connection alive
       _socket!.setOption(SocketOption.tcpNoDelay, true);
 
       // Set up socket listener
@@ -140,58 +138,70 @@ class ConnectionService {
         cancelOnError: false,
       );
 
-  // Do NOT send anything yet. Wait for remote acceptance handshake.
-  debugPrint('[ConnectionService] ⏳ Waiting for acceptance from $deviceName');
-  return true; // TCP is up; logical connection will switch to connected on handshake
+      return true; // TCP is up; logical connection will switch to connected on handshake
     } on SocketException catch (e) {
       String userFriendlyError;
-      if (e.osError?.errorCode == 61 || e.message.contains('Connection refused')) {
-        userFriendlyError = 'The other device is not ready to accept connections.\n\n'
+      if (e.osError?.errorCode == 61 ||
+          e.message.contains('Connection refused')) {
+        userFriendlyError =
+            'The other device is not ready to accept connections.\n\n'
             'Please make sure:\n'
             '1. The app is running on the other device\n'
             '2. The app has been restarted recently (to apply updates)\n'
             '3. Both devices are on the same WiFi network';
-      } else if (e.osError?.errorCode == 60 || e.message.contains('timed out')) {
-        userFriendlyError = 'Connection timed out.\n\n'
+      } else if (e.osError?.errorCode == 60 ||
+          e.message.contains('timed out')) {
+        userFriendlyError =
+            'Connection timed out.\n\n'
             'Please check:\n'
             '1. The device is still on the network\n'
             '2. No firewall is blocking port 53318';
       } else {
         userFriendlyError = 'Network error: ${e.message}';
       }
-      
+
       debugPrint('[ConnectionService] ❌ Connection failed: $e');
       debugPrint('[ConnectionService] 💡 User message: $userFriendlyError');
-      
-      _updateStatus(ConnectionInfo(
-        deviceName: deviceName,
-        ipAddress: ipAddress,
-        port: port,
-        status: ConnectionStatus.failed,
-        error: userFriendlyError,
-      ));
+
+      _updateStatus(
+        ConnectionInfo(
+          deviceName: deviceName,
+          ipAddress: ipAddress,
+          port: port,
+          status: ConnectionStatus.failed,
+          error: userFriendlyError,
+        ),
+      );
       return false;
     } catch (e) {
       debugPrint('[ConnectionService] ❌ Connection failed: $e');
-      _updateStatus(ConnectionInfo(
-        deviceName: deviceName,
-        ipAddress: ipAddress,
-        port: port,
-        status: ConnectionStatus.failed,
-        error: e.toString(),
-      ));
+      _updateStatus(
+        ConnectionInfo(
+          deviceName: deviceName,
+          ipAddress: ipAddress,
+          port: port,
+          status: ConnectionStatus.failed,
+          error: e.toString(),
+        ),
+      );
       return false;
     }
   }
 
   /// Accept an incoming connection (for server-side connections)
   Future<bool> acceptConnection(Socket socket, String deviceName) async {
-    debugPrint('[ConnectionService] 📞 Accepting incoming connection from $deviceName');
-    debugPrint('[ConnectionService] 🔍 Socket info: ${socket.remoteAddress.address}:${socket.remotePort}');
+    debugPrint(
+      '[ConnectionService] 📞 Accepting incoming connection from $deviceName',
+    );
+    debugPrint(
+      '[ConnectionService] 🔍 Socket info: ${socket.remoteAddress.address}:${socket.remotePort}',
+    );
 
     // If already connected, disconnect first and wait for stream to be released
     if (_socket != null) {
-      debugPrint('[ConnectionService] ⚠️  Already have a socket, disconnecting...');
+      debugPrint(
+        '[ConnectionService] ⚠️  Already have a socket, disconnecting...',
+      );
       await disconnect();
       // Wait a bit for the stream to be fully released
       await Future.delayed(const Duration(milliseconds: 100));
@@ -203,12 +213,14 @@ class ConnectionService {
       final ipAddress = socket.remoteAddress.address;
       final port = socket.remotePort;
 
-      _updateStatus(ConnectionInfo(
-        deviceName: deviceName,
-        ipAddress: ipAddress,
-        port: port,
-        status: ConnectionStatus.connecting,
-      ));
+      _updateStatus(
+        ConnectionInfo(
+          deviceName: deviceName,
+          ipAddress: ipAddress,
+          port: port,
+          status: ConnectionStatus.connecting,
+        ),
+      );
 
       // Configure socket options
       try {
@@ -233,9 +245,13 @@ class ConnectionService {
           },
           cancelOnError: false,
         );
-        debugPrint('[ConnectionService] ✅ Socket listener attached successfully');
+        debugPrint(
+          '[ConnectionService] ✅ Socket listener attached successfully',
+        );
       } catch (e) {
-        debugPrint('[ConnectionService] ❌ Failed to attach socket listener: $e');
+        debugPrint(
+          '[ConnectionService] ❌ Failed to attach socket listener: $e',
+        );
         throw Exception('Failed to listen to socket: $e');
       }
 
@@ -247,25 +263,29 @@ class ConnectionService {
       _startKeepAlive();
 
       // Update connection status
-      _updateStatus(ConnectionInfo(
-        deviceName: deviceName,
-        ipAddress: ipAddress,
-        port: port,
-        status: ConnectionStatus.connected,
-        connectedAt: DateTime.now(),
-      ));
+      _updateStatus(
+        ConnectionInfo(
+          deviceName: deviceName,
+          ipAddress: ipAddress,
+          port: port,
+          status: ConnectionStatus.connected,
+          connectedAt: DateTime.now(),
+        ),
+      );
 
       debugPrint('[ConnectionService] ✅ Accepted connection from $deviceName');
       return true;
     } catch (e) {
       debugPrint('[ConnectionService] ❌ Failed to accept connection: $e');
-      _updateStatus(ConnectionInfo(
-        deviceName: deviceName,
-        ipAddress: socket.remoteAddress.address,
-        port: socket.remotePort,
-        status: ConnectionStatus.failed,
-        error: e.toString(),
-      ));
+      _updateStatus(
+        ConnectionInfo(
+          deviceName: deviceName,
+          ipAddress: socket.remoteAddress.address,
+          port: socket.remotePort,
+          status: ConnectionStatus.failed,
+          error: e.toString(),
+        ),
+      );
       return false;
     }
   }
@@ -288,30 +308,43 @@ class ConnectionService {
     }
     try {
       bool ok = true;
-      _sendChain = _sendChain.then((_) async {
-        final json = jsonEncode(message.toJson());
-        final data = '$json\n'; // Add newline as delimiter
-        final bytes = utf8.encode(data);
-        _socket!.add(bytes);
-        await _socket!.flush();
-        debugPrint('[ConnectionService] 📤 Sent message: ${message.type} to $deviceName');
+      _sendChain = _sendChain
+          .then((_) async {
+            final json = jsonEncode(message.toJson());
+            final data = '$json\n'; // Add newline as delimiter
+            final bytes = utf8.encode(data);
+            _socket!.add(bytes);
+            await _socket!.flush();
+            debugPrint(
+              '[ConnectionService] 📤 Sent message: ${message.type} to $deviceName',
+            );
 
-        // Add outgoing message to history (not via listener to avoid duplicate notification)
-        const historyTypes = {'text', 'file_complete', 'file_offer', 'goodbye'};
-        if (historyTypes.contains(message.type)) {
-          _messageHistory.add(message);
-        }
+            // Add outgoing message to history (not via listener to avoid duplicate notification)
+            const historyTypes = {
+              'text',
+              'file_complete',
+              'file_offer',
+              'goodbye',
+            };
+            if (historyTypes.contains(message.type)) {
+              _messageHistory.add(message);
+            }
 
-        // Reset error count on successful send
-        if (_consecutiveErrors > 0) {
-          debugPrint('[ConnectionService] ✅ Message sent successfully, resetting error count');
-          _consecutiveErrors = 0;
-          _errorResetTimer?.cancel();
-        }
-      }).catchError((e) {
-        ok = false;
-        debugPrint('[ConnectionService] ❌ Failed to send message in chain: $e');
-      });
+            // Reset error count on successful send
+            if (_consecutiveErrors > 0) {
+              debugPrint(
+                '[ConnectionService] ✅ Message sent successfully, resetting error count',
+              );
+              _consecutiveErrors = 0;
+              _errorResetTimer?.cancel();
+            }
+          })
+          .catchError((e) {
+            ok = false;
+            debugPrint(
+              '[ConnectionService] ❌ Failed to send message in chain: $e',
+            );
+          });
       await _sendChain; // ensure ordering for caller when needed
       return ok;
     } catch (e) {
@@ -334,7 +367,9 @@ class ConnectionService {
   void _handleIncomingData(List<int> data) async {
     // Reset error count on successful data reception
     if (_consecutiveErrors > 0) {
-      debugPrint('[ConnectionService] ✅ Connection recovered, resetting error count');
+      debugPrint(
+        '[ConnectionService] ✅ Connection recovered, resetting error count',
+      );
       _consecutiveErrors = 0;
       _errorResetTimer?.cancel();
     }
@@ -361,38 +396,53 @@ class ConnectionService {
         try {
           final json = jsonDecode(messageText) as Map<String, dynamic>;
           final message = DeviceMessage.fromJson(json);
-          debugPrint('[ConnectionService] 📥 Received message: ${message.type} from ${message.senderName}');
+          debugPrint(
+            '[ConnectionService] 📥 Received message: ${message.type} from ${message.senderName}',
+          );
 
           // Handle explicit reject messages (new): remote declined connection before handshake
           if (message.type == 'reject') {
-            debugPrint('[ConnectionService] ❌ Connection explicitly rejected by ${message.senderName}');
-            if (_currentConnection != null && _currentConnection!.status == ConnectionStatus.connecting) {
-              _updateStatus(_currentConnection!.copyWith(
-                status: ConnectionStatus.failed,
-                error: 'Connection rejected by remote device',
-              ));
+            debugPrint(
+              '[ConnectionService] ❌ Connection explicitly rejected by ${message.senderName}',
+            );
+            if (_currentConnection != null &&
+                _currentConnection!.status == ConnectionStatus.connecting) {
+              _updateStatus(
+                _currentConnection!.copyWith(
+                  status: ConnectionStatus.failed,
+                  error: 'Connection rejected by remote device',
+                ),
+              );
             }
             // Close socket proactively
             await disconnect();
             continue;
           }
-          
+
           // Handle handshake messages
           if (message.type == 'handshake') {
             final wasConnected = isConnected;
-            if (!wasConnected && _currentConnection != null && _currentConnection!.status == ConnectionStatus.connecting) {
+            if (!wasConnected &&
+                _currentConnection != null &&
+                _currentConnection!.status == ConnectionStatus.connecting) {
               // Transition to connected upon first handshake from peer
-              debugPrint('[ConnectionService] 🤝 Acceptance received from ${message.senderName}. Marking as connected.');
-              _updateStatus(_currentConnection!.copyWith(
-                status: ConnectionStatus.connected,
-                connectedAt: DateTime.now(),
-              ));
+              debugPrint(
+                '[ConnectionService] 🤝 Acceptance received from ${message.senderName}. Marking as connected.',
+              );
+              _updateStatus(
+                _currentConnection!.copyWith(
+                  status: ConnectionStatus.connected,
+                  connectedAt: DateTime.now(),
+                ),
+              );
               // Start keep-alive now that session is accepted
               _startKeepAlive();
               // Send our handshake response (now that we know the peer accepted)
               await _sendHandshake();
             } else {
-              debugPrint('[ConnectionService] 🤝 Received handshake (already connected), ignoring');
+              debugPrint(
+                '[ConnectionService] 🤝 Received handshake (already connected), ignoring',
+              );
             }
             continue;
           }
@@ -412,41 +462,46 @@ class ConnectionService {
                 outgoing.lastAckIndex = newIndex;
                 outgoing.resetWatchdog(); // Reset watchdog on ACK
                 // Release permit if waiting (covers initial handshake and flow control)
-                if (outgoing.chunkPermit != null && !outgoing.chunkPermit!.isCompleted) {
+                if (outgoing.chunkPermit != null &&
+                    !outgoing.chunkPermit!.isCompleted) {
                   outgoing.chunkPermit!.complete();
                   outgoing.chunkPermit = null;
                 }
                 // Emit progress for UI
-                _notifyMessageListeners(DeviceMessage(
-                  type: 'file_progress',
-                  content: outgoing.fileName,
-                  senderName: deviceName,
-                  timestamp: DateTime.now(),
-                  metadata: {
-                    'transferId': ack.transferId,
-                    'bytes': outgoing.sentBytes,
-                    'total': outgoing.totalSize,
-                    'outgoing': true,
-                  },
-                ));
-                // Complete if finished
-                if (ack.completed) {
-                  outgoing.watchdogTimer?.cancel(); // Stop watchdog
-                  outgoing.completer?.complete();
-                  _outgoingTransfers.remove(ack.transferId);
-                  _notifyMessageListeners(DeviceMessage(
-                    type: 'file_complete',
+                _notifyMessageListeners(
+                  DeviceMessage(
+                    type: 'file_progress',
                     content: outgoing.fileName,
                     senderName: deviceName,
                     timestamp: DateTime.now(),
                     metadata: {
                       'transferId': ack.transferId,
+                      'bytes': outgoing.sentBytes,
+                      'total': outgoing.totalSize,
                       'outgoing': true,
-                      'size': outgoing.totalSize,
-                      if (outgoing.mime != null) 'mime': outgoing.mime,
-                      if (outgoing.path != null) 'path': outgoing.path,
                     },
-                  ));
+                  ),
+                );
+                // Complete if finished
+                if (ack.completed) {
+                  outgoing.watchdogTimer?.cancel(); // Stop watchdog
+                  outgoing.completer?.complete();
+                  _outgoingTransfers.remove(ack.transferId);
+                  _notifyMessageListeners(
+                    DeviceMessage(
+                      type: 'file_complete',
+                      content: outgoing.fileName,
+                      senderName: deviceName,
+                      timestamp: DateTime.now(),
+                      metadata: {
+                        'transferId': ack.transferId,
+                        'outgoing': true,
+                        'size': outgoing.totalSize,
+                        if (outgoing.mime != null) 'mime': outgoing.mime,
+                        if (outgoing.path != null) 'path': outgoing.path,
+                      },
+                    ),
+                  );
 
                   // Show notification for completed file transfer
                   NotificationService().showNotification(
@@ -464,14 +519,18 @@ class ConnectionService {
             }
             continue;
           }
-          
+
           // Handle file transfer control & data
-      if (message.type == 'file_offer') {
+          if (message.type == 'file_offer') {
             try {
-        final offer = FileOffer.fromJson((message.metadata?['payload'] as Map?)?.cast<String, dynamic>() ?? {});
+              final offer = FileOffer.fromJson(
+                (message.metadata?['payload'] as Map?)
+                        ?.cast<String, dynamic>() ??
+                    {},
+              );
               // Defer accepting until UI approves; store pending
               _pendingOffers[offer.transferId] = offer;
-              
+
               // Show notification for incoming file offer
               // Use this.deviceName for both display and connection lookup
               // since it's the consistent identifier for this peer
@@ -482,20 +541,24 @@ class ConnectionService {
                 transferId: offer.transferId,
                 deviceName: deviceName, // Connection lookup name
               );
-              
-              _notifyMessageListeners(DeviceMessage(
-                type: 'file_offer',
-                content: offer.fileName,
-                senderName: message.senderName,
-                timestamp: DateTime.now(),
-                metadata: {
-                  'transferId': offer.transferId,
-                  'size': offer.fileSize,
-                  'mime': offer.mimeType,
-                },
-              ));
+
+              _notifyMessageListeners(
+                DeviceMessage(
+                  type: 'file_offer',
+                  content: offer.fileName,
+                  senderName: message.senderName,
+                  timestamp: DateTime.now(),
+                  metadata: {
+                    'transferId': offer.transferId,
+                    'size': offer.fileSize,
+                    'mime': offer.mimeType,
+                  },
+                ),
+              );
             } catch (e) {
-              debugPrint('[ConnectionService] ⚠️ Failed to parse file_offer: $e');
+              debugPrint(
+                '[ConnectionService] ⚠️ Failed to parse file_offer: $e',
+              );
             }
             continue;
           }
@@ -511,56 +574,80 @@ class ConnectionService {
                   nextExpectedIndex: inc.nextIndex,
                   completed: false,
                 );
-                await sendMessage(DeviceMessage(
-                  type: 'file_ack',
-                  content: jsonEncode(ack.toJson()),
-                  senderName: deviceName,
-                ));
-                debugPrint('[ConnectionService] 🔁 Resume-request: resent ACK for $transferId at ${inc.nextIndex}');
+                await sendMessage(
+                  DeviceMessage(
+                    type: 'file_ack',
+                    content: jsonEncode(ack.toJson()),
+                    senderName: deviceName,
+                  ),
+                );
+                debugPrint(
+                  '[ConnectionService] 🔁 Resume-request: resent ACK for $transferId at ${inc.nextIndex}',
+                );
               } else {
-                debugPrint('[ConnectionService] ⚠️ Resume-request: no incoming state for $transferId');
+                debugPrint(
+                  '[ConnectionService] ⚠️ Resume-request: no incoming state for $transferId',
+                );
               }
             } catch (e) {
-              debugPrint('[ConnectionService] ⚠️ Failed to handle resume request: $e');
+              debugPrint(
+                '[ConnectionService] ⚠️ Failed to handle resume request: $e',
+              );
             }
             continue;
           }
 
-      if (message.type == 'file_chunk') {
+          if (message.type == 'file_chunk') {
             try {
-        final chunk = FileChunk.fromJson((message.metadata?['payload'] as Map?)?.cast<String, dynamic>() ?? {});
+              final chunk = FileChunk.fromJson(
+                (message.metadata?['payload'] as Map?)
+                        ?.cast<String, dynamic>() ??
+                    {},
+              );
               final incoming = _incomingFiles[chunk.transferId];
               if (incoming == null) {
-                debugPrint('[ConnectionService] ⚠️ No state for transfer ${chunk.transferId}');
+                debugPrint(
+                  '[ConnectionService] ⚠️ No state for transfer ${chunk.transferId}',
+                );
                 // Ask sender to resend the file_offer so we can create state
                 try {
-                  await sendMessage(DeviceMessage(
-                    type: 'file_offer_request',
-                    content: chunk.transferId,
-                    senderName: deviceName,
-                  ));
-                  debugPrint('[ConnectionService] 📥 Requested offer resend for ${chunk.transferId}');
+                  await sendMessage(
+                    DeviceMessage(
+                      type: 'file_offer_request',
+                      content: chunk.transferId,
+                      senderName: deviceName,
+                    ),
+                  );
+                  debugPrint(
+                    '[ConnectionService] 📥 Requested offer resend for ${chunk.transferId}',
+                  );
                 } catch (e) {
-                  debugPrint('[ConnectionService] ⚠️ Failed to request offer resend: $e');
+                  debugPrint(
+                    '[ConnectionService] ⚠️ Failed to request offer resend: $e',
+                  );
                 }
               } else {
                 await incoming.processChunk(chunk);
 
                 // Emit progress update for UI
-                _notifyMessageListeners(DeviceMessage(
-                  type: 'file_progress',
-                  content: incoming.offer.fileName,
-                  senderName: message.senderName,
-                  timestamp: DateTime.now(),
-                  metadata: {
-                    'transferId': chunk.transferId,
-                    'bytes': incoming.receivedBytes,
-                    'total': incoming.offer.fileSize,
-                    'outgoing': false,
-                  },
-                ));
+                _notifyMessageListeners(
+                  DeviceMessage(
+                    type: 'file_progress',
+                    content: incoming.offer.fileName,
+                    senderName: message.senderName,
+                    timestamp: DateTime.now(),
+                    metadata: {
+                      'transferId': chunk.transferId,
+                      'bytes': incoming.receivedBytes,
+                      'total': incoming.offer.fileSize,
+                      'outgoing': false,
+                    },
+                  ),
+                );
                 if (chunk.isLast) {
-                  debugPrint('[ConnectionService] 📍 Final chunk received for transfer ${chunk.transferId}, waiting for all chunks...');
+                  debugPrint(
+                    '[ConnectionService] 📍 Final chunk received for transfer ${chunk.transferId}, waiting for all chunks...',
+                  );
 
                   // Wait longer to ensure all buffered chunks are processed
                   // With parallel channels, chunks can arrive significantly out of order
@@ -568,13 +655,19 @@ class ConnectionService {
 
                   // Check if all chunks have been received and processed
                   if (!incoming.isComplete()) {
-                    debugPrint('[ConnectionService] ⚠️ Final chunk received but transfer ${chunk.transferId} is not complete. Buffered chunks remaining: ${incoming._chunkBuffer.length}');
-                    debugPrint('[ConnectionService] 📊 Buffer contents: ${incoming._chunkBuffer.keys.toList()}');
+                    debugPrint(
+                      '[ConnectionService] ⚠️ Final chunk received but transfer ${chunk.transferId} is not complete. Buffered chunks remaining: ${incoming._chunkBuffer.length}',
+                    );
+                    debugPrint(
+                      '[ConnectionService] 📊 Buffer contents: ${incoming._chunkBuffer.keys.toList()}',
+                    );
                     // Don't complete yet, wait for more chunks
                     continue;
                   }
 
-                  debugPrint('[ConnectionService] ✅ All chunks received and processed for transfer ${chunk.transferId}');
+                  debugPrint(
+                    '[ConnectionService] ✅ All chunks received and processed for transfer ${chunk.transferId}',
+                  );
                   await incoming.sink.flush();
                   await incoming.sink.close();
                   // Hash verify
@@ -582,37 +675,48 @@ class ConnectionService {
                     final fb = await File(incoming.path).readAsBytes();
                     final calc = sha256.convert(fb).toString();
                     if (calc != incoming.offer.sha256) {
-                      debugPrint('[ConnectionService] ❌ Hash mismatch for ${incoming.offer.fileName}');
-                      _notifyMessageListeners(DeviceMessage(
-                        type: 'text',
-                        content: 'Integrity failed: ${incoming.offer.fileName}',
-                        senderName: deviceName,
-                        timestamp: DateTime.now(),
-                      ));
+                      debugPrint(
+                        '[ConnectionService] ❌ Hash mismatch for ${incoming.offer.fileName}',
+                      );
+                      _notifyMessageListeners(
+                        DeviceMessage(
+                          type: 'text',
+                          content:
+                              'Integrity failed: ${incoming.offer.fileName}',
+                          senderName: deviceName,
+                          timestamp: DateTime.now(),
+                        ),
+                      );
                     } else {
-                      debugPrint('[ConnectionService] ✅ Hash verified for ${incoming.offer.fileName}');
-                      _notifyMessageListeners(DeviceMessage(
-                        type: 'text',
-                        content: 'File verified: ${incoming.offer.fileName}',
-                        senderName: deviceName,
-                        timestamp: DateTime.now(),
-                      ));
+                      debugPrint(
+                        '[ConnectionService] ✅ Hash verified for ${incoming.offer.fileName}',
+                      );
+                      _notifyMessageListeners(
+                        DeviceMessage(
+                          type: 'text',
+                          content: 'File verified: ${incoming.offer.fileName}',
+                          senderName: deviceName,
+                          timestamp: DateTime.now(),
+                        ),
+                      );
                     }
                   }
-                  _notifyMessageListeners(DeviceMessage(
-                    type: 'file_complete',
-                    content: incoming.offer.fileName,
-                    senderName: message.senderName,
-                    timestamp: DateTime.now(),
-                    metadata: {
-          'transferId': chunk.transferId,
-                      'path': incoming.path,
-                      'size': incoming.offer.fileSize,
-                      'mime': incoming.offer.mimeType,
-                      'received': incoming.receivedBytes,
-                      'outgoing': false,
-                    },
-                  ));
+                  _notifyMessageListeners(
+                    DeviceMessage(
+                      type: 'file_complete',
+                      content: incoming.offer.fileName,
+                      senderName: message.senderName,
+                      timestamp: DateTime.now(),
+                      metadata: {
+                        'transferId': chunk.transferId,
+                        'path': incoming.path,
+                        'size': incoming.offer.fileSize,
+                        'mime': incoming.offer.mimeType,
+                        'received': incoming.receivedBytes,
+                        'outgoing': false,
+                      },
+                    ),
+                  );
                   incoming.watchdogTimer?.cancel(); // Stop watchdog
                   _incomingFiles.remove(chunk.transferId);
 
@@ -626,7 +730,9 @@ class ConnectionService {
                   // Clean up old files on Android after each transfer (async, don't await)
                   if (Platform.isAndroid) {
                     cleanupOldReceivedFiles().catchError((e) {
-                      debugPrint('[ConnectionService] Background cleanup error: $e');
+                      debugPrint(
+                        '[ConnectionService] Background cleanup error: $e',
+                      );
                     });
                   }
 
@@ -636,93 +742,119 @@ class ConnectionService {
                     nextExpectedIndex: incoming.nextIndex,
                     completed: true,
                   );
-                  await sendMessage(DeviceMessage(
-                    type: 'file_ack',
-                    content: jsonEncode(completionAck.toJson()),
-                    senderName: deviceName,
-                  ));
-                }
-              // Handle request from receiver to resend file_offer
-              if (message.type == 'file_offer_request') {
-                try {
-                  final reqTransferId = message.content;
-                  final ot = _outgoingTransfers[reqTransferId];
-                  if (ot != null) {
-                    final offer = FileOffer(
-                      transferId: reqTransferId,
-                      fileName: ot.fileName,
-                      fileSize: ot.totalSize,
-                      mimeType: ot.mime ?? 'application/octet-stream',
-                      sha256: null,
-                    );
-                    await sendMessage(DeviceMessage(
-                      type: 'file_offer',
-                      content: ot.fileName,
-                      senderName: deviceName,
-                      metadata: {
-                        'payload': offer.toJson(),
-                        'name': ot.fileName,
-                      },
-                    ));
-                    debugPrint('[ConnectionService] 🔄 Resent file_offer for $reqTransferId');
-                  } else {
-                    debugPrint('[ConnectionService] ⚠️ Offer request: no outgoing state for $reqTransferId');
-                  }
-                } catch (e) {
-                  debugPrint('[ConnectionService] ⚠️ Failed to handle file_offer_request: $e');
-                }
-                continue;
-              }
-
-              // Handle request for ACK resend (auto-resume)
-              if (message.type == 'request_ack') {
-                try {
-                  final reqTransferId = message.content;
-                  final inc = _incomingFiles[reqTransferId];
-                  if (inc != null) {
-                    final ack = FileAck(
-                      transferId: reqTransferId,
-                      nextExpectedIndex: inc.nextIndex,
-                      completed: false,
-                    );
-                    await sendMessage(DeviceMessage(
+                  await sendMessage(
+                    DeviceMessage(
                       type: 'file_ack',
-                      content: jsonEncode(ack.toJson()),
+                      content: jsonEncode(completionAck.toJson()),
                       senderName: deviceName,
-                    ));
-                    debugPrint('[ConnectionService] 🔄 Resent ACK for $reqTransferId at index ${inc.nextIndex}');
-                  }
-                } catch (e) {
-                  debugPrint('[ConnectionService] ⚠️ Failed to resend ACK: $e');
+                    ),
+                  );
                 }
-                continue;
-              }
+                // Handle request from receiver to resend file_offer
+                if (message.type == 'file_offer_request') {
+                  try {
+                    final reqTransferId = message.content;
+                    final ot = _outgoingTransfers[reqTransferId];
+                    if (ot != null) {
+                      final offer = FileOffer(
+                        transferId: reqTransferId,
+                        fileName: ot.fileName,
+                        fileSize: ot.totalSize,
+                        mimeType: ot.mime ?? 'application/octet-stream',
+                        sha256: null,
+                      );
+                      await sendMessage(
+                        DeviceMessage(
+                          type: 'file_offer',
+                          content: ot.fileName,
+                          senderName: deviceName,
+                          metadata: {
+                            'payload': offer.toJson(),
+                            'name': ot.fileName,
+                          },
+                        ),
+                      );
+                      debugPrint(
+                        '[ConnectionService] 🔄 Resent file_offer for $reqTransferId',
+                      );
+                    } else {
+                      debugPrint(
+                        '[ConnectionService] ⚠️ Offer request: no outgoing state for $reqTransferId',
+                      );
+                    }
+                  } catch (e) {
+                    debugPrint(
+                      '[ConnectionService] ⚠️ Failed to handle file_offer_request: $e',
+                    );
+                  }
+                  continue;
+                }
+
+                // Handle request for ACK resend (auto-resume)
+                if (message.type == 'request_ack') {
+                  try {
+                    final reqTransferId = message.content;
+                    final inc = _incomingFiles[reqTransferId];
+                    if (inc != null) {
+                      final ack = FileAck(
+                        transferId: reqTransferId,
+                        nextExpectedIndex: inc.nextIndex,
+                        completed: false,
+                      );
+                      await sendMessage(
+                        DeviceMessage(
+                          type: 'file_ack',
+                          content: jsonEncode(ack.toJson()),
+                          senderName: deviceName,
+                        ),
+                      );
+                      debugPrint(
+                        '[ConnectionService] 🔄 Resent ACK for $reqTransferId at index ${inc.nextIndex}',
+                      );
+                    }
+                  } catch (e) {
+                    debugPrint(
+                      '[ConnectionService] ⚠️ Failed to resend ACK: $e',
+                    );
+                  }
+                  continue;
+                }
               }
               // Smart ACK: send when contiguous progress or buffer pressure
               final inc2 = _incomingFiles[chunk.transferId];
               if (inc2 != null) {
                 final bufferSize = inc2._chunkBuffer.length;
-                final advancedContiguously = (chunk.index == inc2.nextIndex - 1);
+                final advancedContiguously =
+                    (chunk.index == inc2.nextIndex - 1);
                 // Send ACK more frequently: every 2nd contiguous chunk or when buffer reaches half
-                final shouldAck = bufferSize > (_maxPendingChunks ~/ 2) || 
-                                  (advancedContiguously && inc2.nextIndex % 2 == 0);
-                debugPrint('[ConnectionService] 📥 Chunk ${chunk.index} received: nextIndex=${inc2.nextIndex}, bufferSize=$bufferSize, shouldAck=$shouldAck');
+                final shouldAck =
+                    bufferSize > (_maxPendingChunks ~/ 2) ||
+                    (advancedContiguously && inc2.nextIndex % 2 == 0);
+                debugPrint(
+                  '[ConnectionService] 📥 Chunk ${chunk.index} received: nextIndex=${inc2.nextIndex}, bufferSize=$bufferSize, shouldAck=$shouldAck',
+                );
                 if (shouldAck) {
                   final ack = FileAck(
                     transferId: chunk.transferId,
                     nextExpectedIndex: inc2.nextIndex,
                     completed: false,
                   );
-                  await sendMessage(DeviceMessage(
-                    type: 'file_ack',
-                    content: jsonEncode(ack.toJson()),
-                    senderName: deviceName,
-                  ));
-                  debugPrint('[ConnectionService] 📤 ACK sent for nextExpectedIndex=${inc2.nextIndex}');
+                  await sendMessage(
+                    DeviceMessage(
+                      type: 'file_ack',
+                      content: jsonEncode(ack.toJson()),
+                      senderName: deviceName,
+                    ),
+                  );
+                  debugPrint(
+                    '[ConnectionService] 📤 ACK sent for nextExpectedIndex=${inc2.nextIndex}',
+                  );
                 }
               }
             } catch (e) {
-              debugPrint('[ConnectionService] ⚠️ Failed to parse file_chunk: $e');
+              debugPrint(
+                '[ConnectionService] ⚠️ Failed to parse file_chunk: $e',
+              );
             }
             continue;
           }
@@ -734,21 +866,25 @@ class ConnectionService {
               if (inc != null) {
                 await inc.sink.close();
               }
-        // Also clear pending offers
-        _pendingOffers.remove(cancel.transferId);
+              // Also clear pending offers
+              _pendingOffers.remove(cancel.transferId);
               _outgoingTransfers.remove(cancel.transferId);
-              _notifyMessageListeners(DeviceMessage(
-                type: 'text',
-                content: 'Transfer cancelled: ${cancel.reason}',
-                senderName: message.senderName,
-                timestamp: DateTime.now(),
-              ));
+              _notifyMessageListeners(
+                DeviceMessage(
+                  type: 'text',
+                  content: 'Transfer cancelled: ${cancel.reason}',
+                  senderName: message.senderName,
+                  timestamp: DateTime.now(),
+                ),
+              );
             } catch (e) {
-              debugPrint('[ConnectionService] ⚠️ Failed to parse file_cancel: $e');
+              debugPrint(
+                '[ConnectionService] ⚠️ Failed to parse file_cancel: $e',
+              );
             }
             continue;
           }
-          
+
           // Handle ping/pong messages for keep-alive (don't notify listeners)
           if (message.type == 'ping') {
             debugPrint('[ConnectionService] 🏓 Received ping, sending pong');
@@ -759,7 +895,9 @@ class ConnectionService {
             );
             sendMessage(pong);
           } else if (message.type == 'pong') {
-            debugPrint('[ConnectionService] 🏓 Received pong (connection alive)');
+            debugPrint(
+              '[ConnectionService] 🏓 Received pong (connection alive)',
+            );
           } else {
             // Normal message - notify listeners
             _notifyMessageListeners(message);
@@ -788,12 +926,20 @@ class ConnectionService {
       debugPrint('[ConnectionService] ⚠️ Not connected; cannot send file');
       return;
     }
-    final result = await FilePicker.platform.pickFiles(withReadStream: true, allowMultiple: true);
+
+    final result = await FilePicker.platform.pickFiles(
+      withReadStream: true,
+      allowMultiple: true,
+    );
+
     if (result == null || result.files.isEmpty) return;
+
     for (final file in result.files) {
       final name = file.name;
       final size = file.size;
-      final mime = file.extension != null ? 'application/${file.extension}' : 'application/octet-stream';
+      final mime = file.extension != null
+          ? 'application/${file.extension}'
+          : 'application/octet-stream';
       final transferId = generateTransferId();
 
       // Optional: compute sha256 in isolate for integrity
@@ -811,15 +957,15 @@ class ConnectionService {
         mimeType: mime,
         sha256: sha,
       );
-      await sendMessage(DeviceMessage(
-        type: 'file_offer',
-        content: name, // provide filename directly for dialog display
-        senderName: deviceName,
-        metadata: {
-          'payload': offer.toJson(),
-          'name': name,
-        },
-      ));
+
+      await sendMessage(
+        DeviceMessage(
+          type: 'file_offer',
+          content: name, // provide filename directly for dialog display
+          senderName: deviceName,
+          metadata: {'payload': offer.toJson(), 'name': name},
+        ),
+      );
 
       // Stream chunks
       const chunkSize = 256 * 1024; // 256KB per chunk for maximum throughput
@@ -835,44 +981,44 @@ class ConnectionService {
         mime: mime,
         path: file.path,
       );
-      
-      // Show "Sending..." message immediately
-      // _notifyMessageListeners(DeviceMessage(
-      //   type: 'text',
-      //   content: 'Sending: $name (${_formatFileSize(size)})',
-      //   senderName: deviceName,
-      //   timestamp: DateTime.now(),
-      // ));
-      
+
       // Emit initial progress event to render UI tile
-      _notifyMessageListeners(DeviceMessage(
-        type: 'file_progress',
-        content: name,
-        senderName: deviceName,
-        timestamp: DateTime.now(),
-        metadata: {
-          'transferId': transferId,
-          'bytes': 0,
-          'total': size,
-          'mime': mime,
-          'outgoing': true,
-        },
-      ));
+      _notifyMessageListeners(
+        DeviceMessage(
+          type: 'file_progress',
+          content: name,
+          senderName: deviceName,
+          timestamp: DateTime.now(),
+          metadata: {
+            'transferId': transferId,
+            'bytes': 0,
+            'total': size,
+            'mime': mime,
+            'outgoing': true,
+          },
+        ),
+      );
 
       // Wait for initial ACK (nextExpectedIndex = 0) which is sent after receiver accepts
       final starter = _outgoingTransfers[transferId];
       if (starter != null) {
         starter.chunkPermit = Completer<void>();
-        debugPrint('[ConnectionService] ⏳ Waiting for initial ACK for transfer $transferId');
+        debugPrint(
+          '[ConnectionService] ⏳ Waiting for initial ACK for transfer $transferId',
+        );
         try {
           await starter.chunkPermit!.future.timeout(
             const Duration(seconds: 10),
             onTimeout: () {
-              debugPrint('[ConnectionService] ⚠️ Initial ACK timeout for $transferId');
+              debugPrint(
+                '[ConnectionService] ⚠️ Initial ACK timeout for $transferId',
+              );
               throw TimeoutException('No initial ACK received');
             },
           );
-          debugPrint('[ConnectionService] ✅ Initial ACK received, starting chunk stream for $transferId');
+          debugPrint(
+            '[ConnectionService] ✅ Initial ACK received, starting chunk stream for $transferId',
+          );
           // Start watchdog for sender side
           _startOutgoingWatchdog(transferId);
         } catch (e) {
@@ -890,15 +1036,19 @@ class ConnectionService {
           // Wait for permit if previous chunk not acked
           final ot = _outgoingTransfers[transferId];
           if (ot == null) break; // Cancelled
-          
+
           final pendingChunks = index - ot.lastAckIndex - 1;
           if (pendingChunks >= _maxPendingChunks) {
             ot.chunkPermit = Completer<void>();
-            debugPrint('[ConnectionService] ⏳ Flow control: waiting at chunk $index (pending=$pendingChunks, lastAck=${ot.lastAckIndex})');
+            debugPrint(
+              '[ConnectionService] ⏳ Flow control: waiting at chunk $index (pending=$pendingChunks, lastAck=${ot.lastAckIndex})',
+            );
             await ot.chunkPermit!.future;
-            debugPrint('[ConnectionService] ✅ Flow control released at chunk $index');
+            debugPrint(
+              '[ConnectionService] ✅ Flow control released at chunk $index',
+            );
           }
-          
+
           // Record chunk size for accurate progress
           ot.chunkSizes[index] = slice.length;
           final chunk = FileChunk(
@@ -907,7 +1057,14 @@ class ConnectionService {
             dataBase64: base64Encode(slice),
             isLast: false,
           );
-          await _sendRaw(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': chunk.toJson()}));
+          await _sendRaw(
+            DeviceMessage(
+              type: 'file_chunk',
+              content: '',
+              senderName: deviceName,
+              metadata: {'payload': chunk.toJson()},
+            ),
+          );
           ot.resetWatchdog(); // Reset on successful chunk send
           offset = end;
         }
@@ -918,7 +1075,9 @@ class ConnectionService {
         final pendingChunks = index - otFinal.lastAckIndex - 1;
         if (pendingChunks >= _maxPendingChunks) {
           otFinal.chunkPermit = Completer<void>();
-          debugPrint('[ConnectionService] ⏳ Final: waiting for ACK (pending=$pendingChunks)');
+          debugPrint(
+            '[ConnectionService] ⏳ Final: waiting for ACK (pending=$pendingChunks)',
+          );
           await otFinal.chunkPermit!.future;
         }
         final finalChunk = FileChunk(
@@ -928,7 +1087,15 @@ class ConnectionService {
           isLast: true,
         );
         otFinal.completer = Completer<void>();
-        await _sendRaw(DeviceMessage(type: 'file_chunk', content: '', senderName: deviceName, metadata: {'payload': finalChunk.toJson()}), forceFlush: true);
+        await _sendRaw(
+          DeviceMessage(
+            type: 'file_chunk',
+            content: '',
+            senderName: deviceName,
+            metadata: {'payload': finalChunk.toJson()},
+          ),
+          forceFlush: true,
+        );
         await otFinal.completer!.future; // Wait for final ack
       }
     }
@@ -978,50 +1145,84 @@ class ConnectionService {
       nextIndex: 0,
     );
     // Inform UI about chosen path
-    _notifyMessageListeners(DeviceMessage(
-      type: 'file_progress',
-      content: offer.fileName,
-      senderName: deviceName,
-      timestamp: DateTime.now(),
-      metadata: {
-        'transferId': offer.transferId,
-        'bytes': 0,
-        'total': offer.fileSize,
-        'outgoing': false,
-        'path': path,
-      },
-    ));
+    _notifyMessageListeners(
+      DeviceMessage(
+        type: 'file_progress',
+        content: offer.fileName,
+        senderName: deviceName,
+        timestamp: DateTime.now(),
+        metadata: {
+          'transferId': offer.transferId,
+          'bytes': 0,
+          'total': offer.fileSize,
+          'outgoing': false,
+          'path': path,
+        },
+      ),
+    );
     // Send initial ack to let sender start
-    final ack = FileAck(transferId: offer.transferId, nextExpectedIndex: 0, completed: false);
-    await sendMessage(DeviceMessage(type: 'file_ack', content: jsonEncode(ack.toJson()), senderName: deviceName));
-    debugPrint('[ConnectionService] 📤 Initial ACK sent for transfer ${offer.transferId}');
+    final ack = FileAck(
+      transferId: offer.transferId,
+      nextExpectedIndex: 0,
+      completed: false,
+    );
+    await sendMessage(
+      DeviceMessage(
+        type: 'file_ack',
+        content: jsonEncode(ack.toJson()),
+        senderName: deviceName,
+      ),
+    );
+    debugPrint(
+      '[ConnectionService] 📤 Initial ACK sent for transfer ${offer.transferId}',
+    );
     // Start watchdog for receiver side
     _startIncomingWatchdog(offer.transferId);
   }
 
   /// Decline a pending incoming file offer
-  Future<void> declineFileOffer(String transferId, {String reason = 'Declined by receiver'}) async {
+  Future<void> declineFileOffer(
+    String transferId, {
+    String reason = 'Declined by receiver',
+  }) async {
     final offer = _pendingOffers.remove(transferId);
     if (offer == null) return;
     final cancel = FileCancel(transferId: transferId, reason: reason);
-    await sendMessage(DeviceMessage(type: 'file_cancel', content: jsonEncode(cancel.toJson()), senderName: deviceName));
+    await sendMessage(
+      DeviceMessage(
+        type: 'file_cancel',
+        content: jsonEncode(cancel.toJson()),
+        senderName: deviceName,
+      ),
+    );
   }
 
-  Future<void> cancelTransfer(String transferId, {String reason = 'Cancelled by user'}) async {
+  Future<void> cancelTransfer(
+    String transferId, {
+    String reason = 'Cancelled by user',
+  }) async {
     // Notify remote
     final cancel = FileCancel(transferId: transferId, reason: reason);
-    await sendMessage(DeviceMessage(type: 'file_cancel', content: jsonEncode(cancel.toJson()), senderName: deviceName));
+    await sendMessage(
+      DeviceMessage(
+        type: 'file_cancel',
+        content: jsonEncode(cancel.toJson()),
+        senderName: deviceName,
+      ),
+    );
     // Clean local state
     final inc = _incomingFiles.remove(transferId);
     if (inc != null) {
       inc.watchdogTimer?.cancel(); // Stop watchdog
-      try { await inc.sink.close(); } catch (_) {}
+      try {
+        await inc.sink.close();
+      } catch (_) {}
     }
     final out = _outgoingTransfers.remove(transferId);
     if (out != null) {
       out.watchdogTimer?.cancel(); // Stop watchdog
     }
-  _pendingOffers.remove(transferId);
+    _pendingOffers.remove(transferId);
   }
 
   /// Ask the peer (receiver) to resend its last ACK for a stuck outgoing transfer
@@ -1044,7 +1245,9 @@ class ConnectionService {
     try {
       final inc = _incomingFiles[transferId];
       if (inc == null) {
-        debugPrint('[ConnectionService] No incoming state to resume for $transferId');
+        debugPrint(
+          '[ConnectionService] No incoming state to resume for $transferId',
+        );
         return;
       }
       final ack = FileAck(
@@ -1052,12 +1255,16 @@ class ConnectionService {
         nextExpectedIndex: inc.nextIndex,
         completed: false,
       );
-      await sendMessage(DeviceMessage(
-        type: 'file_ack',
-        content: jsonEncode(ack.toJson()),
-        senderName: deviceName,
-      ));
-      debugPrint('[ConnectionService] 🔁 Resent ACK for $transferId at index ${inc.nextIndex}');
+      await sendMessage(
+        DeviceMessage(
+          type: 'file_ack',
+          content: jsonEncode(ack.toJson()),
+          senderName: deviceName,
+        ),
+      );
+      debugPrint(
+        '[ConnectionService] 🔁 Resent ACK for $transferId at index ${inc.nextIndex}',
+      );
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️ Failed to resume incoming: $e');
     }
@@ -1066,13 +1273,17 @@ class ConnectionService {
   /// Handle connection error
   void _handleConnectionError(String error) {
     _consecutiveErrors++;
-    debugPrint('[ConnectionService] ⚠️ Socket error #$_consecutiveErrors: $error');
+    debugPrint(
+      '[ConnectionService] ⚠️ Socket error #$_consecutiveErrors: $error',
+    );
 
     // Reset error count after 10 seconds of no errors
     _errorResetTimer?.cancel();
     _errorResetTimer = Timer(const Duration(seconds: 10), () {
       if (_consecutiveErrors > 0) {
-        debugPrint('[ConnectionService] 🔄 Resetting error count after timeout');
+        debugPrint(
+          '[ConnectionService] 🔄 Resetting error count after timeout',
+        );
         _consecutiveErrors = 0;
       }
     });
@@ -1080,12 +1291,16 @@ class ConnectionService {
     // Only mark as disconnected after multiple consecutive errors (not failed)
     // This prevents removal from activeConnections, allowing UI to show disconnected state
     if (_consecutiveErrors >= _maxConsecutiveErrors) {
-      debugPrint('[ConnectionService] ❌ Too many consecutive errors, marking connection as disconnected (not failed)');
+      debugPrint(
+        '[ConnectionService] ❌ Too many consecutive errors, marking connection as disconnected (not failed)',
+      );
       if (_currentConnection != null) {
-        _updateStatus(_currentConnection!.copyWith(
-          status: ConnectionStatus.disconnected,
-          error: 'Connection lost: $error',
-        ));
+        _updateStatus(
+          _currentConnection!.copyWith(
+            status: ConnectionStatus.disconnected,
+            error: 'Connection lost: $error',
+          ),
+        );
       }
       _consecutiveErrors = 0; // Reset for potential reconnection
     }
@@ -1099,16 +1314,8 @@ class ConnectionService {
 
   /// Notify message listeners
   void _notifyMessageListeners(DeviceMessage message) {
-    // Persist only user-relevant messages to history to avoid duplicate technical entries.
-    const historyTypes = {
-      'text',
-      'file_complete',
-      // 'file_offer' removed - offers are prompts, not chat messages
-      'goodbye',
-      // add future types here (e.g. 'reaction')
-    };
+    const historyTypes = {'text', 'file_complete', 'goodbye'};
     if (historyTypes.contains(message.type)) {
-      // Avoid consecutive duplicates for file_complete with same name
       if (message.type == 'file_complete' && _messageHistory.isNotEmpty) {
         final last = _messageHistory.last;
         if (last.type == 'file_complete' && last.content == message.content) {
@@ -1124,7 +1331,9 @@ class ConnectionService {
       try {
         listener(message);
       } catch (e) {
-        debugPrint('[ConnectionService] ❌ Error notifying message listener: $e');
+        debugPrint(
+          '[ConnectionService] ❌ Error notifying message listener: $e',
+        );
       }
     }
   }
@@ -1145,11 +1354,9 @@ class ConnectionService {
 
   /// Disconnect from current device
   Future<void> disconnect() async {
-    debugPrint('[ConnectionService] 🔌 DISCONNECT CALLED for ${_currentConnection?.deviceName ?? "unknown"}');
-    debugPrint('[ConnectionService] 🔌 Current status: ${_currentConnection?.status}, socket: ${_socket != null}, timer: ${_keepAliveTimer != null}');
-
     // Send goodbye message if connected
-    if (_socket != null && _currentConnection?.status == ConnectionStatus.connected) {
+    if (_socket != null &&
+        _currentConnection?.status == ConnectionStatus.connected) {
       try {
         final goodbye = DeviceMessage(
           type: 'goodbye',
@@ -1158,7 +1365,9 @@ class ConnectionService {
         );
         await sendMessage(goodbye);
       } catch (e) {
-        debugPrint('[ConnectionService] ⚠️  Could not send goodbye message: $e');
+        debugPrint(
+          '[ConnectionService] ⚠️  Could not send goodbye message: $e',
+        );
       }
     }
 
@@ -1167,10 +1376,14 @@ class ConnectionService {
     _socketSubscription = null;
 
     // Stop keep-alive timer
-    debugPrint('[ConnectionService] 🛑 Cancelling keep-alive timer (was ${_keepAliveTimer != null ? "active" : "null"})');
+    debugPrint(
+      '[ConnectionService] 🛑 Cancelling keep-alive timer (was ${_keepAliveTimer != null ? "active" : "null"})',
+    );
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
-    debugPrint('[ConnectionService] 🛑 Keep-alive timer cancelled and nullified');
+    debugPrint(
+      '[ConnectionService] 🛑 Keep-alive timer cancelled and nullified',
+    );
 
     // Stop all watchdog timers
     for (final transfer in _incomingFiles.values) {
@@ -1180,7 +1393,6 @@ class ConnectionService {
       transfer.watchdogTimer?.cancel();
     }
 
-    // Close socket
     try {
       await _socket?.close();
     } catch (e) {
@@ -1193,39 +1405,38 @@ class ConnectionService {
 
     // Update status
     if (_currentConnection != null) {
-      _updateStatus(_currentConnection!.copyWith(
-        status: ConnectionStatus.disconnected,
-      ));
+      _updateStatus(
+        _currentConnection!.copyWith(status: ConnectionStatus.disconnected),
+      );
     }
-
     debugPrint('[ConnectionService] ✅ Disconnected');
   }
 
   /// Start keep-alive timer to prevent connection timeout
   void _startKeepAlive() {
-    debugPrint('[ConnectionService] 🔄 Starting keep-alive timer (cancelling old one first if exists)');
     _keepAliveTimer?.cancel();
     _keepAliveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      debugPrint('[ConnectionService] ⏰ Keep-alive timer fired: socket=${_socket != null}, isConnected=$isConnected');
       if (_socket != null && isConnected) {
         final ping = DeviceMessage(
           type: 'ping',
           content: 'keep-alive',
           senderName: deviceName,
         );
-        debugPrint('[ConnectionService] 📤 Sending keep-alive ping to ${_currentConnection?.deviceName ?? "unknown"}');
         sendMessage(ping).then((success) {
           if (!success) {
             debugPrint('[ConnectionService] ⚠️  Keep-alive ping failed');
           } else {
-            debugPrint('[ConnectionService] ✅ Keep-alive ping sent successfully');
+            debugPrint(
+              '[ConnectionService] ✅ Keep-alive ping sent successfully',
+            );
           }
         });
       } else {
-        debugPrint('[ConnectionService] ⏸️  Keep-alive timer fired but NOT sending (socket=${_socket != null}, isConnected=$isConnected)');
+        debugPrint(
+          '[ConnectionService] ⏸️  Keep-alive timer fired but NOT sending (socket=${_socket != null}, isConnected=$isConnected)',
+        );
       }
     });
-    debugPrint('[ConnectionService] 🔄 Keep-alive timer started successfully');
   }
 
   /// Start watchdog for outgoing transfer - auto-resume if stalled
@@ -1234,25 +1445,35 @@ class ConnectionService {
     if (transfer == null) return;
 
     transfer.watchdogTimer?.cancel();
-    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (
+      timer,
+    ) async {
       final ot = _outgoingTransfers[transferId];
       if (ot == null) {
         timer.cancel();
         return;
       }
 
-      final timeSinceActivity = DateTime.now().difference(ot.lastActivity).inSeconds;
-      if (timeSinceActivity > 5 && ot.chunkPermit != null && !ot.chunkPermit!.isCompleted) {
+      final timeSinceActivity = DateTime.now()
+          .difference(ot.lastActivity)
+          .inSeconds;
+      if (timeSinceActivity > 5 &&
+          ot.chunkPermit != null &&
+          !ot.chunkPermit!.isCompleted) {
         // Transfer appears stalled - auto-resume
         ot.resumeAttempts++;
         if (ot.resumeAttempts <= 3) {
-          debugPrint('[ConnectionService] 🔄 Auto-resuming stalled outgoing transfer $transferId (attempt ${ot.resumeAttempts})');
+          debugPrint(
+            '[ConnectionService] 🔄 Auto-resuming stalled outgoing transfer $transferId (attempt ${ot.resumeAttempts})',
+          );
           // Request receiver to resend ACK for current state
-          await sendMessage(DeviceMessage(
-            type: 'request_ack',
-            content: transferId,
-            senderName: deviceName,
-          ));
+          await sendMessage(
+            DeviceMessage(
+              type: 'request_ack',
+              content: transferId,
+              senderName: deviceName,
+            ),
+          );
           // Release permit to allow progress
           if (ot.chunkPermit != null && !ot.chunkPermit!.isCompleted) {
             ot.chunkPermit!.complete();
@@ -1260,7 +1481,9 @@ class ConnectionService {
           }
           ot.resetWatchdog();
         } else {
-          debugPrint('[ConnectionService] ❌ Outgoing transfer $transferId failed after ${ot.resumeAttempts} resume attempts');
+          debugPrint(
+            '[ConnectionService] ❌ Outgoing transfer $transferId failed after ${ot.resumeAttempts} resume attempts',
+          );
           timer.cancel();
         }
       }
@@ -1273,28 +1496,36 @@ class ConnectionService {
     if (transfer == null) return;
 
     transfer.watchdogTimer?.cancel();
-    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (
+      timer,
+    ) async {
       final inc = _incomingFiles[transferId];
       if (inc == null) {
         timer.cancel();
         return;
       }
 
-      final timeSinceActivity = DateTime.now().difference(inc.lastActivity).inSeconds;
+      final timeSinceActivity = DateTime.now()
+          .difference(inc.lastActivity)
+          .inSeconds;
       if (timeSinceActivity > 5) {
         // No chunks received recently - request sender to resume
-        debugPrint('[ConnectionService] 🔄 Auto-resuming stalled incoming transfer $transferId');
+        debugPrint(
+          '[ConnectionService] 🔄 Auto-resuming stalled incoming transfer $transferId',
+        );
         // Send ACK with current nextIndex to tell sender where to resume
         final ack = FileAck(
           transferId: transferId,
           nextExpectedIndex: inc.nextIndex,
           completed: false,
         );
-        await sendMessage(DeviceMessage(
-          type: 'file_ack',
-          content: jsonEncode(ack.toJson()),
-          senderName: deviceName,
-        ));
+        await sendMessage(
+          DeviceMessage(
+            type: 'file_ack',
+            content: jsonEncode(ack.toJson()),
+            senderName: deviceName,
+          ),
+        );
         inc.resetWatchdog();
       }
     });
@@ -1307,18 +1538,20 @@ class ConnectionService {
       debugPrint('[ConnectionService] 🧹 Cleanup skipped - not Android');
       return;
     }
-    
+
     try {
       final docsDir = await getApplicationDocumentsDirectory();
       final now = DateTime.now();
       int deletedCount = 0;
       int deletedBytes = 0;
       int totalFiles = 0;
-      
-      debugPrint('[ConnectionService] 🧹 Starting cleanup: files older than $olderThanDays days');
+
+      debugPrint(
+        '[ConnectionService] 🧹 Starting cleanup: files older than $olderThanDays days',
+      );
       debugPrint('[ConnectionService] 📂 Directory: ${docsDir.path}');
       debugPrint('[ConnectionService] 🕐 Current time: $now');
-      
+
       await for (final entity in docsDir.list()) {
         if (entity is File) {
           totalFiles++;
@@ -1326,40 +1559,55 @@ class ConnectionService {
             final stat = await entity.stat();
             final age = now.difference(stat.modified).inDays;
             final fileName = entity.path.split('/').last;
-            
-            debugPrint('[ConnectionService] 📄 File: $fileName, Modified: ${stat.modified}, Age: $age days');
-            
+
+            debugPrint(
+              '[ConnectionService] 📄 File: $fileName, Modified: ${stat.modified}, Age: $age days',
+            );
+
             if (age > olderThanDays) {
               final size = await entity.length();
               await entity.delete();
               deletedCount++;
               deletedBytes += size;
-              debugPrint('[ConnectionService] ✅ Deleted: $fileName (${age} days old, ${(size / 1024 / 1024).toStringAsFixed(2)} MB)');
+              debugPrint(
+                '[ConnectionService] ✅ Deleted: $fileName (${age} days old, ${(size / 1024 / 1024).toStringAsFixed(2)} MB)',
+              );
             } else {
-              debugPrint('[ConnectionService] ⏭️  Kept: $fileName (only $age days old)');
+              debugPrint(
+                '[ConnectionService] ⏭️  Kept: $fileName (only $age days old)',
+              );
             }
           } catch (e) {
-            debugPrint('[ConnectionService] ⚠️ Error processing file ${entity.path}: $e');
+            debugPrint(
+              '[ConnectionService] ⚠️ Error processing file ${entity.path}: $e',
+            );
           }
         }
       }
-      
-      debugPrint('[ConnectionService] 📊 Scan complete: $totalFiles files found');
-      
+
+      debugPrint(
+        '[ConnectionService] 📊 Scan complete: $totalFiles files found',
+      );
+
       if (deletedCount > 0) {
         final freedMB = deletedBytes / 1024 / 1024;
-        debugPrint('[ConnectionService] ✅ Cleanup complete: Deleted $deletedCount files, freed ${freedMB.toStringAsFixed(2)} MB');
-        
+        debugPrint(
+          '[ConnectionService] ✅ Cleanup complete: Deleted $deletedCount files, freed ${freedMB.toStringAsFixed(2)} MB',
+        );
+
         // Show notification if significant storage freed (>10 MB)
         if (freedMB > 10) {
           NotificationService().showNotification(
             type: NotificationType.fileTransferCompleted,
             title: 'Storage Cleanup',
-            body: 'Freed ${freedMB.toStringAsFixed(1)} MB by removing $deletedCount old files',
+            body:
+                'Freed ${freedMB.toStringAsFixed(1)} MB by removing $deletedCount old files',
           );
         }
       } else {
-        debugPrint('[ConnectionService] ✅ Cleanup complete: No old files to delete (scanned $totalFiles files)');
+        debugPrint(
+          '[ConnectionService] ✅ Cleanup complete: No old files to delete (scanned $totalFiles files)',
+        );
       }
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️ Cleanup failed: $e');
@@ -1368,15 +1616,17 @@ class ConnectionService {
 
   /// Dispose the service
   Future<void> dispose() async {
-    debugPrint('[ConnectionService] 🗑️  DISPOSE called for ${_currentConnection?.deviceName ?? deviceName} ($hashCode)');
+    debugPrint(
+      '[ConnectionService] 🗑️  DISPOSE called for ${_currentConnection?.deviceName ?? deviceName} ($hashCode)',
+    );
     await disconnect();
     _errorResetTimer?.cancel();
     _messageListeners.clear();
     _statusListeners.clear();
-    debugPrint('[ConnectionService] 🗑️  DISPOSE completed for ${_currentConnection?.deviceName ?? deviceName} ($hashCode)');
+    debugPrint(
+      '[ConnectionService] 🗑️  DISPOSE completed for ${_currentConnection?.deviceName ?? deviceName} ($hashCode)',
+    );
   }
-  
-  // removed unused _formatFileSize helper
 }
 
 class _IncomingFile {
@@ -1420,20 +1670,27 @@ class _IncomingFile {
         receivedBytes += bufferedBytes.length;
         nextIndex++;
       }
-      debugPrint('[ConnectionService] ✅ Processed chunk ${chunk.index}, next expected: $nextIndex, buffered: ${_chunkBuffer.length}');
+      debugPrint(
+        '[ConnectionService] ✅ Processed chunk ${chunk.index}, next expected: $nextIndex, buffered: ${_chunkBuffer.length}',
+      );
     } else if (chunk.index > nextIndex) {
       // Future chunk, buffer it
       _chunkBuffer[chunk.index] = bytes;
-      debugPrint('[ConnectionService] 📦 Buffered chunk ${chunk.index} for transfer (expecting $nextIndex), buffer size: ${_chunkBuffer.length}');
+      debugPrint(
+        '[ConnectionService] 📦 Buffered chunk ${chunk.index} for transfer (expecting $nextIndex), buffer size: ${_chunkBuffer.length}',
+      );
     } else {
       // Duplicate or past chunk, ignore
-      debugPrint('[ConnectionService] ⚠️ Ignoring duplicate/past chunk ${chunk.index} (expecting $nextIndex)');
+      debugPrint(
+        '[ConnectionService] ⚠️ Ignoring duplicate/past chunk ${chunk.index} (expecting $nextIndex)',
+      );
     }
   }
 
   // Check if transfer is complete (all chunks received up to the final marker)
   bool isComplete() {
-    return _chunkBuffer.isEmpty; // All chunks should be written when buffer is empty
+    return _chunkBuffer
+        .isEmpty; // All chunks should be written when buffer is empty
   }
 }
 

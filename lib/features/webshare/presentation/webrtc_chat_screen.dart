@@ -21,7 +21,7 @@ import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
 import 'package:cpft/shared/widgets/app_action_button.dart';
 import 'package:cpft/features/chat/models/transfer_progress.dart';
-import 'package:cpft/features/chat/presentation/widgets/transfer_progress_tile.dart';
+import 'package:cpft/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
 import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:cpft/features/webshare/presentation/widgets/file_card.dart';

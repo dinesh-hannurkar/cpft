@@ -10,7 +10,7 @@ import 'services/notification_service.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/chat/presentation/chat_screen.dart';
 import 'features/chat/services/connection_service.dart';
-import 'common/theme/theme/app_theme.dart';
+import 'common/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
 import 'features/webshare/presentation/web_room_entry_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';

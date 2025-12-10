@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../models/transfer_progress.dart';
-import '../../utils/file_utils.dart';
-import 'file_type_icon.dart';
+import '../../../models/transfer_progress.dart';
+import '../../../utils/file_utils.dart';
+import '../file_type_icon.dart';
 
 class TransferProgressTile extends StatelessWidget {
   final TransferProgress progress;

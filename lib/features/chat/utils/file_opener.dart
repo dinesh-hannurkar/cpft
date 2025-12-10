@@ -20,9 +20,9 @@ class FileOpener {
     } catch (e) {
       debugPrint('[FileOpener] Error opening file: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening file: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error opening file: $e')));
       }
     }
   }
@@ -51,12 +51,16 @@ class FileOpener {
       type: 'application/vnd.android.package-archive',
     );
 
-    debugPrint('[FileOpener] APK open result: ${result.type} - ${result.message}');
+    debugPrint(
+      '[FileOpener] APK open result: ${result.type} - ${result.message}',
+    );
 
     if (result.type != ResultType.done) {
       // Fallback: try without type specification
       result = await OpenFilex.open(filePath);
-      debugPrint('[FileOpener] APK open fallback result: ${result.type} - ${result.message}');
+      debugPrint(
+        '[FileOpener] APK open fallback result: ${result.type} - ${result.message}',
+      );
     }
 
     if (result.type != ResultType.done && context.mounted) {
@@ -72,7 +76,9 @@ class FileOpener {
     String fileName,
   ) async {
     final result = await OpenFilex.open(filePath);
-    debugPrint('[FileOpener] Open file result: ${result.type} - ${result.message}');
+    debugPrint(
+      '[FileOpener] Open file result: ${result.type} - ${result.message}',
+    );
 
     if (result.type != ResultType.done) {
       debugPrint('[FileOpener] Cannot open file directly, opening folder...');
@@ -100,9 +106,9 @@ class FileOpener {
       SnackBar(
         content: Text(
           'Permission required to install APK files.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.white,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
         ),
         duration: const Duration(seconds: 30),
         action: SnackBarAction(
@@ -138,9 +144,9 @@ class FileOpener {
     } catch (e) {
       debugPrint('[FileOpener] Error revealing file: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('File at: $filePath')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('File at: $filePath')));
       }
     }
   }
