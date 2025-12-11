@@ -1,25 +1,23 @@
 import 'package:cpft/features/chat/utils/file_utils.dart';
+import 'package:cpft/features/webshare/helpers/received_file.dart';
+import 'package:cpft/features/webshare/helpers/shared_file.dart';
 import 'package:cpft/features/webshare/presentation/widgets/file_card.dart';
 import 'package:cpft/features/webshare/presentation/widgets/qr_image_section.dart';
 import 'package:cpft/features/webshare/presentation/widgets/qr_link_chip.dart';
 import 'package:cpft/features/webshare/presentation/widgets/received_file_item.dart';
-import 'package:cpft/features/webshare/presentation/widgets/status_indicator.dart';
 import 'package:cpft/features/webshare/presentation/widgets/upload_progress.dart';
 import 'package:cpft/features/webshare/presentation/widgets/uploading_file_item.dart';
+import 'package:cpft/features/webshare/presentation/widgets/web_rtc_connection_bottomsheet.dart';
 import 'package:cpft/features/webshare/services/web_server.dart';
 import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
-// Removed unused imports flagged by analyzer
 import 'package:cpft/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
-// import 'package:cpft/features/webshare/services/web_download.dart';
 import 'package:cpft/features/webshare/services/web_received_cache.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'dart:io'
     if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
 import 'dart:async';
-// import 'package:open_filex/open_filex.dart';
-// import 'package:share_plus/share_plus.dart';
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_action_button.dart';
 import '../../../shared/widgets/app_bottom_sheet.dart';
@@ -548,12 +546,9 @@ class _WebShareScreenState extends State<WebShareScreen>
   }
 
   Future<void> _pickAndShareFile() async {
-    // Check if we can share files
     if (_transferMode) {
-      // HTTP mode
       if (!_webShareService.isRunning) return;
     } else {
-      // WebRTC mode
       if (!_webrtcService.connectionEstablished.value) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -569,13 +564,13 @@ class _WebShareScreenState extends State<WebShareScreen>
 
     final result = await FilePicker.platform.pickFiles(
       withReadStream: false,
-      withData: kIsWeb, // ensure bytes are available on web
+      withData: kIsWeb,
     );
+
     if (result == null || result.files.isEmpty) return;
     final selected = result.files.first;
     String? path;
     if (!kIsWeb) {
-      // On web, accessing PlatformFile.path throws. Never touch it there.
       path = selected.path;
     }
 
@@ -649,7 +644,7 @@ class _WebShareScreenState extends State<WebShareScreen>
             'Please enter a code',
             style: TextStyle(color: Colors.white),
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.red,
         ),
       );
       return;
@@ -675,7 +670,6 @@ class _WebShareScreenState extends State<WebShareScreen>
             deviceName: widget.deviceName,
             disposeServiceOnClose: false,
             onDisconnect: () {
-              // Handle disconnect - go back to room joining screen
               Navigator.of(context).pop();
             },
           ),
@@ -692,11 +686,8 @@ class _WebShareScreenState extends State<WebShareScreen>
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            friendly,
-            style: const TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
+          content: Text(friendly, style: const TextStyle(color: Colors.white)),
+          backgroundColor: AppColors.red,
         ),
       );
     } finally {
@@ -717,7 +708,6 @@ class _WebShareScreenState extends State<WebShareScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icon
               Container(
                 width: 80,
                 height: 80,
@@ -731,7 +721,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                 ),
                 child: const Icon(
                   Icons.group_add,
-                  color: Colors.white,
+                  color: AppColors.white,
                   size: 40,
                 ),
               ),
@@ -759,18 +749,19 @@ class _WebShareScreenState extends State<WebShareScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.error_outline, color: Colors.red.shade700),
+                      Icon(Icons.error_outline, color: AppColors.red),
                       const SizedBox(width: AppSizes.sm),
                       Expanded(
                         child: Text(
                           _joinErrorMessage!,
-                          style: TextStyle(color: Colors.red.shade800),
+                          style: TextStyle(color: AppColors.red),
                         ),
                       ),
                       IconButton(
-                        onPressed: () => setState(() => _joinErrorMessage = null),
+                        onPressed: () =>
+                            setState(() => _joinErrorMessage = null),
                         icon: const Icon(Icons.close),
-                        color: Colors.red.shade700,
+                        color: AppColors.red,
                         tooltip: 'Dismiss',
                       ),
                     ],
@@ -780,20 +771,20 @@ class _WebShareScreenState extends State<WebShareScreen>
               // Description
               Text(
                 'Enter a code to connect with another device for peer-to-peer file sharing.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.greyDark,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.greyDark),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSizes.xl),
               // Code input
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
+                      color: AppColors.darkPrimary.withValues(alpha: 0.05),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -835,7 +826,7 @@ class _WebShareScreenState extends State<WebShareScreen>
                       : () => _joinWebRTCRoom(_roomIdController.text.trim()),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: AppSizes.md),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -848,7 +839,9 @@ class _WebShareScreenState extends State<WebShareScreen>
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text(
@@ -864,9 +857,9 @@ class _WebShareScreenState extends State<WebShareScreen>
               // Helper text
               Text(
                 'Both devices must enter the same code to connect.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.greyLight,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.greyLight),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -890,9 +883,6 @@ class _WebShareScreenState extends State<WebShareScreen>
 
     final services = await _webShareService.discoverHttpServices();
 
-    debugPrint(
-      '[WebShareScreen] 📡 Discovery complete. Found ${services.length} services',
-    );
     for (var service in services) {
       debugPrint('[WebShareScreen] Service: ${service['instance']}');
       debugPrint('[WebShareScreen]   - URL: ${service['url']}');
@@ -1088,11 +1078,13 @@ class _WebShareScreenState extends State<WebShareScreen>
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppColors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
+                                color: AppColors.darkPrimary.withValues(
+                                  alpha: 0.05,
+                                ),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -1212,13 +1204,10 @@ class _WebShareScreenState extends State<WebShareScreen>
                               },
                             ),
                             const SizedBox(height: AppSizes.sm),
-                            // Hostname link chip (shows loading until hostname)
                             QrLinkChip(webShareService: _webShareService),
                           ],
-                          // Network connection status
                           NetworkBanner(networkName: _networkName),
                           const SizedBox(height: AppSizes.sm),
-                          // Local network readiness indicator for WebRTC
                           if (!_transferMode) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -1260,9 +1249,12 @@ class _WebShareScreenState extends State<WebShareScreen>
                                   Text(
                                     (_networkName != null &&
                                             _networkName != 'Not Connected')
-                                        ? (_networkName?.toLowerCase().contains('local') == true
-                                            ? 'Personal Hotspot is active'
-                                            : 'Connected to $_networkName')
+                                        ? (_networkName?.toLowerCase().contains(
+                                                    'local',
+                                                  ) ==
+                                                  true
+                                              ? 'Personal Hotspot is active'
+                                              : 'Connected to $_networkName')
                                         : 'Not connected',
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
@@ -1540,7 +1532,6 @@ class _WebShareScreenState extends State<WebShareScreen>
           : Colors.transparent,
       icon: mode ? Icons.north_east : Icons.south_east,
       width: 145,
-      // height: 40,
     );
   }
 
@@ -1566,7 +1557,6 @@ class _WebShareScreenState extends State<WebShareScreen>
     return ValueListenableBuilder<List<SharedFile>>(
       valueListenable: _webShareService.sharedFiles,
       builder: (_, files, __) {
-        // Combine uploading (progress) items with already shared files
         final allItems = [
           ..._uploadProgress.values.map((p) => UploadingFileItem(p)),
           ...files,
@@ -1612,11 +1602,9 @@ class _WebShareScreenState extends State<WebShareScreen>
       valueListenable: _webShareService.receivedFiles,
       builder: (_, receivedFiles, __) {
         final allItems = [
-          // Add uploading files first
           ..._uploadProgress.values.map(
             (progress) => UploadingFileItem(progress),
           ),
-          // Then add received files
           ...receivedFiles.map((file) => ReceivedFileItem(file)),
         ];
 
@@ -1879,629 +1867,6 @@ class _WebShareScreenState extends State<WebShareScreen>
         ),
       );
     }
-  }
-}
-
-/// WebRTC Connection Bottom Sheet
-class WebRTCConnectionBottomSheet extends StatefulWidget {
-  final WebRTCFileTransferService webrtcService;
-  final VoidCallback onConnected;
-  final Function(String) onError;
-
-  const WebRTCConnectionBottomSheet({
-    super.key,
-    required this.webrtcService,
-    required this.onConnected,
-    required this.onError,
-  });
-
-  @override
-  State<WebRTCConnectionBottomSheet> createState() =>
-      _WebRTCConnectionBottomSheetState();
-}
-
-class _WebRTCConnectionBottomSheetState
-    extends State<WebRTCConnectionBottomSheet> {
-  final TextEditingController _peerIdController = TextEditingController();
-  bool _isConnecting = false;
-  bool _hasJoinedRoom = false;
-  bool _isDiscovering = false;
-  String? _currentRoomId;
-  String? _networkName;
-  String? _detectedHostIp;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkNetworkStatus();
-  }
-
-  Future<void> _checkNetworkStatus() async {
-    try {
-      final networkName = await NetworkUtils.getWifiName();
-      if (mounted) {
-        setState(() {
-          _networkName = networkName;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _networkName = 'Not Connected';
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _peerIdController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _connectToPeer() async {
-    // Check if local mode and if host
-    final isLocal = widget.webrtcService.isLocalMode.value;
-    final isHost = widget.webrtcService.isHostMode.value;
-
-    // For host mode, room ID is auto-generated. For join mode, need manual entry.
-    String roomId;
-    if (isHost && isLocal) {
-      // Host: room ID will be generated automatically with port
-      roomId = ''; // Will be generated by startLocalHostAndConnect
-    } else {
-      // Join or remote mode: need room ID from user
-      roomId = _peerIdController.text.trim();
-      if (roomId.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Please enter a code')));
-        return;
-      }
-
-      // On web: auto-switch to local signaling if room ID encodes port (e.g., 1234-192-p8081)
-      if (kIsWeb && !isLocal && RegExp(r"-p\d+").hasMatch(roomId)) {
-        widget.webrtcService.setSignalingMode(useLocal: true);
-        widget.webrtcService.setHostMode(false); // web cannot host local WS
-      }
-    }
-
-    setState(() {
-      _isConnecting = true;
-      _currentRoomId = roomId;
-    });
-
-    try {
-      setState(() {
-        _isDiscovering = !isHost && isLocal; // Show discovery for join mode
-      });
-
-      if (isLocal) {
-        if (isHost) {
-          // Start as host and get generated room ID with port
-          final generatedRoomId = await widget.webrtcService
-              .startLocalHostAndConnect();
-          if (mounted && generatedRoomId != null) {
-            setState(() {
-              _detectedHostIp = generatedRoomId; // Store the room ID
-              _currentRoomId = generatedRoomId;
-              _peerIdController.text = generatedRoomId; // Show in UI
-              _isDiscovering = false;
-            });
-          }
-        } else {
-          // Join as client - automatic discovery with port extraction!
-          await widget.webrtcService.connectToSignalingServer(roomId);
-          if (mounted) {
-            setState(() {
-              _isDiscovering = false;
-            });
-          }
-        }
-      } else {
-        // Use remote Socket.IO signaling
-        await widget.webrtcService.connectToSignalingServer(roomId);
-      }
-
-      if (mounted) {
-        setState(() {
-          _hasJoinedRoom = true;
-          _isConnecting = false;
-          _isDiscovering = false;
-        });
-      }
-      // Don't close dialog yet - wait for actual peer connection
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isConnecting = false;
-          _hasJoinedRoom = false;
-          _isDiscovering = false;
-        });
-      }
-      widget.onError(e.toString());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Signaling Mode Toggle (hide on web - local mode not supported)
-            if (!_hasJoinedRoom && !kIsWeb) ...[
-              ValueListenableBuilder<bool>(
-                valueListenable: widget.webrtcService.isLocalMode,
-                builder: (context, isLocal, _) {
-                  return Card(
-                    color: isLocal ? Colors.blue.shade50 : Colors.green.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                isLocal ? Icons.wifi : Icons.cloud,
-                                color: isLocal ? Colors.blue : Colors.green,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Signaling Mode',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isLocal
-                                      ? Colors.blue.shade900
-                                      : Colors.green.shade900,
-                                ),
-                              ),
-                              const Spacer(),
-                              Switch(
-                                value: isLocal,
-                                onChanged: (value) {
-                                  widget.webrtcService.setSignalingMode(
-                                    useLocal: value,
-                                  );
-                                },
-                                activeColor: Colors.blue,
-                                inactiveThumbColor: Colors.green,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isLocal
-                                ? 'Local (WiFi/Hotspot) - No internet needed'
-                                : 'Remote (Internet) - Works anywhere',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isLocal
-                                  ? Colors.blue.shade700
-                                  : Colors.green.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              // Host/Join Mode Toggle (only for local mode)
-              ValueListenableBuilder<bool>(
-                valueListenable: widget.webrtcService.isLocalMode,
-                builder: (context, isLocal, _) {
-                  if (!isLocal) return const SizedBox.shrink();
-                  return ValueListenableBuilder<bool>(
-                    valueListenable: widget.webrtcService.isHostMode,
-                    builder: (context, isHost, _) {
-                      return Card(
-                        color: isHost
-                            ? Colors.purple.shade50
-                            : Colors.orange.shade50,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isHost ? Icons.router : Icons.link,
-                                    color: isHost
-                                        ? Colors.purple
-                                        : Colors.orange,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Connection Role',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: isHost
-                                            ? Colors.purple.shade900
-                                            : Colors.orange.shade900,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: SegmentedButton<bool>(
-                                  segments: const [
-                                    ButtonSegment(
-                                      value: true,
-                                      label: Text(
-                                        'Host',
-                                        style: TextStyle(fontSize: 13),
-                                      ),
-                                      icon: Icon(Icons.router, size: 18),
-                                    ),
-                                    ButtonSegment(
-                                      value: false,
-                                      label: Text(
-                                        'Join',
-                                        style: TextStyle(fontSize: 13),
-                                      ),
-                                      icon: Icon(Icons.link, size: 18),
-                                    ),
-                                  ],
-                                  selected: {isHost},
-                                  onSelectionChanged: (Set<bool> selected) {
-                                    widget.webrtcService.setHostMode(
-                                      selected.first,
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                isHost
-                                    ? 'Create the room and share your IP with peers'
-                                    : 'Join an existing room - host IP auto-detected',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isHost
-                                      ? Colors.purple.shade700
-                                      : Colors.orange.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-            ],
-            // Step 1: Network Check
-            StatusIndicator(
-              icon: (_networkName != null && _networkName != 'Not Connected')
-                  ? Icons.wifi
-                  : Icons.wifi_off,
-              text: 'Network Check',
-              status: (_networkName != null && _networkName != 'Not Connected')
-                  ? (_networkName?.toLowerCase().contains('local') == true
-                      ? 'Personal Hotspot is active'
-                      : 'Connected to $_networkName')
-                  : 'Not connected',
-              isComplete:
-                  _networkName != null && _networkName != 'Not Connected',
-              color: (_networkName != null && _networkName != 'Not Connected')
-                  ? Colors.green
-                  : Colors.orange,
-            ),
-            const SizedBox(height: 12),
-            // Signaling Backend Indicator
-            StatusIndicator(
-              icon: Icons.cloud,
-              text: 'Signaling Backend',
-              status: widget.webrtcService.useFirestoreSignaling
-                  ? 'Firestore (Firebase)'
-                  : (widget.webrtcService.isLocalMode.value
-                        ? 'Local WebSocket'
-                        : 'Socket.IO Remote'),
-              isComplete: true,
-              color: Colors.indigo,
-            ),
-            const SizedBox(height: 12),
-            // Discovery status (for join mode)
-            if (_isDiscovering) ...[
-              StatusIndicator(
-                icon: Icons.search,
-                text: 'Finding Host',
-                status: 'Scanning local network for WebRTC host...',
-                isComplete: false,
-                color: Colors.blue,
-                isLoading: true,
-              ),
-              const SizedBox(height: 12),
-            ],
-            // Step 2: Room Input/Joined
-            if (!_hasJoinedRoom) ...[
-              const Text(
-                'Enter a code that both devices will join:',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _peerIdController,
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
-                decoration: InputDecoration(
-                  hintText: kIsWeb
-                      ? 'Enter code (e.g., "1234")'
-                      : 'Enter code (e.g., "1234-192-p8081")',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: AppColors.primary,
-                      width: 2,
-                    ),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  prefixIcon: const Icon(
-                    Icons.meeting_room,
-                    color: AppColors.primary,
-                  ),
-                  helperText: 'Both devices must use the same code',
-                  helperStyle: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                ),
-                enabled: !_isConnecting,
-                onSubmitted: (_) => _connectToPeer(),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isConnecting
-                          ? null
-                          : () async {
-                              setState(() => _isConnecting = true);
-                              try {
-                                // Ensure Firestore (remote) signaling for web sharing
-                                widget.webrtcService.setSignalingMode(
-                                  useLocal: false,
-                                );
-                                widget.webrtcService.setHostMode(false);
-                                final id = await widget.webrtcService
-                                    .createAutoRoomAndConnect(
-                                      length: 4,
-                                      alphanumeric: false,
-                                    );
-                                if (!mounted) return;
-                                setState(() {
-                                  _peerIdController.text = id;
-                                  _currentRoomId = id;
-                                  _hasJoinedRoom = true;
-                                  _isConnecting = false;
-                                });
-                              } catch (e) {
-                                if (!mounted) return;
-                                setState(() => _isConnecting = false);
-                                widget.onError(e.toString());
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Failed to start web sharing: $e',
-                                    ),
-                                    backgroundColor: Colors.red.shade700,
-                                  ),
-                                );
-                              }
-                            },
-                      icon: const Icon(Icons.wifi_tethering, size: 20),
-                      label: const Text('Start Web Sharing (auto room)'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ValueListenableBuilder<bool>(
-                valueListenable: widget.webrtcService.isHostMode,
-                builder: (context, isHost, _) {
-                  return SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _isConnecting ? null : _connectToPeer,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      icon: _isConnecting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : Icon(isHost ? Icons.router : Icons.link, size: 24),
-                      label: Text(
-                        _isConnecting
-                            ? (isHost
-                                  ? 'Starting Server...'
-                                  : 'Joining Room...')
-                            : (isHost ? 'Start Hosting' : 'Join'),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-            ] else ...[
-              StatusIndicator(
-                icon: Icons.meeting_room,
-                text: 'Room Joined',
-                status: 'Code: $_currentRoomId',
-                isComplete: true,
-                color: Colors.green,
-              ),
-              const SizedBox(height: 12),
-              // Show generated room ID if in local host mode
-              if (_detectedHostIp != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.shade50,
-                    border: Border.all(color: Colors.purple.shade200),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.share,
-                            color: Colors.purple.shade700,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Share This Code',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.purple.shade900,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Other devices on the same WiFi can join using this code:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.purple.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: Colors.purple.shade200,
-                                ),
-                              ),
-                              child: SelectableText(
-                                _detectedHostIp!,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'monospace',
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.copy),
-                            onPressed: () {
-                              // Copy to clipboard
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('IP copied to clipboard'),
-                                ),
-                              );
-                            },
-                            tooltip: 'Copy IP',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-              // Step 3: Waiting for peer / Connected
-              ValueListenableBuilder<bool>(
-                valueListenable: widget.webrtcService.connectionEstablished,
-                builder: (context, isConnected, _) {
-                  if (isConnected) {
-                    // Auto-close dialog after showing success
-                    Future.delayed(const Duration(milliseconds: 1500), () {
-                      if (mounted) {
-                        widget.onConnected();
-                      }
-                    });
-                  }
-                  return StatusIndicator(
-                    icon: isConnected
-                        ? Icons.check_circle
-                        : Icons.hourglass_empty,
-                    text: isConnected
-                        ? 'Connected & Ready'
-                        : 'Waiting for Connection',
-                    status: isConnected
-                        ? 'You can now send files to your peer'
-                        : 'Join the same room on another device',
-                    isComplete: isConnected,
-                    color: isConnected ? Colors.green : Colors.blue,
-                    isLoading: !isConnected,
-                  );
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 }
 

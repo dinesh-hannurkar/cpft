@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:cpft/core/logging/app_logger.dart';
+import 'package:cpft/features/webshare/helpers/received_file.dart';
+import 'package:cpft/features/webshare/helpers/shared_file.dart';
 import 'package:cpft/services/notification_service.dart';
 import 'package:cpft/utils/network_utils.dart';
 import 'package:flutter/foundation.dart';
@@ -244,21 +246,17 @@ class WebShareService {
   }
 
   /// Get hostname URL for sharing
-  /// Returns the actual mDNS hostname that will be resolved by other devices
   Future<String?> getHostnameUrl() async {
     if (!isRunning) return null;
 
-    // Check if we have network connectivity
     final networkIp = await NetworkUtils.getLanIPv4();
     if (networkIp == null) {
       debugPrint(
         '[WebShareService] ⚠️ No network connection - hostname URL not available',
       );
-      return null; // Don't show hostname URL when offline
+      return null;
     }
 
-    // Use the actual system hostname (Platform.localHostname)
-    // This is where the service is ACTUALLY reachable (e.g., iPhone.local)
     final platformHost = Platform.localHostname.toLowerCase();
     String hostnameForUrl;
 
@@ -280,19 +278,6 @@ class WebShareService {
     }
 
     final hostnameUrl = 'http://$hostnameForUrl.local:$port';
-
-    debugPrint('[WebShareService] 🌐 Hostname URL generation:');
-    debugPrint('[WebShareService]   📱 deviceName: "$deviceName"');
-    debugPrint(
-      '[WebShareService]   🎯 customServiceName: "$customServiceName"',
-    );
-    debugPrint(
-      '[WebShareService]   🔄 Platform.localHostname: "$platformHost"',
-    );
-    debugPrint('[WebShareService]   🌐 Accessible URL: $hostnameUrl');
-    debugPrint(
-      '[WebShareService]   💡 This matches where the service is actually reachable',
-    );
     return hostnameUrl;
   }
 
@@ -393,18 +378,10 @@ class WebShareService {
         // On iOS/macOS, use NSD (wraps Bonjour/NetService API)
         debugPrint('[WebShareService] Using NSD for iOS/macOS advertising');
       }
-
-      // Use NSD package for advertising on both platforms
       try {
-        // The actual hostname where the service can be reached is determined by
-        // the system's mDNS hostname (e.g., iPhone.local, Android_XXXX.local)
-        // We can't control this - it's set by the OS
-        // So we'll try to detect it and store it in TXT records
         String actualHostname;
 
         if (Platform.isAndroid) {
-          // On Android, get the actual hostname from native code
-          // because Platform.localHostname and NSD don't provide the .local hostname
           try {
             final androidHostname = await _hostnameChannel.invokeMethod<String>(
               'getActualHostname',
@@ -478,11 +455,6 @@ class WebShareService {
 
         // Get the actual hostname using different methods per platform
         if (Platform.isAndroid) {
-          // Android: Use multicast_dns SRV resolution
-          // NSD on Android returns IP instead of hostname
-          debugPrint(
-            '[WebShareService] 🔍 Attempting to resolve actual hostname via SRV record...',
-          );
           try {
             final srvHostname =
                 await MdnsSrvResolver.getOwnHostname(
@@ -501,12 +473,6 @@ class WebShareService {
             if (srvHostname != null && srvHostname.isNotEmpty) {
               _actualHostname = srvHostname;
               actualHostnameNotifier.value = srvHostname;
-              debugPrint(
-                '[WebShareService] ✅ SRV hostname resolved: $_actualHostname.local',
-              );
-              debugPrint(
-                '[WebShareService] 🎯 This is the ACTUAL reachable hostname!',
-              );
             } else {
               debugPrint(
                 '[WebShareService] ⚠️ Could not resolve SRV hostname, using fallback',
@@ -519,8 +485,6 @@ class WebShareService {
             );
           }
         } else {
-          // iOS: Use NSD discovery to get the actual hostname
-          // NSD on iOS correctly returns the .local hostname
           debugPrint(
             '[WebShareService] 🔍 Using NSD discovery to get actual hostname...',
           );
@@ -583,10 +547,6 @@ class WebShareService {
             );
           }
         }
-
-        debugPrint(
-          '[WebShareService] 🎯 NSD setup complete - hostname access should now work',
-        );
       } catch (e) {
         debugPrint('[WebShareService] ⚠️ NSD advertising failed: $e');
         if (Platform.isIOS) {
@@ -594,34 +554,11 @@ class WebShareService {
             '[WebShareService] 💡 SOLUTION: Add multicast entitlement to iOS project',
           );
         }
-        debugPrint(
-          '[WebShareService] 💡 IP access still works: http://$localIP:$port',
-        );
-        // Don't rethrow - allow web server to continue without advertising
         _nsdRegistration = null;
       }
 
       _isAdvertising = true;
-      final deviceHostname = Platform.localHostname.toLowerCase();
-      debugPrint(Platform.localHostname);
-      debugPrint(
-        '[WebShareService] ✅ Started advertising mDNS service: $instanceName._http._tcp.local',
-      );
-      debugPrint(
-        '[WebShareService] Service details: instance=$instanceName, hostname=$deviceHostname.local, ip=$localIP, port=$port',
-      );
-      debugPrint(
-        '[WebShareService] 🔍 TEST: Try accessing http://$deviceHostname.local from another device',
-      );
-      debugPrint(
-        '[WebShareService] 🔍 TEST: Or try: ping $deviceHostname.local',
-      );
-      debugPrint(
-        '[WebShareService] 🔍 TEST: Or try: nslookup $deviceHostname.local',
-      );
-      debugPrint(
-        '[WebShareService] 💡 If hostname doesn\'t work, use IP: http://$localIP:$port',
-      );
+      Platform.localHostname.toLowerCase();
     } catch (e) {
       debugPrint('[WebShareService] ❌ Failed to start advertising: $e');
       debugPrint('[WebShareService] Error details: ${e.toString()}');
@@ -663,36 +600,17 @@ class WebShareService {
 
       // Set up service listener
       discovery.addServiceListener((nsdService, status) async {
-        print(nsdService);
         if (status == ServiceStatus.found) {
-          debugPrint(
-            '[WebShareService] ========== DISCOVERED SERVICE ==========',
-          );
-          debugPrint('[WebShareService] Found service: ${nsdService.name}');
-          debugPrint('[WebShareService]   - host: ${nsdService.host}');
-          debugPrint('[WebShareService]   - port: ${nsdService.port}');
-          debugPrint(
-            '[WebShareService]   - addresses: ${nsdService.addresses}',
-          );
-          debugPrint('[WebShareService]   - txt: ${nsdService.txt}');
-
-          // Get hostname from NSD service - this is the actual .local hostname
           String? resolvedHost = nsdService.host;
           String? ip;
 
           // If this is our own service, update the actual hostname for QR code
           if (nsdService.host != null && nsdService.host!.isNotEmpty) {
-            // On Android, nsdService.host returns IP - canonicalHostName doesn't resolve .local
-            // This is a known Android limitation - mDNS hostnames aren't accessible via standard APIs
             if (Platform.isAndroid) {
-              debugPrint(
-                '[WebShareService]   ℹ️ Using IP address (Android limitation): ${nsdService.host}',
-              );
               ip = nsdService.host;
               _localIP = ip;
               resolvedHost = ip;
             } else {
-              // iOS or already has .local hostname
               final hostWithoutSuffix = nsdService.host!.endsWith('.local')
                   ? nsdService.host!.substring(0, nsdService.host!.length - 6)
                   : nsdService.host;
@@ -700,9 +618,6 @@ class WebShareService {
               if (_actualHostname != hostWithoutSuffix) {
                 _actualHostname = hostWithoutSuffix;
                 actualHostnameNotifier.value = hostWithoutSuffix;
-                debugPrint(
-                  '[WebShareService] 🎯 Updated actual hostname for QR code: $_actualHostname',
-                );
               }
             }
           }
@@ -778,14 +693,15 @@ class WebShareService {
     } catch (e) {
       debugPrint('[WebShareService] Error discovering services: $e');
     }
-
     return services;
   }
 
   /// Add a file received via WebRTC to the received files list
   void addWebRTCReceivedFile(String filename, String path, int sizeBytes) {
     debugPrint('[WebShareService] Adding WebRTC received file: $filename');
-    debugPrint('[WebShareService] Current received files count: ${receivedFiles.value.length}');
+    debugPrint(
+      '[WebShareService] Current received files count: ${receivedFiles.value.length}',
+    );
     receivedFiles.value = [
       ReceivedFile(
         filename: filename,
@@ -795,8 +711,12 @@ class WebShareService {
       ),
       ...receivedFiles.value,
     ];
-    debugPrint('[WebShareService] New received files count: ${receivedFiles.value.length}');
-    debugPrint('[WebShareService] Notifying ${receivedFiles.hasListeners ? "YES" : "NO"} listeners');
+    debugPrint(
+      '[WebShareService] New received files count: ${receivedFiles.value.length}',
+    );
+    debugPrint(
+      '[WebShareService] Notifying ${receivedFiles.hasListeners ? "YES" : "NO"} listeners',
+    );
   }
 
   /// Add a file sent via WebRTC to the shared files list
@@ -811,53 +731,5 @@ class WebShareService {
       ),
       ...sharedFiles.value,
     ];
-  }
-}
-
-class SharedFile {
-  final String id;
-  final String filename;
-  final int sizeBytes;
-  final DateTime sharedAt;
-  SharedFile({
-    required this.id,
-    required this.filename,
-    required this.sizeBytes,
-    required this.sharedAt,
-  });
-
-  String get humanSize {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    double size = sizeBytes.toDouble();
-    int i = 0;
-    while (size >= 1024 && i < units.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return '${size.toStringAsFixed((i == 0) ? 0 : 1)} ${units[i]}';
-  }
-}
-
-class ReceivedFile {
-  final String filename;
-  final String path;
-  final int sizeBytes;
-  final DateTime receivedAt;
-  ReceivedFile({
-    required this.filename,
-    required this.path,
-    required this.sizeBytes,
-    required this.receivedAt,
-  });
-
-  String get humanSize {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    double size = sizeBytes.toDouble();
-    int i = 0;
-    while (size >= 1024 && i < units.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return '${size.toStringAsFixed((i == 0) ? 0 : 1)} ${units[i]}';
   }
 }

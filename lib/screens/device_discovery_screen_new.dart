@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-
 import '../services/discovery_service.dart';
 import '../utils/permissions.dart';
 

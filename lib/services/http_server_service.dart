@@ -13,7 +13,8 @@ class HttpServerService {
   final String alias;
   final String fingerprint;
   final String deviceModel;
-  final Function(String deviceName, String ipAddress, int port) onDeviceRegistered;
+  final Function(String deviceName, String ipAddress, int port)
+  onDeviceRegistered;
 
   HttpServer? _server;
   bool _isRunning = false;
@@ -33,8 +34,9 @@ class HttpServerService {
       return;
     }
 
-    // If we have a previously used server, try a different port range to avoid conflicts
-    int currentPort = (_server != null) ? port + 100 : port; // Offset by 100 if restarting
+    int currentPort = (_server != null)
+        ? port + 100
+        : port; // Offset by 100 if restarting
     const int maxPortAttempts = 20; // Increased attempts
 
     for (int attempt = 0; attempt < maxPortAttempts; attempt++) {
@@ -50,19 +52,13 @@ class HttpServerService {
         );
 
         _isRunning = true;
-        debugPrint('[HttpServer] Server started on port $currentPort');
         return;
       } catch (e) {
-        debugPrint('[HttpServer] Error starting server on port $currentPort: $e');
-        
         if (e is SocketException && attempt < maxPortAttempts - 1) {
-          // Try next port
           currentPort++;
           debugPrint('[HttpServer] Trying port $currentPort...');
           continue;
         }
-        
-        // Re-throw if we've exhausted all attempts or it's not a socket error
         rethrow;
       }
     }
@@ -71,7 +67,9 @@ class HttpServerService {
   /// Handle incoming HTTP requests
   Future<Response> _handleRequest(Request request) async {
     final path = request.url.path;
-    debugPrint('[HttpServer] ${request.method} /$path from ${request.requestedUri.host}');
+    debugPrint(
+      '[HttpServer] ${request.method} /$path from ${request.requestedUri.host}',
+    );
 
     try {
       if (path == 'info' && request.method == 'GET') {
@@ -89,7 +87,6 @@ class HttpServerService {
 
   /// Handle /info endpoint - returns device information
   Response _handleInfo(Request request) {
-    // Check if it's self-discovery
     final senderFingerprint = request.url.queryParameters['fingerprint'];
     if (senderFingerprint == fingerprint) {
       return Response(412, body: jsonEncode({'message': 'Self-discovered'}));
@@ -122,8 +119,10 @@ class HttpServerService {
 
       // Extract IP from request
       final clientIp = _extractClientIp(request);
-      
-      debugPrint('[HttpServer] Registered device: ${dto.alias} ($clientIp:${dto.port})');
+
+      debugPrint(
+        '[HttpServer] Registered device: ${dto.alias} ($clientIp:${dto.port})',
+      );
 
       // Notify discovery listeners
       onDeviceRegistered(dto.alias, clientIp, dto.port);
@@ -148,14 +147,13 @@ class HttpServerService {
 
   /// Extract client IP from request
   String _extractClientIp(Request request) {
-    // Try X-Forwarded-For header first
     final forwardedFor = request.headers['x-forwarded-for'];
     if (forwardedFor != null && forwardedFor.isNotEmpty) {
       return forwardedFor.split(',').first.trim();
     }
 
-    // Fall back to connection info
-    final connectionInfo = request.context['shelf.io.connection_info'] as HttpConnectionInfo?;
+    final connectionInfo =
+        request.context['shelf.io.connection_info'] as HttpConnectionInfo?;
     return connectionInfo?.remoteAddress.address ?? 'unknown';
   }
 

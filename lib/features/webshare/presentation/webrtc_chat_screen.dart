@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' as io;
 import 'package:cpft/features/chat/models/connection_state.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_bubble.dart';
+import 'package:cpft/features/webshare/models/chat_message_model.dart';
 import 'package:cpft/shared/widgets/connection_info_dialog.dart';
 import 'package:cpft/utils/file_saver.dart';
 import 'package:cpft/utils/mime_utils.dart';
@@ -18,7 +19,7 @@ import 'package:cpft/features/webshare/services/web_download.dart';
 import 'package:cpft/features/webshare/services/web_received_cache.dart';
 import 'package:cpft/shared/widgets/primary_app_bar.dart';
 import 'package:cpft/shared/widgets/back_button_chip.dart';
-import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
+import 'package:cpft/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:cpft/shared/widgets/app_action_button.dart';
 import 'package:cpft/features/chat/models/transfer_progress.dart';
 import 'package:cpft/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
@@ -33,7 +34,6 @@ import 'package:cpft/shared/showcase/showcase_helper.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 
-/// Chat-like screen for WebRTC file sharing
 class WebRTCChatScreen extends StatefulWidget {
   final WebRTCFileTransferService webrtcService;
   final WebShareService? webShareService;
@@ -61,7 +61,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _didStartShowcase = false;
-  
+
   String? _peerName;
   final FocusNode _inputFocus = FocusNode();
   final List<ChatMessage> _messages = [];
@@ -172,7 +172,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       setState(() {
         _isConnected = false;
       });
-      // Removed: _addSystemMessage('Connection lost');
     };
 
     // Set up file transfer callbacks
@@ -210,7 +209,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       setState(() {
         _outgoingProgress.remove('outgoing_$filename');
       });
-      // Removed: _addSystemMessage('Sent: $filename');
     };
 
     widget.webrtcService.onFileReceiveComplete = (filename, savedPath) {
@@ -221,7 +219,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       setState(() {
         _incomingProgress.remove('incoming_$filename');
       });
-      // Removed: _addSystemMessage('Received: $filename');
       _onWebRTCFileReceiveComplete(filename, savedPath);
     };
 
@@ -231,7 +228,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
         '[WebRTCChatScreen] ❌ WebRTC transfer error: $filename | $reason',
       );
 
-      // Clean up progress on error
       setState(() {
         if (duringSend) {
           _outgoingProgress.remove('outgoing_$filename');
@@ -268,6 +264,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       });
       _scrollToBottom();
     };
+
     widget.webrtcService.onTextMessageSent = (message) {
       if (!mounted) return;
       // Ignore local peer-info from showing as a bubble
@@ -308,18 +305,15 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   Future<void> _sendLocalNameToPeer() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // Prefer saved name; fall back to injected deviceName if missing
       final saved = (prefs.getString('device_name') ?? '').trim();
       final fallback = (widget.deviceName ?? '').trim();
       String localName = saved.isNotEmpty ? saved : fallback;
-      // On web, if still empty, use a default
       if (localName.isEmpty && kIsWeb) {
         localName = 'Web User';
       }
       if (localName.isNotEmpty) {
         final message = 'peer-info: $localName';
         widget.webrtcService.sendTextMessage(message);
-        // If we don't receive a peer name within a second, retry once
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted && (_peerName == null || _peerName!.isEmpty)) {
             try {
@@ -342,7 +336,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       _isConnected = isConnected;
     });
 
-    // Manage background service to keep connection alive
     if (isConnected) {
       BackgroundService.start().then((started) {
         if (started) {
@@ -352,20 +345,11 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           );
         }
       });
-      // Enable wakelock to prevent device sleep during connection
       WakelockPlus.enable();
     } else {
       BackgroundService.stop();
-      // Disable wakelock when disconnected
       WakelockPlus.disable();
     }
-
-    // Removed system messages
-    // if (isConnected) {
-    //   _addSystemMessage('Connected successfully');
-    // } else {
-    //   _addSystemMessage('Connection lost');
-    // }
   }
 
   void _onWebRTCFileReceiveComplete(String filename, String savedPath) {
@@ -377,7 +361,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // Add file to WebShareService
     if (widget.webShareService != null) {
       if (kIsWeb) {
-        // Web: handle cache-backed paths
         if (savedPath.startsWith('web-parts:')) {
           final id = savedPath.substring('web-parts:'.length);
           final total = WebReceivedCache.length(id);
@@ -561,9 +544,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   }
 
   void _onFileSendComplete(String filename, String filePath, int fileSize) {
-    // Clear transfer state
-
-    // Clear progress map
     setState(() {
       _outgoingProgress.remove('outgoing_$filename');
     });
@@ -574,14 +554,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       final fileId = 'webrtc_${DateTime.now().millisecondsSinceEpoch}';
       svc.addWebRTCSharedFile(fileId, filename, fileSize);
     }
-    // File card already shows sent status, no need for system message
   }
 
   void _onFileReceiveComplete(String filename, String savedPath) {
-    // Note: WebShareService file addition is handled by the main callback
-    // This listener callback only handles any additional chat UI updates
-
-    // Clear incoming progress entry
     setState(() {
       _incomingProgress.remove('incoming_$filename');
     });
@@ -591,10 +566,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     debugPrint(
       '[WebRTCChatScreen] Transfer error: $filename - $reason (during ${duringSend ? 'send' : 'receive'})',
     );
-
-    // Clear transfer state
-    // Removed: final action = duringSend ? 'sending' : 'receiving';
-    // Removed: _addSystemMessage('Error $action $filename: $reason');
   }
 
   void _addTransferProgressMessage(String filename, int sent, int total) {
@@ -638,22 +609,17 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
-        withData: kIsWeb, // For web, we need the data
+        withData: kIsWeb,
       );
 
       if (result != null && result.files.isNotEmpty) {
         for (final file in result.files) {
-          // On web, path is unavailable. Check platform before accessing path.
           final hasData = kIsWeb
               ? file.bytes != null
               : (file.path != null || file.bytes != null);
 
           if (hasData) {
-            // Add sending message to chat immediately
             _addFileMessage(file.name, file.size, true);
-
-            // Seed an outgoing progress entry to show a preparing indicator
-            // until the actual send progress callbacks provide totals.
             setState(() {
               final transferId = 'outgoing_${file.name}';
               _outgoingProgress.putIfAbsent(
@@ -668,7 +634,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
             });
 
             try {
-              // Match WebShareScreen behavior: use bytes on web, path on native
               if (kIsWeb) {
                 final bytes = file.bytes;
                 if (bytes == null) {
@@ -689,7 +654,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                 if (file.path != null) {
                   await widget.webrtcService.sendFile(file.path!);
                 } else if (file.bytes != null) {
-                  // Fallback if provider returns bytes on native
                   await widget.webrtcService.sendFileBytes(
                     file.name,
                     file.bytes!,
@@ -699,16 +663,12 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                 }
               }
             } catch (sendError) {
-              if (mounted) {
-                // Add error message for failed send
-                // Removed: _addSystemMessage('Failed to send ${file.name}: $sendError');
-              }
+              if (mounted) {}
             }
           }
         }
       }
     } catch (e) {
-      debugPrint('[WebRTCChatScreen] Error picking file: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -743,17 +703,8 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                     if (kIsWeb &&
                         (file.path.startsWith('web-bytes:') ||
                             file.path.startsWith('web-parts:'))) {
-                      // On web cached items, trigger the same action as the download button
                       try {
-                        // Reuse the action handler
-                        // ignore: use_build_context_synchronously
                         await Future.microtask(() => {});
-                        // Call the same logic as onAction
-                        // Note: onAction is non-null in this callsite
-                        // ignore: unnecessary_lambdas
-                        // ignore: inference_failure_on_untyped_parameter
-                        // ignore: avoid_dynamic_calls
-                        // We directly duplicate the download logic below to avoid context quirks
                         final path = file.path;
                         if (path.startsWith('web-bytes:')) {
                           final id = path.substring('web-bytes:'.length);
@@ -826,9 +777,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                         return;
                       }
                     }
-                    // Native: show actions - Open, Save to device…, Share
                     if (!kIsWeb) {
-                      // ignore: use_build_context_synchronously
                       final RenderBox button =
                           context.findRenderObject() as RenderBox;
                       final RenderBox overlay =
@@ -996,7 +945,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header with title and close icon
               Row(
                 children: [
                   Expanded(
@@ -1004,16 +952,16 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                       'Close Connection?',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(false),
                     icon: const Icon(Icons.close_rounded, size: 24),
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.grey.shade100,
+                      backgroundColor: AppColors.greyLight,
                       padding: const EdgeInsets.all(10),
                     ),
                   ),
@@ -1026,9 +974,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                 'This will disconnect and stops any ongoing transfers.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.darkPrimary,
-                      height: 1.4,
-                    ),
+                  color: AppColors.darkPrimary,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: AppSizes.lg),
               // Single action button
@@ -1054,14 +1002,11 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Kick off showcase only on first chat session with longer delay for web
     if (!_didStartShowcase) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final prefs = await SharedPreferences.getInstance();
         final hasSeenShowcase = prefs.getBool('chat_showcase_seen') ?? false;
-        
         if (!hasSeenShowcase && mounted) {
-          // Use longer delay on web to ensure full layout completion
           Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted) {
               try {
@@ -1074,6 +1019,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       });
       _didStartShowcase = true;
     }
+
     return ShowCaseWidget(
       builder: (context) => PopScope(
         canPop: false,
@@ -1089,207 +1035,225 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           backgroundColor: Colors.transparent,
           appBar: PrimaryAppBar(
             leading: BackButtonChip(
-            onPressed: () async {
-              final shouldPop = await _onWillPop();
-              if (shouldPop && mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-          ),
-          titleWidget: Padding(
-            padding: const EdgeInsets.only(left: AppSizes.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                    (_peerName?.isNotEmpty == true
-                      ? _peerName!
-                        .split(RegExp(r'\s+'))
-                        .map((w) => w.isEmpty
-                          ? w
-                          : '${w[0].toUpperCase()}${w.substring(1)}')
-                        .join(' ')
-                      : 'Direct Share'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
-                Text(
-                  _isConnected
-                      ? '${widget.roomId} • Connected'
-                      : '${widget.roomId} • Disconnected',
-                  style: const TextStyle(fontSize: 11, color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-          centerTitle: false,
-          trailing: [
-            if (widget.webShareService != null)
-              Showcase(
-                key: ShowcaseHelper.receivedListKey,
-                disableBarrierInteraction: false,
-                targetPadding: const EdgeInsets.all(8),
-                title: 'Received Files',
-                description: 'Open the list of received files to download or open.',
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-                titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
-                tooltipBorderRadius: BorderRadius.circular(12),
-                targetBorderRadius: BorderRadius.circular(12),
-                child: AppIconButton(
-                  onPressed: _showReceivedFiles,
-                  icon: Icons.folder_open,
-                ),
-              ),
-            
-            AppIconButton(
-              onPressed: _showConnectionInfo,
-              icon: _isConnected ? Icons.wifi : Icons.wifi_off,
-            ),AppIconButton(
-              onPressed: () {
-                try {
-                  ShowcaseHelper.startForWebRTCChat(context);
-                } catch (_) {}
+              onPressed: () async {
+                final shouldPop = await _onWillPop();
+                if (shouldPop && mounted) {
+                  Navigator.of(context).pop();
+                }
               },
-              icon: Icons.help_outline,
             ),
-          ],
-          backgroundColor: Colors.transparent,
-        ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-              stops: [0.0, 1.0],
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                
-                Expanded(
-                  child: (() {
-                    final totalItems =
-                        _messages.length +
-                        _incomingProgress.length +
-                        _outgoingProgress.length;
-                    if (totalItems == 0) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.chat_bubble_outline,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No messages yet',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Send files to start sharing',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSizes.sm,
-                      ),
-                      itemCount: totalItems,
-                      itemBuilder: (context, index) {
-                        if (index < _messages.length) {
-                          final msg = _messages[index];
-                          return _buildMessageBubble(msg);
-                        }
-                        final extra = index - _messages.length;
-                        // First render incoming progress tiles
-                        final incomingKeys = _incomingProgress.keys.toList();
-                        if (extra < incomingKeys.length) {
-                          final tId = incomingKeys[extra];
-                          return TransferProgressTile(
-                            progress: _incomingProgress[tId]!,
-                            onCancel: () {
-                              setState(() {
-                                _incomingProgress.remove(tId);
-                              });
-                            },
-                          );
-                        }
-                        // Then render outgoing tiles
-                        final outExtra = extra - incomingKeys.length;
-                        final outKeys = _outgoingProgress.keys.toList();
-                        if (outExtra < outKeys.length) {
-                          final tId = outKeys[outExtra];
-                          return TransferProgressTile(
-                            progress: _outgoingProgress[tId]!,
-                            onCancel: () {
-                              // Remove from local progress list
-                              setState(() {
-                                _outgoingProgress.remove(tId);
-                              });
-                            },
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    );
-                  })(),
-                ),
-                if (_isConnected)
-                  Showcase(
-                    key: ShowcaseHelper.sendFileButtonKey,
-                    disableBarrierInteraction: false,
-                    targetPadding: const EdgeInsets.all(8),
-                    title: 'Send Files',
-                    description: 'Tap here to select and send files to the connected device.',
-                    tooltipBackgroundColor: Colors.white,
-                    textColor: Colors.black,
-                    descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-                    titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
-                    tooltipBorderRadius: BorderRadius.circular(12),
-                    targetBorderRadius: BorderRadius.circular(12),
-                    child: FileTaglineBar(
-                      onTapMain: _pickAndSendFile,
-                      onTapFab: _pickAndSendFile,
-                      pulseController: _fileIconPulse!,
-                      fileIcons: _fileIcons,
-                      fileIconIndex: _fileIconIndex,
-                      slideFromLeft: _slideFromLeft,
+            titleWidget: Padding(
+              padding: const EdgeInsets.only(left: AppSizes.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    (_peerName?.isNotEmpty == true
+                        ? _peerName!
+                              .split(RegExp(r'\s+'))
+                              .map(
+                                (w) => w.isEmpty
+                                    ? w
+                                    : '${w[0].toUpperCase()}${w.substring(1)}',
+                              )
+                              .join(' ')
+                        : 'Direct Share'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
                     ),
                   ),
-                MessageInputBar(
-                  controller: _messageController,
-                  focusNode: _inputFocus,
-                  onSend: _handleSendPressed,
-                  enabled: _isConnected,
+                  Text(
+                    _isConnected
+                        ? '${widget.roomId} • Connected'
+                        : '${widget.roomId} • Disconnected',
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+            centerTitle: false,
+            trailing: [
+              if (widget.webShareService != null)
+                Showcase(
+                  key: ShowcaseHelper.receivedListKey,
+                  disableBarrierInteraction: false,
+                  targetPadding: const EdgeInsets.all(8),
+                  title: 'Received Files',
+                  description:
+                      'Open the list of received files to download or open.',
+                  tooltipBackgroundColor: Colors.white,
+                  textColor: Colors.black,
+                  descTextStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
+                  ),
+                  titleTextStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    fontSize: 16,
+                  ),
+                  tooltipBorderRadius: BorderRadius.circular(12),
+                  targetBorderRadius: BorderRadius.circular(12),
+                  child: AppIconButton(
+                    onPressed: _showReceivedFiles,
+                    icon: Icons.folder_open,
+                  ),
                 ),
-              ],
+
+              AppIconButton(
+                onPressed: _showConnectionInfo,
+                icon: _isConnected ? Icons.wifi : Icons.wifi_off,
+              ),
+              AppIconButton(
+                onPressed: () {
+                  try {
+                    ShowcaseHelper.startForWebRTCChat(context);
+                  } catch (_) {}
+                },
+                icon: Icons.help_outline,
+              ),
+            ],
+            backgroundColor: Colors.transparent,
+          ),
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                stops: [0.0, 1.0],
+              ),
+            ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: (() {
+                      final totalItems =
+                          _messages.length +
+                          _incomingProgress.length +
+                          _outgoingProgress.length;
+                      if (totalItems == 0) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.chat_bubble_outline,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No messages yet',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Send files to start sharing',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSizes.sm,
+                        ),
+                        itemCount: totalItems,
+                        itemBuilder: (context, index) {
+                          if (index < _messages.length) {
+                            final msg = _messages[index];
+                            return _buildMessageBubble(msg);
+                          }
+                          final extra = index - _messages.length;
+                          // First render incoming progress tiles
+                          final incomingKeys = _incomingProgress.keys.toList();
+                          if (extra < incomingKeys.length) {
+                            final tId = incomingKeys[extra];
+                            return TransferProgressTile(
+                              progress: _incomingProgress[tId]!,
+                              onCancel: () {
+                                setState(() {
+                                  _incomingProgress.remove(tId);
+                                });
+                              },
+                            );
+                          }
+                          // Then render outgoing tiles
+                          final outExtra = extra - incomingKeys.length;
+                          final outKeys = _outgoingProgress.keys.toList();
+                          if (outExtra < outKeys.length) {
+                            final tId = outKeys[outExtra];
+                            return TransferProgressTile(
+                              progress: _outgoingProgress[tId]!,
+                              onCancel: () {
+                                // Remove from local progress list
+                                setState(() {
+                                  _outgoingProgress.remove(tId);
+                                });
+                              },
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      );
+                    })(),
+                  ),
+                  if (_isConnected)
+                    Showcase(
+                      key: ShowcaseHelper.sendFileButtonKey,
+                      disableBarrierInteraction: false,
+                      targetPadding: const EdgeInsets.all(8),
+                      title: 'Send Files',
+                      description:
+                          'Tap here to select and send files to the connected device.',
+                      tooltipBackgroundColor: Colors.white,
+                      textColor: Colors.black,
+                      descTextStyle: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black87,
+                      ),
+                      titleTextStyle: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                        fontSize: 16,
+                      ),
+                      tooltipBorderRadius: BorderRadius.circular(12),
+                      targetBorderRadius: BorderRadius.circular(12),
+                      child: FileTaglineBar(
+                        onTapMain: _pickAndSendFile,
+                        onTapFab: _pickAndSendFile,
+                        pulseController: _fileIconPulse!,
+                        fileIcons: _fileIcons,
+                        fileIconIndex: _fileIconIndex,
+                        slideFromLeft: _slideFromLeft,
+                      ),
+                    ),
+                  MessageInputBar(
+                    controller: _messageController,
+                    focusNode: _inputFocus,
+                    onSend: _handleSendPressed,
+                    enabled: _isConnected,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 
@@ -1299,9 +1263,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     );
     switch (message.type) {
       case MessageType.fileSent:
-        // Avoid rendering a duplicate file card while the outgoing transfer
-        // is still in progress. Show only the progress tile. If transfer
-        // hasn't started (no total yet), show a small preparing indicator.
         TransferProgress? preparing;
         final hasOngoing = _outgoingProgress.values.any((tp) {
           final sameName = tp.name == message.content;
@@ -1310,10 +1271,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           return sameName && inProgress;
         });
         if (hasOngoing) {
-          debugPrint(
-            '[WebRTCChatScreen] Skipping file card (outgoing in progress)',
-          );
-          // If we're still preparing (no total yet), show a subtle loading row
           if (preparing != null &&
               preparing!.total == 0 &&
               preparing!.progress == 0) {
@@ -1370,11 +1327,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           }
           return const SizedBox.shrink();
         }
-        debugPrint('[WebRTCChatScreen] Rendering file SENT card');
         return _buildFileCard(message: message, isMine: true);
 
       case MessageType.fileReceived:
-        debugPrint('[WebRTCChatScreen] Rendering file RECEIVED card');
         return _buildFileCard(message: message, isMine: false);
       case MessageType.textSent:
         return Padding(
@@ -1407,8 +1362,6 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
   Widget _buildFileCard({required ChatMessage message, required bool isMine}) {
     final isReceived = message.type == MessageType.fileReceived;
-
-    // Find the file path for received files
     String? filePath;
     if (isReceived && widget.webShareService != null) {
       final files = widget.webShareService!.receivedFiles.value;
@@ -1458,19 +1411,3 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 }
 
 enum MessageType { fileSent, fileReceived, textSent, textReceived }
-
-class ChatMessage {
-  final String id;
-  final String content;
-  final MessageType type;
-  final DateTime timestamp;
-  final int? fileSize;
-
-  ChatMessage({
-    required this.id,
-    required this.content,
-    required this.type,
-    required this.timestamp,
-    this.fileSize,
-  });
-}

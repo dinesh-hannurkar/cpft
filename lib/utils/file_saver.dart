@@ -3,9 +3,7 @@ import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:path/path.dart' as p;
 
 class FileSaver {
-  const FileSaver._(); // private constructor to prevent instantiation
-
-  /// Opens a "save to device" picker and shows a SnackBar on success/failure.
+  const FileSaver._();
   static Future<void> saveToDevicePicker({
     required BuildContext context,
     required String filename,
@@ -26,9 +24,9 @@ class FileSaver {
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
     }
   }
 }

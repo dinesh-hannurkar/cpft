@@ -1,13 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 
-/// Simplified isolate-based WebRTC file transfer
-/// Uses isolates to prevent UI blocking during heavy file operations
 class WebRTCTransferIsolate {
   Isolate? _processingIsolate;
   SendPort? _isolateSendPort;
@@ -99,10 +96,7 @@ class WebRTCTransferIsolate {
   void updateCredits(int credits) {
     if (_isolateSendPort == null) return;
 
-    final message = {
-      'type': 'update_credits',
-      'credits': credits,
-    };
+    final message = {'type': 'update_credits', 'credits': credits};
 
     _isolateSendPort!.send(message);
   }
@@ -111,10 +105,7 @@ class WebRTCTransferIsolate {
   void handleBinaryChunk(Uint8List chunkData) {
     if (_isolateSendPort == null) return;
 
-    final message = {
-      'type': 'binary_chunk',
-      'chunkData': chunkData,
-    };
+    final message = {'type': 'binary_chunk', 'chunkData': chunkData};
 
     _isolateSendPort!.send(message);
   }
@@ -123,10 +114,7 @@ class WebRTCTransferIsolate {
   void handleFileComplete(String fileName) {
     if (_isolateSendPort == null) return;
 
-    final message = {
-      'type': 'file_complete',
-      'fileName': fileName,
-    };
+    final message = {'type': 'file_complete', 'fileName': fileName};
 
     _isolateSendPort!.send(message);
   }
@@ -137,27 +125,27 @@ class WebRTCTransferIsolate {
         case 'send_chunk':
           // Forward chunk to WebRTC
           if (_dataChannel != null) {
-            _dataChannel!.send(RTCDataChannelMessage.fromBinary(
-              message['chunk'] as Uint8List,
-            ));
+            _dataChannel!.send(
+              RTCDataChannelMessage.fromBinary(message['chunk'] as Uint8List),
+            );
           }
           break;
 
         case 'send_metadata':
           // Forward metadata to WebRTC
           if (_dataChannel != null) {
-            _dataChannel!.send(RTCDataChannelMessage(jsonEncode(
-              message['metadata'],
-            )));
+            _dataChannel!.send(
+              RTCDataChannelMessage(jsonEncode(message['metadata'])),
+            );
           }
           break;
 
         case 'send_completion':
           // Forward completion to WebRTC
           if (_dataChannel != null) {
-            _dataChannel!.send(RTCDataChannelMessage(jsonEncode(
-              message['completion'],
-            )));
+            _dataChannel!.send(
+              RTCDataChannelMessage(jsonEncode(message['completion'])),
+            );
           }
           break;
 
@@ -186,10 +174,7 @@ class WebRTCTransferIsolate {
           break;
 
         case 'receive_complete':
-          onReceiveComplete?.call(
-            message['fileName'],
-            message['savedPath'],
-          );
+          onReceiveComplete?.call(message['fileName'], message['savedPath']);
           break;
       }
     }
@@ -248,11 +233,23 @@ void _isolateEntry(_IsolateConfig config) {
           break;
 
         case 'binary_chunk':
-          _processBinaryChunk(message, config.mainSendPort, currentFileName, currentFileSize, receivedBytes, webParts);
+          _processBinaryChunk(
+            message,
+            config.mainSendPort,
+            currentFileName,
+            currentFileSize,
+            receivedBytes,
+            webParts,
+          );
           break;
 
         case 'file_complete':
-          _processFileComplete(message, config.mainSendPort, webParts, receivedBytes);
+          _processFileComplete(
+            message,
+            config.mainSendPort,
+            webParts,
+            receivedBytes,
+          );
           break;
 
         case 'shutdown':
@@ -299,10 +296,7 @@ void _processSendFile(Map<String, dynamic> data, SendPort mainPort) {
     packedChunk.setRange(8, packedChunk.length, chunk);
 
     // Send chunk
-    mainPort.send({
-      'type': 'send_chunk',
-      'chunk': packedChunk,
-    });
+    mainPort.send({'type': 'send_chunk', 'chunk': packedChunk});
 
     sentBytes += chunk.length;
 
@@ -319,10 +313,7 @@ void _processSendFile(Map<String, dynamic> data, SendPort mainPort) {
   Future.delayed(const Duration(seconds: 30), () {
     mainPort.send({
       'type': 'send_completion',
-      'completion': {
-        'type': 'file-complete',
-        'fileName': fileName,
-      },
+      'completion': {'type': 'file-complete', 'fileName': fileName},
     });
 
     // Completion callback
@@ -335,14 +326,24 @@ void _processSendFile(Map<String, dynamic> data, SendPort mainPort) {
   });
 }
 
-void _processBinaryChunk(Map<String, dynamic> data, SendPort mainPort,
-    String? currentFileName, int currentFileSize, int receivedBytes, List<Uint8List>? webParts) {
+void _processBinaryChunk(
+  Map<String, dynamic> data,
+  SendPort mainPort,
+  String? currentFileName,
+  int currentFileSize,
+  int receivedBytes,
+  List<Uint8List>? webParts,
+) {
   final chunkData = data['chunkData'] as Uint8List;
 
   try {
     if (chunkData.length < 8) return;
 
-    final byteData = ByteData.view(chunkData.buffer, chunkData.offsetInBytes, chunkData.lengthInBytes);
+    final byteData = ByteData.view(
+      chunkData.buffer,
+      chunkData.offsetInBytes,
+      chunkData.lengthInBytes,
+    );
     final offsetHigh = byteData.getUint32(0, Endian.big);
     final offsetLow = byteData.getUint32(4, Endian.big);
     final offset = (offsetHigh << 32) | offsetLow;
@@ -368,14 +369,17 @@ void _processBinaryChunk(Map<String, dynamic> data, SendPort mainPort,
       'bytesReceived': newReceivedBytes,
       'totalBytes': currentFileSize,
     });
-
   } catch (e) {
     AppLogger.e('Error processing chunk in isolate: $e', tag: 'WebRTC-Isolate');
   }
 }
 
-void _processFileComplete(Map<String, dynamic> data, SendPort mainPort,
-    List<Uint8List>? webParts, int receivedBytes) {
+void _processFileComplete(
+  Map<String, dynamic> data,
+  SendPort mainPort,
+  List<Uint8List>? webParts,
+  int receivedBytes,
+) {
   final fileName = data['fileName'] as String;
 
   try {
@@ -396,7 +400,6 @@ void _processFileComplete(Map<String, dynamic> data, SendPort mainPort,
       'fileName': fileName,
       'savedPath': fileName,
     });
-
   } catch (e) {
     AppLogger.e('Error completing file in isolate: $e', tag: 'WebRTC-Isolate');
   }

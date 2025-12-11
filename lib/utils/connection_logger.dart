@@ -16,20 +16,27 @@ class ConnectionLogger {
 
   Future<void> initialize() async {
     if (_initialized) return;
-    
+
     try {
       final directory = await getApplicationDocumentsDirectory();
       final logDir = Directory('${directory.path}/cpft_logs');
       if (!await logDir.exists()) {
         await logDir.create(recursive: true);
       }
-      
-      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+
+      final timestamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .split('.')
+          .first;
       _logFile = File('${logDir.path}/connection_log_$timestamp.txt');
-      
+
       await _logFile!.writeAsString('=== CPFT Connection Log ===\n');
-      await _logFile!.writeAsString('Started: ${DateTime.now()}\n\n', mode: FileMode.append);
-      
+      await _logFile!.writeAsString(
+        'Started: ${DateTime.now()}\n\n',
+        mode: FileMode.append,
+      );
+
       _initialized = true;
       debugPrint('[ConnectionLogger] ✅ Log file created: ${_logFile!.path}');
     } catch (e) {
@@ -39,15 +46,10 @@ class ConnectionLogger {
 
   Future<void> log(String message) async {
     if (!_initialized) await initialize();
-    
     try {
       final timestamp = DateTime.now().toIso8601String();
       final logMessage = '[$timestamp] $message\n';
-      
       await _logFile?.writeAsString(logMessage, mode: FileMode.append);
-      
-      // Also print to console with special prefix
-      debugPrint('📝 LOG: $message');
     } catch (e) {
       debugPrint('[ConnectionLogger] ❌ Failed to write log: $e');
     }
@@ -62,7 +64,7 @@ class ConnectionLogger {
     if (!_initialized || _logFile == null) {
       return 'Log file not initialized';
     }
-    
+
     try {
       if (await _logFile!.exists()) {
         return await _logFile!.readAsString();
@@ -76,7 +78,10 @@ class ConnectionLogger {
   Future<void> clearLogs() async {
     if (_logFile != null && await _logFile!.exists()) {
       await _logFile!.writeAsString('=== CPFT Connection Log ===\n');
-      await _logFile!.writeAsString('Cleared: ${DateTime.now()}\n\n', mode: FileMode.append);
+      await _logFile!.writeAsString(
+        'Cleared: ${DateTime.now()}\n\n',
+        mode: FileMode.append,
+      );
     }
   }
 }

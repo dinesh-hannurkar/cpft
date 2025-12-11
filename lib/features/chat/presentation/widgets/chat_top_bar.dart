@@ -1,6 +1,6 @@
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
+import 'package:cpft/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:cpft/shared/widgets/primary_app_bar.dart';
 import 'package:flutter/material.dart';

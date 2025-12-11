@@ -89,12 +89,14 @@ class QrLinkChip extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(width: AppSizes.xs),
-                Text('Click to copy',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.primary.withValues(alpha: 0.8),
-                          fontWeight: FontWeight.w500,
-                          fontSize: 10
-                        )),
+                Text(
+                  'Click to copy',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.primary.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10,
+                  ),
+                ),
               ],
             ),
           ),

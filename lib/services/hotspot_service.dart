@@ -1,19 +1,15 @@
 import 'dart:io';
+import 'package:cpft/models/hotspot_info.dart';
 import 'package:flutter/services.dart';
 
 class LocalHotspotService {
   static const platform = MethodChannel('com.example.cpft/hotspot');
-
-  // Start hotspot
   static Future<HotspotInfo?> startHotspot() async {
-    // Hotspot APIs are Android-only. On other platforms, return null gracefully.
     if (!Platform.isAndroid) {
       return null;
     }
     try {
-      // Some devices keep WiFi connected while hotspot is on; proactively disconnect WiFi.
       try {
-        // Use WifiService if available; ignore errors to avoid blocking hotspot start.
         const wifiChannel = MethodChannel('com.example.cpft/wifi');
         await wifiChannel.invokeMethod('disconnectWifi');
       } catch (_) {}
@@ -21,10 +17,6 @@ class LocalHotspotService {
       final result = await platform.invokeMethod('startLocalOnlyHotspot');
 
       if (result['success']) {
-        print('Hotspot started successfully:');
-        print('SSID: "${result['ssid']}"');
-        print('Password: "${result['password']}"');
-        print('Security Type: "${result['securityType']}"');
         return HotspotInfo(
           ssid: result['ssid'] ?? 'Unknown',
           password: result['password'] ?? 'Unknown',
@@ -39,7 +31,6 @@ class LocalHotspotService {
     }
   }
 
-  // Stop hotspot
   static Future<bool> stopHotspot() async {
     if (!Platform.isAndroid) {
       return false;
@@ -53,7 +44,6 @@ class LocalHotspotService {
     }
   }
 
-  // Get hotspot details
   static Future<HotspotInfo?> getHotspotDetails() async {
     if (!Platform.isAndroid) {
       return null;
@@ -75,7 +65,6 @@ class LocalHotspotService {
     }
   }
 
-  // Check if hotspot is running
   static Future<bool> isHotspotRunning() async {
     if (!Platform.isAndroid) {
       return false;
@@ -88,17 +77,4 @@ class LocalHotspotService {
       return false;
     }
   }
-}
-
-// Model for hotspot information
-class HotspotInfo {
-  final String ssid;
-  final String password;
-  final String securityType;
-
-  HotspotInfo({
-    required this.ssid,
-    required this.password,
-    required this.securityType,
-  });
 }

@@ -21,7 +21,7 @@ class FileCard extends StatelessWidget {
     this.onTap,
     this.onAction,
     this.actionIcon,
-    this.margin
+    this.margin,
   });
 
   @override
@@ -86,7 +86,7 @@ class FileCard extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1565C0),
+                                  color: AppColors.primary,
                                   letterSpacing: .5,
                                 ),
                               ),
@@ -98,7 +98,7 @@ class FileCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
+                                  color: AppColors.darkPrimary,
                                 ),
                               ),
                             ),
@@ -110,7 +110,7 @@ class FileCard extends StatelessWidget {
                             Text(
                               formatBytes(sizeBytes),
                               style: const TextStyle(
-                                color: Colors.black54,
+                                color: AppColors.darkPrimary,
                                 fontSize: 12,
                               ),
                             ),
@@ -118,7 +118,7 @@ class FileCard extends StatelessWidget {
                             Text(
                               formatTime(timestamp),
                               style: const TextStyle(
-                                color: Colors.black38,
+                                color: AppColors.darkPrimary,
                                 fontSize: 10,
                               ),
                             ),

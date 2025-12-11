@@ -3,7 +3,6 @@ import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'app_action_button.dart';
 
-/// A reusable, consistent confirm dialog used across the app.
 class AppConfirmDialog extends StatelessWidget {
   final String title;
   final Widget? content;
@@ -11,7 +10,6 @@ class AppConfirmDialog extends StatelessWidget {
   final String cancelLabel;
   final VoidCallback? onConfirm;
   final VoidCallback? onCancel;
-  /// If true, confirm action is styled as destructive (red), else primary (green).
   final bool destructive;
 
   const AppConfirmDialog({
@@ -39,14 +37,16 @@ class AppConfirmDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.only(bottom: AppSizes.spaceBtwInputFields),
+              padding: const EdgeInsets.only(
+                bottom: AppSizes.spaceBtwInputFields,
+              ),
               child: Text(
                 title,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             if (content != null) ...[
@@ -59,7 +59,8 @@ class AppConfirmDialog extends StatelessWidget {
                 Expanded(
                   child: AppActionButton(
                     text: cancelLabel,
-                    onPressed: onCancel ?? () => Navigator.of(context).pop(false),
+                    onPressed:
+                        onCancel ?? () => Navigator.of(context).pop(false),
                     backgroundColor: AppColors.red.withValues(alpha: 0.1),
                     textColor: AppColors.red,
                     borderColor: AppColors.white,
@@ -70,7 +71,8 @@ class AppConfirmDialog extends StatelessWidget {
                 Expanded(
                   child: AppActionButton(
                     text: confirmLabel,
-                    onPressed: onConfirm ?? () => Navigator.of(context).pop(true),
+                    onPressed:
+                        onConfirm ?? () => Navigator.of(context).pop(true),
                     backgroundColor: AppColors.green.withValues(alpha: 0.09),
                     textColor: AppColors.green,
                     borderColor: AppColors.white,

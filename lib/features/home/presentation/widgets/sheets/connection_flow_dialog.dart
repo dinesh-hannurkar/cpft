@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
-import '../../../../features/chat/services/connection_manager.dart';
-import '../../../../services/discovery_service.dart';
-import '../../../../features/chat/models/connection_state.dart';
+import '../../../../chat/services/connection_manager.dart';
+import '../../../../../services/discovery_service.dart';
+import '../../../../chat/models/connection_state.dart';
 
 class ConnectionFlowDialog extends StatefulWidget {
   final String myDeviceName;
@@ -38,7 +38,9 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
   @override
   void initState() {
     super.initState();
-    debugPrint('[ConnectionFlowDialog] Creating connection to ${widget.peerDeviceName}');
+    debugPrint(
+      '[ConnectionFlowDialog] Creating connection to ${widget.peerDeviceName}',
+    );
     _service.addStatusListener(_onStatus);
     _connect();
   }
@@ -46,9 +48,11 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
   Future<void> _connect() async {
     // Don't attempt connection if already connecting or connected
     final currentStatus = _service.currentConnection?.status;
-    if (currentStatus == ConnectionStatus.connected || 
+    if (currentStatus == ConnectionStatus.connected ||
         currentStatus == ConnectionStatus.connecting) {
-      debugPrint('[ConnectionFlowDialog] Already $currentStatus, skipping connect()');
+      debugPrint(
+        '[ConnectionFlowDialog] Already $currentStatus, skipping connect()',
+      );
       setState(() {
         _status = currentStatus!; // safe: we checked it's not null above
       });
@@ -61,7 +65,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
       }
       return;
     }
-    
+
     try {
       await _service.connect(
         widget.peerDeviceName,
@@ -83,7 +87,9 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
 
   void _onStatus(ConnectionInfo info) {
     if (!mounted) return;
-    debugPrint('[ConnectionFlowDialog] Status update for ${widget.peerDeviceName}: ${info.status}');
+    debugPrint(
+      '[ConnectionFlowDialog] Status update for ${widget.peerDeviceName}: ${info.status}',
+    );
     setState(() {
       _status = info.status;
       _error = info.error;
@@ -91,10 +97,14 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     // When connected, close this dialog and let caller proceed
     if (info.status == ConnectionStatus.connected && !_completed) {
       _completed = true;
-      debugPrint('[ConnectionFlowDialog] Connection established to ${widget.peerDeviceName}, closing dialog');
+      debugPrint(
+        '[ConnectionFlowDialog] Connection established to ${widget.peerDeviceName}, closing dialog',
+      );
       // Pop with a result the caller can use to navigate
       Navigator.of(context).pop('connected');
-    } else if ((info.status == ConnectionStatus.failed || info.status == ConnectionStatus.disconnected) && !_completed) {
+    } else if ((info.status == ConnectionStatus.failed ||
+            info.status == ConnectionStatus.disconnected) &&
+        !_completed) {
       // Provide quick feedback to the initiator if rejected/disconnected
       final messenger = ScaffoldMessenger.maybeOf(context);
       final isRejected = (info.error ?? '').toLowerCase().contains('rejected');
@@ -104,9 +114,11 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
             isRejected
                 ? 'Request rejected by ${widget.peerDeviceName}'
                 : (info.status == ConnectionStatus.failed
-                    ? 'Failed to connect to ${widget.peerDeviceName}'
-                    : 'Disconnected from ${widget.peerDeviceName}'),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
+                      ? 'Failed to connect to ${widget.peerDeviceName}'
+                      : 'Disconnected from ${widget.peerDeviceName}'),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.white),
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -193,9 +205,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
   }
 
   Widget _buildTitle() {
-      print("=== Connection Status: $_status ===");
     switch (_status) {
-    
       case ConnectionStatus.connecting:
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -216,28 +226,22 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
           ],
         );
       case ConnectionStatus.connected:
-        return  Text(
+        return Text(
           'Connected',
-          style: Theme.of(  context).textTheme.titleMedium?.copyWith(
-                color: AppColors.green,
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: AppColors.green,
+            fontWeight: FontWeight.w600,
+          ),
         );
       case ConnectionStatus.failed:
         return const Text(
           'Request Rejected',
-          style: TextStyle(
-            color: AppColors.red,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600),
         );
       case ConnectionStatus.disconnected:
         return const Text(
           'Disconnected',
-          style: TextStyle(
-            color: AppColors.red,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600),
         );
     }
   }

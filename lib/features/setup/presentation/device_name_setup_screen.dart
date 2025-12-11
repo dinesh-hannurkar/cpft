@@ -33,13 +33,20 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
       await prefs.setString('device_name', name);
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(kIsWeb ? '/webshare' : '/home');
+        Navigator.of(
+          context,
+        ).pushReplacementNamed(kIsWeb ? '/webshare' : '/home');
       }
     } catch (e) {
       // Handle error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save device name', style: TextStyle(color: Colors.white))),
+          const SnackBar(
+            content: Text(
+              'Failed to save device name',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
         );
       }
     } finally {
@@ -59,7 +66,10 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
           padding: const EdgeInsets.all(24.0),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
+              minHeight:
+                  MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -114,18 +124,6 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
                   isLoading: _isLoading,
                 ),
                 const SizedBox(height: 16),
-                // TextButton(
-                //   onPressed: _isLoading ? null : _useGeneratedName,
-                //   style: TextButton.styleFrom(
-                //     foregroundColor: AppColors.greyDark,
-                //     textStyle: const TextStyle(
-                //       fontSize: 16,
-                //       fontWeight: FontWeight.w500,
-                //     ),
-                //   ),
-                //   child: const Text('Use auto-generated name'),
-                // ),
-                // const SizedBox(height: 24), // Extra space at bottom for keyboard
               ],
             ),
           ),

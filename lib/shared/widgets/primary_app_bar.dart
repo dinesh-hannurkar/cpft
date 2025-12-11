@@ -20,7 +20,10 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.trailing,
     this.centerTitle = true,
     this.backgroundColor,
-  }) : assert(title == null || titleWidget == null, 'Cannot provide both title and titleWidget');
+  }) : assert(
+         title == null || titleWidget == null,
+         'Cannot provide both title and titleWidget',
+       );
 
   @override
   Size get preferredSize => Size.fromHeight(AppSizes.appBarHeight);
@@ -44,17 +47,22 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
           children: [
             if (title != null || titleWidget != null)
               Align(
-                alignment: centerTitle ? Alignment.center : Alignment.centerLeft,
+                alignment: centerTitle
+                    ? Alignment.center
+                    : Alignment.centerLeft,
                 child: Padding(
                   padding: EdgeInsets.only(
                     left: centerTitle ? 0 : 60.0,
                     right: centerTitle ? 0 : 60.0,
                   ),
-                  child: titleWidget ??
+                  child:
+                      titleWidget ??
                       Text(
                         title!,
-                        style: (titleStyle ?? Theme.of(context).textTheme.headlineMedium)
-                            ?.apply(color: AppColors.primary),
+                        style:
+                            (titleStyle ??
+                                    Theme.of(context).textTheme.headlineMedium)
+                                ?.apply(color: AppColors.primary),
                         overflow: TextOverflow.ellipsis,
                       ),
                 ),
@@ -74,9 +82,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
                 child: Center(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ..._withSpacing(trailing!),
-                    ],
+                    children: [..._withSpacing(trailing!)],
                   ),
                 ),
               ),

@@ -35,12 +35,19 @@ class NetworkBanner extends StatelessWidget {
             const SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2962FF)),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF2962FF),
+              ),
             ),
             const SizedBox(width: 8),
             const Text(
               'Switching to temporary hotspot...',
-              style: TextStyle(color: Color(0xFF2962FF), fontWeight: FontWeight.w500, fontSize: 14),
+              style: TextStyle(
+                color: Color(0xFF2962FF),
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
@@ -57,11 +64,19 @@ class NetworkBanner extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.wifi_tethering, color: Color(0xFF2962FF), size: 22),
+                const Icon(
+                  Icons.wifi_tethering,
+                  color: Color(0xFF2962FF),
+                  size: 22,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   name,
-                  style: const TextStyle(color: Color(0xFF2962FF), fontWeight: FontWeight.w500, fontSize: 14),
+                  style: const TextStyle(
+                    color: Color(0xFF2962FF),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
                 ),
               ],
             ),
@@ -73,9 +88,15 @@ class NetworkBanner extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onShowQrCode,
                     icon: const Icon(Icons.qr_code, size: 16),
-                    label: const Text('QR Code', style: TextStyle(fontSize: 12)),
+                    label: const Text(
+                      'QR Code',
+                      style: TextStyle(fontSize: 12),
+                    ),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       side: const BorderSide(color: Color(0xFF2962FF)),
                       minimumSize: const Size(0, 32),
                     ),
@@ -86,7 +107,10 @@ class NetworkBanner extends StatelessWidget {
                   OutlinedButton(
                     onPressed: onSwitchToWifi,
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       side: const BorderSide(color: Color(0xFF2962FF)),
                       minimumSize: const Size(0, 32),
                     ),
@@ -109,11 +133,11 @@ class NetworkBanner extends StatelessWidget {
     final color = isConnected ? const Color(0xFF00C853) : AppColors.red;
     final icon = isConnected ? Icons.wifi : Icons.wifi_off;
     final text = isConnected
-      ? (networkName?.toLowerCase().contains('local') == true
-        ? 'Personal Hotspot is active'
-        : 'Connected to $networkName')
-      : 'Not connected';
-    
+        ? (networkName?.toLowerCase().contains('local') == true
+              ? 'Personal Hotspot is active'
+              : 'Connected to $networkName')
+        : 'Not connected';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -126,7 +150,11 @@ class NetworkBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 text,
-                style: TextStyle(color: color, fontWeight: FontWeight.w500, fontSize: 14),
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
               ),
             ],
           ),
@@ -135,11 +163,17 @@ class NetworkBanner extends StatelessWidget {
             OutlinedButton(
               onPressed: onSwitchToHotspot,
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 side: const BorderSide(color: Color(0xFF00C853)),
                 minimumSize: const Size(0, 32),
               ),
-              child: const Text('Switch to Temporary Hotspot', style: TextStyle(fontSize: 12)),
+              child: const Text(
+                'Switch to Temporary Hotspot',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
           ],
         ],

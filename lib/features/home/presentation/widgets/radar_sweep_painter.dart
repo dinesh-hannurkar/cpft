@@ -5,7 +5,10 @@ class RadarSweepPainter extends CustomPainter {
   final double sweepAngle;
   final Color color;
 
-  RadarSweepPainter({required this.sweepAngle, this.color = const Color(0xFFB8D9ED)});
+  RadarSweepPainter({
+    required this.sweepAngle,
+    this.color = const Color(0xFFB8D9ED),
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -29,8 +32,16 @@ class RadarSweepPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
       ..color = baseColor.withValues(alpha: 0.12);
-    canvas.drawLine(Offset(center.dx - radius, center.dy), Offset(center.dx + radius, center.dy), gridPaint);
-    canvas.drawLine(Offset(center.dx, center.dy - radius), Offset(center.dx, center.dy + radius), gridPaint);
+    canvas.drawLine(
+      Offset(center.dx - radius, center.dy),
+      Offset(center.dx + radius, center.dy),
+      gridPaint,
+    );
+    canvas.drawLine(
+      Offset(center.dx, center.dy - radius),
+      Offset(center.dx, center.dy + radius),
+      gridPaint,
+    );
 
     // Perimeter ticks every 15 degrees
     final tickPaint = Paint()
@@ -109,7 +120,7 @@ class RadarSweepPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(center, sweepEnd, leadLine);
 
-  // Tip pulse removed for a cleaner sweep
+    // Tip pulse removed for a cleaner sweep
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'package:cpft/features/settings/presentation/widget/settings_tile.dart';
 import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,18 +39,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _deviceName = widget.currentDeviceName;
     _loadVersion();
     _loadDeviceNameFromPrefs();
-    // Start settings showcase only on first visit
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
       final hasSeenShowcase = prefs.getBool('settings_showcase_seen') ?? false;
-      
+
       if (!hasSeenShowcase && mounted) {
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
             try {
-              ShowCaseWidget.of(context).startShowCase([
-                ShowcaseHelper.settingsIconKey,
-              ]);
+              ShowCaseWidget.of(
+                context,
+              ).startShowCase([ShowcaseHelper.settingsIconKey]);
               prefs.setBool('settings_showcase_seen', true);
             } catch (_) {}
           }
@@ -213,25 +213,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isApplying = true);
 
     try {
-      // Persist
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('device_name', newName);
-
-      // Dispose current discovery service if any
       await widget.discoveryService?.dispose();
 
-      // Recreate discovery with new alias via /home wrapper
       globalDeviceName = newName;
       globalDiscoveryService = null;
 
       if (!mounted) return;
-      // Replace stack based on platform
-      // On web: return to webshare single-page flow
-      // On mobile: go to home wrapper to rebuild discovery
       if (kIsWeb) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/webshare', (route) => false);
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/webshare', (route) => false);
       } else {
-        Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/home', (route) => false);
       }
     } catch (e) {
       if (!mounted) return;
@@ -272,7 +269,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 ListView(
                   children: [
-                    // Device card
                     Padding(
                       padding: const EdgeInsets.only(
                         top: AppSizes.xl,
@@ -346,15 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Text(
-                          //   'General',
-                          //   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          //     color: AppColors.darkPrimary,
-                          //     fontWeight: FontWeight.bold,
-                          //   ),
-                          // ),
-                          // const SizedBox(height: AppSizes.md),
-                          _settingsTile(
+                          SettingsTile(
                             icon: Icons.info_outline_rounded,
                             title: 'Version',
                             subtitle: 'Installed app version',
@@ -362,43 +350,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               _appVersion.isEmpty ? '-' : _appVersion,
                             ),
                           ),
-                          // _settingsTile(
-                          //   icon: Icons.color_lens_outlined,
-                          //   title: 'Appearance',
-                          //   subtitle: 'Light',
-                          //   onTap: () {},
-                          // ),
-                          _settingsTile(
+                          SettingsTile(
                             icon: Icons.help_outline_rounded,
                             title: 'Help & Support',
                             subtitle: 'Get help, FAQs, and contact support',
                             onTap: () {},
                           ),
-                          _settingsTile(
+                          SettingsTile(
                             icon: Icons.description_outlined,
                             title: 'Terms of Use',
                             subtitle: 'Read the terms and conditions',
                             onTap: () {},
                           ),
-                          _settingsTile(
+                          SettingsTile(
                             icon: Icons.privacy_tip_outlined,
                             title: 'Privacy Policy',
                             subtitle: 'Learn how your data is used',
                             onTap: () {},
                           ),
-                          _settingsTile(
+                          SettingsTile(
                             icon: Icons.feedback_outlined,
                             title: 'Send Feedback',
                             subtitle: 'Report a bug or suggest a feature',
                             onTap: () {},
                           ),
-                          _settingsTile(
+                          SettingsTile(
                             icon: Icons.star_rate_outlined,
                             title: 'Rate Us',
                             subtitle: 'Leave a rating in the store',
                             onTap: () {},
                           ),
-                          _settingsTile(
+                          SettingsTile(
                             icon: Icons.share_outlined,
                             title: 'Share App',
                             subtitle: 'Share CPFT with friends',
@@ -422,43 +404,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _settingsTile({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSizes.sm),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppSizes.cardRadiusSm),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSizes.md,
-          vertical: AppSizes.xs,
-        ),
-        onTap: onTap,
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.secondary,
-            borderRadius: BorderRadius.circular(AppSizes.cardRadiusSm),
-          ),
-          child: Icon(icon, color: AppColors.primary),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: subtitle == null ? null : Text(subtitle),
-        trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
       ),
     );
   }

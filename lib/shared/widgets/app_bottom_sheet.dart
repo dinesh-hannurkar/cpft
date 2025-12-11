@@ -1,14 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 
-/// Reusable bottom sheet wrapper with consistent styling across the app
-/// 
-/// Features:
-/// - Custom drag handle matching app design
-/// - Optional title and subtitle
-/// - Optional close button
-/// - Responsive height with constraints
-/// - Consistent padding and spacing
 class AppBottomSheet extends StatelessWidget {
   final String? title;
   final String? subtitle;
@@ -38,7 +30,8 @@ class AppBottomSheet extends StatelessWidget {
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * (maxHeightFactor ?? 0.85),
+        maxHeight:
+            MediaQuery.of(context).size.height * (maxHeightFactor ?? 0.85),
       ),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -79,7 +72,8 @@ class AppBottomSheet extends StatelessWidget {
                       children: [
                         Text(
                           title!,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.darkPrimary,
                               ),

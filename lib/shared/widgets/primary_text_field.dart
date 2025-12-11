@@ -60,12 +60,9 @@ class PrimaryTextField extends StatelessWidget {
         autofillHints: autofillHints,
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: TextStyle(
-            color: AppColors.greyLight,
-            fontSize: 16,
-          ),
+          hintStyle: TextStyle(color: AppColors.greyLight, fontSize: 16),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.white,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 24,
             vertical: 20,
@@ -80,25 +77,16 @@ class PrimaryTextField extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: AppColors.primary,
-              width: 2,
-            ),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2),
           ),
           prefixIcon: prefixIcon != null
               ? Padding(
                   padding: const EdgeInsets.only(left: 20, right: 12),
-                  child: Icon(
-                    prefixIcon,
-                    color: AppColors.primary,
-                  ),
+                  child: Icon(prefixIcon, color: AppColors.primary),
                 )
               : null,
         ),
-        style: const TextStyle(
-          fontSize: 16,
-          color: AppColors.darkPrimary,
-        ),
+        style: const TextStyle(fontSize: 16, color: AppColors.darkPrimary),
       ),
     );
   }

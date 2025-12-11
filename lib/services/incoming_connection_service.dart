@@ -1,22 +1,16 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
-
 import 'notification_service.dart';
 
-/// Service for accepting incoming connections from other devices
 class IncomingConnectionService {
   final int port;
   final String deviceName;
   ServerSocket? _serverSocket;
-  // Listeners receive the accepted Socket and the remote device name
   final List<Function(Socket, String)> _connectionListeners = [];
   bool _isListening = false;
 
-  IncomingConnectionService({
-    required this.port,
-    required this.deviceName,
-  });
+  IncomingConnectionService({required this.port, required this.deviceName});
 
   /// Check if service is listening
   bool get isListening => _isListening;
@@ -68,11 +62,15 @@ class IncomingConnectionService {
   /// Handle incoming connection (no initial data required)
   void _handleIncomingConnection(Socket socket) {
     final remoteAddress = socket.remoteAddress.address;
-    debugPrint('[IncomingConnection] 📞 Incoming connection from $remoteAddress');
+    debugPrint(
+      '[IncomingConnection] 📞 Incoming connection from $remoteAddress',
+    );
 
     // Don't convert to broadcast - just pass the socket directly
     // The ConnectionService will attach its own listener
-    debugPrint('[IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)');
+    debugPrint(
+      '[IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)',
+    );
     _notifyListeners(socket, remoteAddress);
 
     // Show notification for incoming connection
@@ -106,7 +104,9 @@ class IncomingConnectionService {
       await _serverSocket?.close();
       _serverSocket = null;
       _isListening = false;
-      debugPrint('[IncomingConnection] ✅ Successfully closed socket on port $port');
+      debugPrint(
+        '[IncomingConnection] ✅ Successfully closed socket on port $port',
+      );
     } catch (e) {
       debugPrint('[IncomingConnection] ⚠️  Error stopping: $e');
     }

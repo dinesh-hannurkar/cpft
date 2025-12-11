@@ -13,18 +13,14 @@ class WebServer {
   final String deviceName;
   final List<WebSocket> _connectedClients = [];
 
-  // Static registry of running instances for force stopping
   static final Set<WebServer> _runningInstances = {};
 
-  // Files available for download
   final Map<String, _AvailableFile> _availableFiles = {};
 
-  // Uploaded files for deletion
   final Map<String, String> _uploadedFiles = {}; // filename -> path
 
   bool _isRunning = false;
 
-  // Callbacks for integration with app
   final Function(String filename, Uint8List data)? onFileReceived;
   final Function(String clientId)? onClientConnected;
   final Function(String clientId)? onClientDisconnected;
@@ -92,17 +88,13 @@ class WebServer {
     _port = port;
 
     try {
-      // Prefer dual-stack (IPv6 with IPv4-mapped) when available
       try {
         _server = await HttpServer.bind(
           InternetAddress.anyIPv6,
           _port,
           v6Only: false,
         );
-
-        debugPrint('[WebServer] ✅ Started (dual-stack) on port $_port');
       } catch (e) {
-        // Fallback to IPv4 only
         debugPrint(
           '[WebServer] Dual-stack bind failed: $e. Falling back to IPv4...',
         );
@@ -131,7 +123,6 @@ class WebServer {
   /// Stop the web server
   Future<void> stop() async {
     debugPrint('[WebServer] Stopping web server...');
-    // Always reset the running flag, even for external servers
     _isRunning = false;
 
     if (_server == null) {
@@ -139,7 +130,6 @@ class WebServer {
       return;
     }
 
-    // Close all WebSocket connections
     for (var ws in _connectedClients) {
       try {
         await ws.close();
@@ -149,7 +139,7 @@ class WebServer {
 
     await _server?.close();
     _server = null;
-    _runningInstances.remove(this); // Unregister this instance
+    _runningInstances.remove(this);
     debugPrint('[WebServer] Stopped');
   }
 
@@ -350,7 +340,6 @@ class WebServer {
       final transformer = MimeMultipartTransformer(boundary);
       final downloadsDir = await _getPreferredSaveDirectory();
       try {
-        // Ensure directory exists
         await downloadsDir.create(recursive: true);
       } catch (_) {}
       int processedFiles = 0;
@@ -377,8 +366,6 @@ class WebServer {
             received += chunk.length;
             sink.add(chunk);
             if (onFileUploadProgress != null) {
-              // For multipart uploads, total size is unknown until complete
-              // Report -1 as total to indicate indeterminate progress
               onFileUploadProgress!(filename, received, -1);
             }
           },
@@ -467,11 +454,9 @@ class WebServer {
 
   /// Choose a writable directory for saving uploaded files across platforms
   Future<Directory> _getPreferredSaveDirectory() async {
-    // On Apple platforms, prefer Documents inside sandbox (safe without extra entitlements)
     if (Platform.isIOS || Platform.isMacOS) {
       return await getApplicationDocumentsDirectory();
     }
-    // Else, try Downloads, then fallback to Documents
     final d = await getDownloadsDirectory();
     if (d != null) return d;
     return await getApplicationDocumentsDirectory();

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/features/chat/services/connection_manager.dart';
-import 'package:cpft/features/home/presentation/widgets/settings_button.dart';
+import 'package:cpft/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:cpft/services/discovery_service.dart';
 import 'package:cpft/features/settings/presentation/settings_screen.dart';
 import 'package:showcaseview/showcaseview.dart';
@@ -50,10 +50,9 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
               Center(
                 child: Text(
                   'CPFT',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineMedium
-                      ?.apply(color: AppColors.primary),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineMedium?.apply(color: AppColors.primary),
                 ),
               ),
               Positioned(
@@ -69,11 +68,19 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                         disableBarrierInteraction: false,
                         targetPadding: const EdgeInsets.all(8),
                         title: 'Connected Devices',
-                        description: 'View all currently connected devices and tap to start transferring files.',
+                        description:
+                            'View all currently connected devices and tap to start transferring files.',
                         tooltipBackgroundColor: Colors.white,
                         textColor: Colors.black,
-                        descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-                        titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                        descTextStyle: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                        titleTextStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          fontSize: 16,
+                        ),
                         tooltipBorderRadius: BorderRadius.circular(12),
                         targetBorderRadius: BorderRadius.circular(12),
                         child: _buildConnectedDevicesButton(),
@@ -84,11 +91,19 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                         disableBarrierInteraction: false,
                         targetPadding: const EdgeInsets.all(8),
                         title: 'Scan QR Code',
-                        description: 'Scan a QR code to quickly join a shared network and connect with nearby devices.',
+                        description:
+                            'Scan a QR code to quickly join a shared network and connect with nearby devices.',
                         tooltipBackgroundColor: Colors.white,
                         textColor: Colors.black,
-                        descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-                        titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                        descTextStyle: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                        titleTextStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          fontSize: 16,
+                        ),
                         tooltipBorderRadius: BorderRadius.circular(12),
                         targetBorderRadius: BorderRadius.circular(12),
                         child: AppIconButton(
@@ -113,11 +128,19 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                         disableBarrierInteraction: false,
                         targetPadding: const EdgeInsets.all(8),
                         title: 'Settings',
-                        description: 'Change your device name and app preferences.',
+                        description:
+                            'Change your device name and app preferences.',
                         tooltipBackgroundColor: Colors.white,
                         textColor: Colors.black,
-                        descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-                        titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                        descTextStyle: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                        titleTextStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          fontSize: 16,
+                        ),
                         tooltipBorderRadius: BorderRadius.circular(12),
                         targetBorderRadius: BorderRadius.circular(12),
                         child: AppIconButton(
@@ -143,8 +166,15 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                         description: 'Replay this guide anytime.',
                         tooltipBackgroundColor: Colors.white,
                         textColor: Colors.black,
-                        descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-                        titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+                        descTextStyle: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                        titleTextStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          fontSize: 16,
+                        ),
                         tooltipBorderRadius: BorderRadius.circular(12),
                         targetBorderRadius: BorderRadius.circular(12),
                         child: AppIconButton(

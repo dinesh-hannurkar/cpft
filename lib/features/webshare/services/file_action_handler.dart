@@ -8,39 +8,39 @@ import 'package:cpft/features/webshare/services/web_received_cache.dart';
 import 'package:cpft/utils/mime_utils.dart';
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 
-/// Utility class for handling file actions across different screens
 class FileActionHandler {
-  /// Creates onTap callback for file cards
   static VoidCallback? createOnTap(String filename, String path) {
     return () async {
       await handleFileTap(filename, path);
     };
   }
 
-  /// Creates onAction callback for file cards
-  static void Function(BuildContext)? createOnAction(String filename, String path) {
+  static void Function(BuildContext)? createOnAction(
+    String filename,
+    String path,
+  ) {
     return (context) async {
       await handleFileAction(context, filename, path);
     };
   }
 
-  /// Handles file tap (open/download)
   static Future<void> handleFileTap(String filename, String path) async {
     if (kIsWeb &&
         (path.startsWith('web-bytes:') || path.startsWith('web-parts:'))) {
-      // On web cached items, trigger download
       await _downloadWebFile(filename, path);
       return;
     }
 
-    // Native: open file
     try {
       await OpenFilex.open(path);
     } catch (_) {}
   }
 
-  /// Handles file action (download on web, action sheet on native)
-  static Future<void> handleFileAction(BuildContext context, String filename, String path) async {
+  static Future<void> handleFileAction(
+    BuildContext context,
+    String filename,
+    String path,
+  ) async {
     if (kIsWeb && path.startsWith('web-bytes:')) {
       await _downloadWebFileFromCache(filename, path, 'web-bytes:');
       return;
@@ -51,14 +51,12 @@ class FileActionHandler {
       return;
     }
 
-    // Native: show actions - Open, Save to device…, Share
     if (!kIsWeb) {
       await _showNativeFileActions(context, filename, path);
       return;
     }
   }
 
-  /// Downloads file from web cache
   static Future<void> _downloadWebFile(String filename, String path) async {
     if (path.startsWith('web-bytes:')) {
       await _downloadWebFileFromCache(filename, path, 'web-bytes:');
@@ -67,8 +65,11 @@ class FileActionHandler {
     }
   }
 
-  /// Downloads file from specific web cache type
-  static Future<void> _downloadWebFileFromCache(String filename, String path, String prefix) async {
+  static Future<void> _downloadWebFileFromCache(
+    String filename,
+    String path,
+    String prefix,
+  ) async {
     final id = path.substring(prefix.length);
 
     if (prefix == 'web-bytes:') {
@@ -92,8 +93,11 @@ class FileActionHandler {
     }
   }
 
-  /// Shows native file action bottom sheet
-  static Future<void> _showNativeFileActions(BuildContext context, String filename, String path) async {
+  static Future<void> _showNativeFileActions(
+    BuildContext context,
+    String filename,
+    String path,
+  ) async {
     showAppBottomSheet(
       context: context,
       title: 'File Options',

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cpft/features/webshare/models/webshare_models.dart';
 import 'package:cpft/utils/time_utils.dart';
 import 'package:cpft/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +7,6 @@ import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../services/discovery_service.dart';
 
-/// Screen for managing files shared via web transfer
 class WebFileManagerScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
 
@@ -431,7 +431,6 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
   }
 
   void _showFileOptions(String path) {
-    // TODO: Implement file viewer or share options
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -441,34 +440,4 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
       ),
     );
   }
-}
-
-/// Model for files received from web
-class ReceivedFileInfo {
-  final String filename;
-  final String path;
-  final DateTime receivedAt;
-
-  ReceivedFileInfo({
-    required this.filename,
-    required this.path,
-    required this.receivedAt,
-  });
-}
-
-/// Model for files shared to web (mirrors the one in DiscoveryService)
-class SharedFileInfo {
-  final String id;
-  final String filename;
-  final String path;
-  final int size;
-  final DateTime sharedAt;
-
-  SharedFileInfo({
-    required this.id,
-    required this.filename,
-    required this.path,
-    required this.size,
-    required this.sharedAt,
-  });
 }

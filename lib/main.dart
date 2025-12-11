@@ -1,4 +1,3 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,9 +13,7 @@ import 'common/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
 import 'features/webshare/presentation/web_room_entry_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
-import 'firebase_options.dart';
 import 'services/firebase_initializer.dart';
-import 'widgets/firebase_status_banner.dart';
 
 // Global navigator key for navigation from anywhere (e.g., notifications)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -31,12 +28,12 @@ void main() async {
   try {
     await FirebaseInitializer.ensure();
   } catch (_) {}
-  
+
   // Clean up old received files on Android (async, don't block app startup)
   ConnectionService.cleanupOldReceivedFiles().catchError((e) {
     debugPrint('[Main] Startup cleanup error: $e');
   });
-  
+
   runApp(const MainApp());
 }
 
@@ -47,37 +44,37 @@ class MainApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShowCaseWidget(
       builder: (context) => MaterialApp(
-      title: 'CPFT',
-      theme: AppTheme.lightTheme,
-      navigatorKey: navigatorKey,
-      // On web, only show the WebShare (WebRTC) screen
-      initialRoute: kIsWeb ? '/webshare' : '/',
-      routes: {
-        '/': (context) => const PermissionWrapper(),
-        '/setup': (context) => const DeviceNameSetupScreen(),
-        '/home': (context) => const HomeWrapper(),
-        '/webshare': (context) => const WebRoomEntryScreen(),
-      },
-      builder: (context, child) {
-        final content = Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-              stops: [0.0, 1.0],
+        title: 'CPFT',
+        theme: AppTheme.lightTheme,
+        navigatorKey: navigatorKey,
+        // On web, only show the WebShare (WebRTC) screen
+        initialRoute: kIsWeb ? '/webshare' : '/',
+        routes: {
+          '/': (context) => const PermissionWrapper(),
+          '/setup': (context) => const DeviceNameSetupScreen(),
+          '/home': (context) => const HomeWrapper(),
+          '/webshare': (context) => const WebRoomEntryScreen(),
+        },
+        builder: (context, child) {
+          final content = Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                stops: [0.0, 1.0],
+              ),
             ),
-          ),
-          child: child,
-        );
-        return Stack(
-          children: [
-            content, 
-            // FirebaseStatusBanner(),
-          ],
-        );
-      },
-    ),
+            child: child,
+          );
+          return Stack(
+            children: [
+              content,
+              // FirebaseStatusBanner(),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -126,7 +123,9 @@ class _HomeWrapperState extends State<HomeWrapper> {
   }
 
   void _initializeDiscoveryService(String deviceName) {
-    final platformName = kIsWeb ? 'web' : defaultTargetPlatform.name.toLowerCase();
+    final platformName = kIsWeb
+        ? 'web'
+        : defaultTargetPlatform.name.toLowerCase();
     _discoveryService = DiscoveryService(
       alias: deviceName,
       deviceModel: platformName,
@@ -138,68 +137,46 @@ class _HomeWrapperState extends State<HomeWrapper> {
     // Set up notification tap handler
     _setupNotificationHandler();
   }
-  
+
   void _setupNotificationHandler() {
-    debugPrint('[HomeWrapper] Setting up notification handler');
-    NotificationService().onNotificationTap = (String deviceName, String transferId) async {
-      debugPrint('[HomeWrapper] ========================================');
-      debugPrint('[HomeWrapper] Notification callback triggered!');
-      debugPrint('[HomeWrapper] Device: $deviceName, Transfer: $transferId');
-      debugPrint('[HomeWrapper] globalDiscoveryService is null: ${globalDiscoveryService == null}');
-      debugPrint('[HomeWrapper] globalDeviceName: $globalDeviceName');
-      
-      final cm = globalDiscoveryService?.connectionManager;
-      debugPrint('[HomeWrapper] ConnectionManager is null: ${cm == null}');
-      
-      if (cm == null) {
-        debugPrint('[HomeWrapper] ERROR: ConnectionManager not available');
-        return;
-      }
-      
-      final connection = cm.getConnection(deviceName);
-      debugPrint('[HomeWrapper] Connection found: ${connection != null}');
-      
-      if (connection == null) {
-        debugPrint('[HomeWrapper] ERROR: No connection found for $deviceName');
-        debugPrint('[HomeWrapper] Available connections: ${cm.activeConnections.keys.toList()}');
-        return;
-      }
-      
-      // Navigate using global navigator key
-      final context = navigatorKey.currentContext;
-      debugPrint('[HomeWrapper] Navigator context available: ${context != null}');
-      
-      if (context != null) {
-        debugPrint('[HomeWrapper] Navigating to ConnectionScreenRefactored...');
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ChatScreen(
-              deviceName: deviceName,
-              ipAddress: connection.currentConnection?.ipAddress ?? '',
-              port: DiscoveryService.p2pPort,
-              myDeviceName: globalDeviceName ?? '',
-              connectionManager: cm,
-              initialDeviceId: deviceName,
-            ),
-          ),
-        );
-        debugPrint('[HomeWrapper] Navigation pushed successfully');
-      } else {
-        debugPrint('[HomeWrapper] ERROR: No navigator context available');
-      }
-      debugPrint('[HomeWrapper] ========================================');
-    };
-    debugPrint('[HomeWrapper] Notification handler setup complete');
+    NotificationService().onNotificationTap =
+        (String deviceName, String transferId) async {
+          final cm = globalDiscoveryService?.connectionManager;
+          if (cm == null) {
+            return;
+          }
+
+          final connection = cm.getConnection(deviceName);
+          if (connection == null) {
+            return;
+          }
+
+          // Navigate using global navigator key
+          final context = navigatorKey.currentContext;
+
+          if (context != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ChatScreen(
+                  deviceName: deviceName,
+                  ipAddress: connection.currentConnection?.ipAddress ?? '',
+                  port: DiscoveryService.p2pPort,
+                  myDeviceName: globalDeviceName ?? '',
+                  connectionManager: cm,
+                  initialDeviceId: deviceName,
+                ),
+              ),
+            );
+          } else {
+            debugPrint('[HomeWrapper] ERROR: No navigator context available');
+          }
+        };
   }
 
   @override
   Widget build(BuildContext context) {
     if (_deviceName == null || _discoveryService == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return HomeScreen(
@@ -216,7 +193,8 @@ class PermissionWrapper extends StatefulWidget {
   State<PermissionWrapper> createState() => _PermissionWrapperState();
 }
 
-class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindingObserver {
+class _PermissionWrapperState extends State<PermissionWrapper>
+    with WidgetsBindingObserver {
   bool _permissionsGranted = false;
   bool _isCheckingPermissions = true;
   bool _locationServiceDisabled = false;
@@ -239,7 +217,8 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     // When app resumes from background (e.g., returning from Settings), re-check permissions
-    if (state == AppLifecycleState.resumed && (!_permissionsGranted || _locationServiceDisabled)) {
+    if (state == AppLifecycleState.resumed &&
+        (!_permissionsGranted || _locationServiceDisabled)) {
       AppLogger.d('App resumed - re-checking permissions', tag: 'PermWrap');
       _checkPermissions();
     }
@@ -255,7 +234,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     await _checkPermissions();
     _deviceName = await _getDeviceName();
     AppLogger.d('Device name loaded: $_deviceName', tag: 'PermWrap');
-    
+
     // If device name not set: on web, use a dummy name; on mobile, navigate to setup.
     if (_deviceName == null) {
       if (kIsWeb) {
@@ -270,7 +249,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
         }
       }
     }
-    
+
     if (mounted) {
       setState(() {});
     }
@@ -299,7 +278,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
 
     final granted = await AppPermissions.requestNetworkPermissions();
     AppLogger.d('Permissions granted: $granted', tag: 'PermWrap');
-    
+
     // For iOS, also show Local Network permission instructions
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       await LocalNetworkPermissionHelper.requestPermission();
@@ -341,7 +320,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
       );
     }
 
-  if (!_permissionsGranted) {
+    if (!_permissionsGranted) {
       final isServiceDisabled = _locationServiceDisabled;
       return Scaffold(
         resizeToAvoidBottomInset: false,
@@ -358,7 +337,7 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
                 ),
                 const SizedBox(height: 16),
                 Text(
-                    isServiceDisabled
+                  isServiceDisabled
                       ? 'Location Services Disabled'
                       : 'Location Permission Required',
                   style: const TextStyle(
@@ -369,11 +348,12 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
                 ),
                 const SizedBox(height: 16),
                 Text(
-                    isServiceDisabled
+                  isServiceDisabled
                       ? 'Please enable Location Services in your device settings to use this app. WiFi network detection requires location services to be turned on.'
-                      : (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-                        ? 'On Android 10+, location permission is required to detect your WiFi network name. This helps you confirm you\'re connected to the right network for file transfers.'
-                        : 'Location permission is needed to detect your WiFi network name and discover nearby devices on your local network.',
+                      : (!kIsWeb &&
+                            defaultTargetPlatform == TargetPlatform.android)
+                      ? 'On Android 10+, location permission is required to detect your WiFi network name. This helps you confirm you\'re connected to the right network for file transfers.'
+                      : 'Location permission is needed to detect your WiFi network name and discover nearby devices on your local network.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16, color: Colors.black87),
                 ),
@@ -382,7 +362,11 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
                   const Text(
                     'Note: Your location data is never collected or shared. This permission only allows the app to read your WiFi name.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.black54),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.black54,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 24),
@@ -390,9 +374,11 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
                   onPressed: isServiceDisabled
                       ? AppPermissions.openSystemLocationSettings
                       : _checkPermissions,
-                  child: Text(isServiceDisabled
-                      ? 'Open Location Settings'
-                      : 'Grant Permission'),
+                  child: Text(
+                    isServiceDisabled
+                        ? 'Open Location Settings'
+                        : 'Grant Permission',
+                  ),
                 ),
                 if (!isServiceDisabled) ...[
                   const SizedBox(height: 16),
@@ -410,8 +396,13 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
 
     // If device name is set, show home screen
     if (_deviceName != null) {
-      AppLogger.i('Creating HomeScreen with device name: $_deviceName', tag: 'PermWrap');
-      final platformName = kIsWeb ? 'web' : defaultTargetPlatform.name.toLowerCase();
+      AppLogger.i(
+        'Creating HomeScreen with device name: $_deviceName',
+        tag: 'PermWrap',
+      );
+      final platformName = kIsWeb
+          ? 'web'
+          : defaultTargetPlatform.name.toLowerCase();
       final discovery = DiscoveryService(
         alias: _deviceName!,
         deviceModel: platformName,
@@ -429,44 +420,59 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
     }
 
     // If we're still initializing (device name check in progress), show loading
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
-  
+
   void _setupNotificationHandler() {
     debugPrint('[PermissionWrapper] Setting up notification handler');
-    NotificationService().onNotificationTap = (String deviceName, String transferId) async {
-      debugPrint('[PermissionWrapper] ========================================');
+    NotificationService()
+        .onNotificationTap = (String deviceName, String transferId) async {
+      debugPrint(
+        '[PermissionWrapper] ========================================',
+      );
       debugPrint('[PermissionWrapper] Notification callback triggered!');
-      debugPrint('[PermissionWrapper] Device: $deviceName, Transfer: $transferId');
-      debugPrint('[PermissionWrapper] globalDiscoveryService is null: ${globalDiscoveryService == null}');
-      
+      debugPrint(
+        '[PermissionWrapper] Device: $deviceName, Transfer: $transferId',
+      );
+      debugPrint(
+        '[PermissionWrapper] globalDiscoveryService is null: ${globalDiscoveryService == null}',
+      );
+
       final cm = globalDiscoveryService?.connectionManager;
-      debugPrint('[PermissionWrapper] ConnectionManager is null: ${cm == null}');
-      
+      debugPrint(
+        '[PermissionWrapper] ConnectionManager is null: ${cm == null}',
+      );
+
       if (cm == null) {
-        debugPrint('[PermissionWrapper] ERROR: ConnectionManager not available');
+        debugPrint(
+          '[PermissionWrapper] ERROR: ConnectionManager not available',
+        );
         return;
       }
-      
+
       final connection = cm.getConnection(deviceName);
       debugPrint('[PermissionWrapper] Connection found: ${connection != null}');
-      
+
       if (connection == null) {
-        debugPrint('[PermissionWrapper] ERROR: No connection found for $deviceName');
-        debugPrint('[PermissionWrapper] Available connections: ${cm.activeConnections.keys.toList()}');
+        debugPrint(
+          '[PermissionWrapper] ERROR: No connection found for $deviceName',
+        );
+        debugPrint(
+          '[PermissionWrapper] Available connections: ${cm.activeConnections.keys.toList()}',
+        );
         return;
       }
-      
+
       // Navigate using global navigator key
       final context = navigatorKey.currentContext;
-      debugPrint('[PermissionWrapper] Navigator context available: ${context != null}');
-      
+      debugPrint(
+        '[PermissionWrapper] Navigator context available: ${context != null}',
+      );
+
       if (context != null) {
-        debugPrint('[PermissionWrapper] Navigating to ConnectionScreenRefactored...');
+        debugPrint(
+          '[PermissionWrapper] Navigating to ConnectionScreenRefactored...',
+        );
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ChatScreen(
@@ -483,7 +489,9 @@ class _PermissionWrapperState extends State<PermissionWrapper> with WidgetsBindi
       } else {
         debugPrint('[PermissionWrapper] ERROR: No navigator context available');
       }
-      debugPrint('[PermissionWrapper] ========================================');
+      debugPrint(
+        '[PermissionWrapper] ========================================',
+      );
     };
     debugPrint('[PermissionWrapper] Notification handler setup complete');
   }

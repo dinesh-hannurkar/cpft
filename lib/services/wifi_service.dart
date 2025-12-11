@@ -4,15 +4,11 @@ import 'package:flutter/services.dart';
 
 class WifiService {
   static const MethodChannel _channel = MethodChannel('com.example.cpft/wifi');
-
-  /// Connect to a WiFi network
-  /// Returns a map with connection status
   static Future<Map<String, dynamic>> connectToWifi({
     required String ssid,
     String? password,
     String security = 'WPA',
   }) async {
-
     try {
       final result = await _channel.invokeMethod('connectToWifi', {
         'ssid': ssid,
@@ -26,7 +22,6 @@ class WifiService {
     }
   }
 
-  /// Disconnect from current WiFi network
   static Future<Map<String, dynamic>> disconnectWifi() async {
     if (!Platform.isAndroid) {
       throw UnsupportedError('WiFi disconnection is only supported on Android');
@@ -64,7 +59,9 @@ class WifiService {
       final result = await _channel.invokeMethod('openWifiSettings');
       debugPrint('📱 openWifiSettings result: $result');
     } on PlatformException catch (e) {
-      debugPrint('❌ openWifiSettings PlatformException: ${e.code} - ${e.message}');
+      debugPrint(
+        '❌ openWifiSettings PlatformException: ${e.code} - ${e.message}',
+      );
       rethrow;
     } catch (e) {
       debugPrint('❌ openWifiSettings error: $e');

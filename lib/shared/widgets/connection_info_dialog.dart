@@ -3,9 +3,6 @@ import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/utils/network_utils.dart';
 
-/// Dialog widget for displaying WebRTC connection information
-///
-/// Shows peer device name, network name, and disconnect option
 class ConnectionInfoDialog extends StatefulWidget {
   final String? peerName;
   final String networkName;
@@ -64,7 +61,6 @@ class _ConnectionInfoDialogState extends State<ConnectionInfoDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header with title and close icon
             Row(
               children: [
                 Expanded(
@@ -72,9 +68,9 @@ class _ConnectionInfoDialogState extends State<ConnectionInfoDialog> {
                     'Connection Info',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -98,7 +94,9 @@ class _ConnectionInfoDialogState extends State<ConnectionInfoDialog> {
             _buildInfoRow(
               icon: Icons.wifi,
               label: 'Network Name',
-              value: _isLoadingWifi ? 'Loading...' : (_wifiName ?? 'Unknown Network'),
+              value: _isLoadingWifi
+                  ? 'Loading...'
+                  : (_wifiName ?? 'Unknown Network'),
             ),
             const SizedBox(height: AppSizes.sm),
             _buildInfoRow(
@@ -126,11 +124,7 @@ class _ConnectionInfoDialogState extends State<ConnectionInfoDialog> {
             color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: AppColors.primary,
-          ),
+          child: Icon(icon, size: 20, color: AppColors.primary),
         ),
         const SizedBox(width: AppSizes.md),
         Expanded(
@@ -162,7 +156,6 @@ class _ConnectionInfoDialogState extends State<ConnectionInfoDialog> {
   }
 }
 
-/// Helper function to show connection info dialog
 Future<void> showConnectionInfoDialog({
   required BuildContext context,
   required String? peerName,

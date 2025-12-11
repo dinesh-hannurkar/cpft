@@ -29,72 +29,74 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
-  
+
   /// Callback for notification tap (to navigate to chat)
   Function(String deviceName, String transferId)? onNotificationTap;
 
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('[NotificationService] ========================================');
-    debugPrint('[NotificationService] Notification tapped!');
-    debugPrint('[NotificationService] Payload: ${response.payload}');
-    debugPrint('[NotificationService] Action ID: ${response.actionId}');
-    debugPrint('[NotificationService] Notification ID: ${response.id}');
-    debugPrint('[NotificationService] onNotificationTap callback set: ${onNotificationTap != null}');
-    debugPrint('[NotificationService] ========================================');
-    
-    // Handle file transfer notification tap - navigate to chat
-    if (response.payload != null && response.payload!.startsWith('file_offer:')) {
+    if (response.payload != null &&
+        response.payload!.startsWith('file_offer:')) {
       final parts = response.payload!.split(':');
       debugPrint('[NotificationService] Payload parts: $parts');
       if (parts.length >= 3) {
         final transferId = parts[1];
         final deviceName = parts[2];
-        debugPrint('[NotificationService] Opening chat with $deviceName for file transfer $transferId');
-        debugPrint('[NotificationService] Calling onNotificationTap callback...');
         onNotificationTap?.call(deviceName, transferId);
-        debugPrint('[NotificationService] Callback invoked');
       } else {
-        debugPrint('[NotificationService] ERROR: Invalid payload format, expected 3+ parts but got ${parts.length}');
+        debugPrint(
+          '[NotificationService] ERROR: Invalid payload format, expected 3+ parts but got ${parts.length}',
+        );
       }
     } else {
-      debugPrint('[NotificationService] Not a file_offer notification, ignoring');
+      debugPrint(
+        '[NotificationService] Not a file_offer notification, ignoring',
+      );
     }
   }
 
   /// Create notification channels for Android
   Future<void> _createNotificationChannels() async {
-    const AndroidNotificationChannel connectionChannel = AndroidNotificationChannel(
-      'connections',
-      'Connections',
-      description: 'Connection status notifications',
-      importance: Importance.defaultImportance,
-    );
+    const AndroidNotificationChannel connectionChannel =
+        AndroidNotificationChannel(
+          'connections',
+          'Connections',
+          description: 'Connection status notifications',
+          importance: Importance.defaultImportance,
+        );
 
-    const AndroidNotificationChannel transferChannel = AndroidNotificationChannel(
-      'transfers',
-      'File Transfers',
-      description: 'File transfer status notifications',
-      importance: Importance.high,
-    );
+    const AndroidNotificationChannel transferChannel =
+        AndroidNotificationChannel(
+          'transfers',
+          'File Transfers',
+          description: 'File transfer status notifications',
+          importance: Importance.high,
+        );
 
-    const AndroidNotificationChannel generalChannel = AndroidNotificationChannel(
-      'general',
-      'General',
-      description: 'General app notifications',
-      importance: Importance.defaultImportance,
-    );
+    const AndroidNotificationChannel generalChannel =
+        AndroidNotificationChannel(
+          'general',
+          'General',
+          description: 'General app notifications',
+          importance: Importance.defaultImportance,
+        );
 
     await _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(connectionChannel);
 
     await _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(transferChannel);
 
     await _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(generalChannel);
   }
 
@@ -107,23 +109,24 @@ class NotificationService {
 
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        );
 
     const DarwinInitializationSettings initializationSettingsMacOS =
         DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        );
 
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-      macOS: initializationSettingsMacOS,
-    );
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+          android: initializationSettingsAndroid,
+          iOS: initializationSettingsIOS,
+          macOS: initializationSettingsMacOS,
+        );
 
     await _flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
@@ -149,21 +152,24 @@ class NotificationService {
     bool enableVibration = true,
   }) async {
     if (!_isInitialized) {
-      debugPrint('[NotificationService] ⚠️  Not initialized, call initialize() first');
+      debugPrint(
+        '[NotificationService] ⚠️  Not initialized, call initialize() first',
+      );
       return;
     }
 
     final int id = DateTime.now().millisecondsSinceEpoch ~/ 1000; // Unique ID
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      _getChannelId(type),
-      _getChannelName(type),
-      channelDescription: _getChannelDescription(type),
-      importance: _getImportance(type),
-      playSound: enableSound,
-      enableVibration: enableVibration,
-      icon: '@mipmap/ic_launcher',
-    );
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          _getChannelId(type),
+          _getChannelName(type),
+          channelDescription: _getChannelDescription(type),
+          importance: _getImportance(type),
+          playSound: enableSound,
+          enableVibration: enableVibration,
+          icon: '@mipmap/ic_launcher',
+        );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
@@ -203,13 +209,15 @@ class NotificationService {
     required String deviceName, // Connection lookup name
   }) async {
     if (!_isInitialized) {
-      debugPrint('[NotificationService] ⚠️  Not initialized, call initialize() first');
+      debugPrint(
+        '[NotificationService] ⚠️  Not initialized, call initialize() first',
+      );
       return;
     }
 
     final int id = transferId.hashCode; // Use transferId hash for consistent ID
     final String payload = 'file_offer:$transferId:$deviceName';
-    
+
     // Format file size
     String sizeStr;
     if (fileSize < 1024) {
@@ -221,20 +229,21 @@ class NotificationService {
     } else {
       sizeStr = '${(fileSize / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
     }
-    
+
     final title = 'Incoming File from $senderDisplayName';
     final body = '$fileName ($sizeStr) - Tap to accept or decline';
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'transfers',
-      'File Transfers',
-      channelDescription: 'File transfer status notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      icon: '@mipmap/ic_launcher',
-    );
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'transfers',
+          'File Transfers',
+          channelDescription: 'File transfer status notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
+        );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
@@ -262,7 +271,9 @@ class NotificationService {
       payload: payload,
     );
 
-    debugPrint('[NotificationService] 📱 File transfer notification shown: $title');
+    debugPrint(
+      '[NotificationService] 📱 File transfer notification shown: $title',
+    );
   }
 
   /// Get channel ID for notification type
@@ -340,7 +351,6 @@ class NotificationService {
     // Android 13+ (API 33+): Request POST_NOTIFICATIONS permission
     if (Platform.isAndroid) {
       final status = await Permission.notification.request();
-      debugPrint('[NotificationService] Android notification permission: $status');
       return status.isGranted;
     }
 
@@ -349,20 +359,17 @@ class NotificationService {
       return true;
     }
 
-    final bool? granted = await _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        ) ??
+    final bool? granted =
         await _flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<MacOSFlutterLocalNotificationsPlugin>()
-            ?.requestPermissions(
-              alert: true,
-              badge: true,
-              sound: true,
-            );
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >()
+            ?.requestPermissions(alert: true, badge: true, sound: true) ??
+        await _flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin
+            >()
+            ?.requestPermissions(alert: true, badge: true, sound: true);
 
     return granted ?? false;
   }

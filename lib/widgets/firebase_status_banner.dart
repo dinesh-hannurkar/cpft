@@ -1,3 +1,4 @@
+import 'package:cpft/core/constants/app_colors.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cpft/services/firebase_initializer.dart';
@@ -30,7 +31,7 @@ class _FirebaseStatusBannerState extends State<FirebaseStatusBanner> {
   Widget build(BuildContext context) {
     if (!kIsWeb) return const SizedBox.shrink();
 
-    final ready = (FirebaseInitializer.isReady as ValueListenable<bool>).value;
+    final ready = (FirebaseInitializer.isReady).value;
     final pid = FirebaseInitializer.projectId ?? '-';
     final apps = FirebaseInitializer.appCount;
     final hasError = FirebaseInitializer.lastError != null;
@@ -40,8 +41,8 @@ class _FirebaseStatusBannerState extends State<FirebaseStatusBanner> {
         : (ready ? 'Firebase: OK ($pid)' : 'Firebase: Init…');
 
     final Color bg = hasError
-        ? Colors.red.withOpacity(0.85)
-        : (ready ? Colors.black.withOpacity(0.65) : Colors.orange.withOpacity(0.8));
+        ? AppColors.red.withOpacity(0.85)
+        : (ready ? AppColors.blackDark : Colors.orange.withOpacity(0.8));
 
     return IgnorePointer(
       child: Container(
@@ -56,7 +57,7 @@ class _FirebaseStatusBannerState extends State<FirebaseStatusBanner> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: DefaultTextStyle(
               style: const TextStyle(
-                color: Colors.white,
+                color: AppColors.white,
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
               ),

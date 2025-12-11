@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-// Removed flutter/foundation debugPrint usage; replaced with AppLogger
 import 'package:cpft/core/logging/app_logger.dart';
-
 import 'package:http/http.dart' as http;
 import '../models/multicast_dto.dart';
 
-/// HTTP client for sending registration requests to discovered devices
 class HttpDiscoveryClient {
   final String fingerprint;
   final String alias;
@@ -20,7 +17,6 @@ class HttpDiscoveryClient {
     required this.deviceModel,
   });
 
-  /// Send registration to a discovered device
   Future<bool> registerWithDevice(String ip, int port) async {
     try {
       final dto = RegisterDto(
@@ -33,11 +29,13 @@ class HttpDiscoveryClient {
       final url = Uri.parse('http://$ip:$port/register');
       AppLogger.d('Registering with $ip:$port...', tag: 'HttpDisc');
 
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: dto.toJsonString(),
-      ).timeout(const Duration(seconds: 3));
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: dto.toJsonString(),
+          )
+          .timeout(const Duration(seconds: 3));
 
       if (response.statusCode == 200) {
         AppLogger.i('Successfully registered with $ip:$port', tag: 'HttpDisc');
@@ -46,32 +44,43 @@ class HttpDiscoveryClient {
         AppLogger.d('Self-discovery ignored ($ip)', tag: 'HttpDisc');
         return false;
       } else {
-        AppLogger.w('Registration failed: ${response.statusCode} ($ip:$port)', tag: 'HttpDisc');
+        AppLogger.w(
+          'Registration failed: ${response.statusCode} ($ip:$port)',
+          tag: 'HttpDisc',
+        );
         return false;
       }
     } catch (e) {
-      // Provide more detailed error diagnostics for registration
       if (e is SocketException) {
         final errorCode = e.osError?.errorCode ?? 'unknown';
-        // final errorMessage = e.osError?.message ?? e.message; // unused
-        
+
         switch (errorCode) {
           case 113: // EHOSTUNREACH - No route to host
-            AppLogger.w('Cannot register - no route to host $ip:$port', tag: 'HttpDisc');
+            AppLogger.w(
+              'Cannot register - no route to host $ip:$port',
+              tag: 'HttpDisc',
+            );
             break;
           case 111: // ECONNREFUSED - Connection refused
-            AppLogger.w('Registration refused by $ip:$port - device may not be running CPFT', tag: 'HttpDisc');
+            AppLogger.w(
+              'Registration refused by $ip:$port - device may not be running CPFT',
+              tag: 'HttpDisc',
+            );
             break;
           case 110: // ETIMEDOUT - Connection timed out
             AppLogger.w('Registration timeout to $ip:$port', tag: 'HttpDisc');
             break;
           default:
-            // debugPrint('[HttpClient] ❌ Socket error ($errorCode) during registration with $ip:$port: $errorMessage');
+          // debugPrint('[HttpClient] ❌ Socket error ($errorCode) during registration with $ip:$port: $errorMessage');
         }
       } else if (e is TimeoutException) {
         AppLogger.w('Registration timeout with $ip:$port', tag: 'HttpDisc');
       } else {
-        AppLogger.w('Error registering with $ip:$port: $e', tag: 'HttpDisc', error: e);
+        AppLogger.w(
+          'Error registering with $ip:$port: $e',
+          tag: 'HttpDisc',
+          error: e,
+        );
       }
       return false;
     }
@@ -81,48 +90,58 @@ class HttpDiscoveryClient {
   Future<InfoDto?> getDeviceInfo(String ip, int port) async {
     try {
       final url = Uri.parse('http://$ip:$port/info?fingerprint=$fingerprint');
-      // debugPrint('[HttpClient] Fetching info from $ip:$port...');
-
       final response = await http.get(url).timeout(const Duration(seconds: 3));
-
       if (response.statusCode == 200) {
         final dto = InfoDto.fromJsonString(response.body);
         AppLogger.d('Got info from ${dto.alias}', tag: 'HttpDisc');
         return dto;
       } else {
-        AppLogger.w('Get info failed: ${response.statusCode} ($ip:$port)', tag: 'HttpDisc');
+        AppLogger.w(
+          'Get info failed: ${response.statusCode} ($ip:$port)',
+          tag: 'HttpDisc',
+        );
         return null;
       }
     } catch (e) {
-      // Provide more detailed error diagnostics
       if (e is SocketException) {
         final errorCode = e.osError?.errorCode ?? 'unknown';
-        // final errorMessage = e.osError?.message ?? e.message; // unused
-        
         switch (errorCode) {
           case 113: // EHOSTUNREACH - No route to host
-            // debugPrint('[HttpClient] ❌ No route to host $ip:$port - device may be offline or unreachable');
-            AppLogger.w('Check host reachability / firewall for $ip:$port', tag: 'HttpDisc');
+            AppLogger.w(
+              'Check host reachability / firewall for $ip:$port',
+              tag: 'HttpDisc',
+            );
             break;
           case 111: // ECONNREFUSED - Connection refused
-            AppLogger.w('Connection refused by $ip:$port - target may not run CPFT', tag: 'HttpDisc');
-            AppLogger.d('Advise: ensure CPFT running on remote device', tag: 'HttpDisc');
+            AppLogger.w(
+              'Connection refused by $ip:$port - target may not run CPFT',
+              tag: 'HttpDisc',
+            );
+            AppLogger.d(
+              'Advise: ensure CPFT running on remote device',
+              tag: 'HttpDisc',
+            );
             break;
           case 110: // ETIMEDOUT - Connection timed out
-            AppLogger.w('Connection timeout to $ip:$port - network slow or unreachable', tag: 'HttpDisc');
+            AppLogger.w(
+              'Connection timeout to $ip:$port - network slow or unreachable',
+              tag: 'HttpDisc',
+            );
             break;
           case 101: // ENETUNREACH - Network unreachable
-            AppLogger.w('Network unreachable for $ip:$port - check connectivity', tag: 'HttpDisc');
+            AppLogger.w(
+              'Network unreachable for $ip:$port - check connectivity',
+              tag: 'HttpDisc',
+            );
             break;
           default:
-            // debugPrint('[HttpClient] ❌ Socket error ($errorCode) connecting to $ip:$port: $errorMessage');
+          // debugPrint('[HttpClient] ❌ Socket error ($errorCode) connecting to $ip:$port: $errorMessage');
         }
       } else if (e is TimeoutException) {
         // debugPrint('[HttpClient] ❌ Timeout connecting to $ip:$port - device may be slow to respond');
       } else {
         // debugPrint('[HttpClient] ❌ Error getting info from $ip:$port: $e');
       }
-      
       return null;
     }
   }

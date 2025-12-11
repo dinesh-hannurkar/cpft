@@ -1,15 +1,14 @@
 import 'dart:async';
+import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'dart:io';
-
 import 'package:cpft/features/webshare/presentation/web_file_manager_screen.dart';
+import 'package:cpft/widgets/device_count.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-
 import '../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../shared/widgets/app_confirm_dialog.dart';
-
 import '../services/discovery_service.dart';
 import '../features/chat/presentation/chat_screen.dart';
 import 'package:file_picker/file_picker.dart';
@@ -17,10 +16,7 @@ import 'package:file_picker/file_picker.dart';
 class DeviceDiscoveryScreen extends StatefulWidget {
   final String deviceName;
 
-  const DeviceDiscoveryScreen({
-    super.key,
-    required this.deviceName,
-  });
+  const DeviceDiscoveryScreen({super.key, required this.deviceName});
 
   @override
   State<DeviceDiscoveryScreen> createState() => _DeviceDiscoveryScreenState();
@@ -39,10 +35,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   @override
   void initState() {
     super.initState();
-    
-    // Enable wakelock to keep screen on during discovery
     WakelockPlus.enable();
-    
     _discoveryService = DiscoveryService(
       alias: widget.deviceName,
       deviceModel: Platform.operatingSystem,
@@ -51,9 +44,12 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   }
 
   void _onWebUploadProgress(String filename, int received, int total) {
-    AppLogger.v('[DeviceDiscovery] Upload progress: $filename - $received/$total bytes (${(received / total * 100).toStringAsFixed(1)}%)', tag: 'DiscoveryUI');
+    AppLogger.v(
+      '[DeviceDiscovery] Upload progress: $filename - $received/$total bytes (${(received / total * 100).toStringAsFixed(1)}%)',
+      tag: 'DiscoveryUI',
+    );
     if (!mounted) return;
-    
+
     setState(() {
       _activeWebUploads[filename] = _WebUpload(
         filename: filename,
@@ -73,7 +69,13 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   ) async {
     if (_pendingIncoming.contains(deviceName)) return;
     _pendingIncoming.add(deviceName);
-    await _handleIncomingConnectionUI(deviceName, ipAddress, port, accept, decline);
+    await _handleIncomingConnectionUI(
+      deviceName,
+      ipAddress,
+      port,
+      accept,
+      decline,
+    );
   }
 
   Future<void> _handleIncomingConnectionUI(
@@ -128,35 +130,49 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     });
 
     try {
-      AppLogger.d('Refresh triggered - clearing devices and scanning', tag: 'DiscoveryUI');
-      
+      AppLogger.d(
+        'Refresh triggered - clearing devices and scanning',
+        tag: 'DiscoveryUI',
+      );
+
       // Clear the discovery service's device list
       _discoveryService.clearDevices();
-      
+
       // Wait a bit for the clear to propagate
       await Future.delayed(const Duration(milliseconds: 300));
-      
+
       // Force a re-announcement (this will work on Android/macOS, not iOS)
       await _discoveryService.announce();
-      
+
       // On iOS, Bonjour is continuously running, so we just need to wait
       // for devices to be re-discovered from the ongoing Bonjour discovery
       // and incoming multicast messages
       if (Platform.isIOS) {
-        AppLogger.d('iOS: Waiting for Bonjour re-discovery...', tag: 'DiscoveryUI');
+        AppLogger.d(
+          'iOS: Waiting for Bonjour re-discovery...',
+          tag: 'DiscoveryUI',
+        );
         // Give Bonjour time to trigger discovery events
         await Future.delayed(const Duration(milliseconds: 1500));
       } else {
         // On other platforms, multicast announcements will trigger discoveries
         await Future.delayed(const Duration(milliseconds: 800));
       }
-      
-      AppLogger.i('Refresh complete - found ${_discoveredDevices.length} devices', tag: 'DiscoveryUI');
+
+      AppLogger.i(
+        'Refresh complete - found ${_discoveredDevices.length} devices',
+        tag: 'DiscoveryUI',
+      );
     } catch (e) {
       AppLogger.w('Refresh error: $e', tag: 'DiscoveryUI', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Refresh failed: $e', style: const TextStyle(color: Colors.white))),
+          SnackBar(
+            content: Text(
+              'Refresh failed: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
         );
       }
     } finally {
@@ -172,9 +188,8 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => WebFileManagerScreen(
-          discoveryService: _discoveryService,
-        ),
+        builder: (context) =>
+            WebFileManagerScreen(discoveryService: _discoveryService),
       ),
     );
   }
@@ -188,7 +203,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Failed to start web server', style: TextStyle(color: Colors.white)),
+              content: Text(
+                'Failed to start web server',
+                style: TextStyle(color: Colors.white),
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -202,7 +220,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Unable to generate web link. Check network connection.', style: TextStyle(color: Colors.white)),
+            content: Text(
+              'Unable to generate web link. Check network connection.',
+              style: TextStyle(color: Colors.white),
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -217,7 +238,9 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         barrierDismissible: true,
         builder: (ctx) => Dialog(
           insetPadding: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
           child: Padding(
@@ -232,7 +255,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                     SizedBox(width: 12),
                     Text(
                       'Web Browser Access',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                      ),
                     ),
                   ],
                 ),
@@ -268,7 +294,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                           Clipboard.setData(ClipboardData(text: webLink));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Link copied to clipboard!', style: TextStyle(color: Colors.white)),
+                              content: Text(
+                                'Link copied to clipboard!',
+                                style: TextStyle(color: Colors.white),
+                              ),
                               duration: Duration(seconds: 2),
                             ),
                           );
@@ -303,7 +332,9 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                         },
                         icon: const Icon(Icons.upload_file),
                         label: const Text('Share File'),
-                        style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.green,
+                        ),
                       ),
                     ),
                   ],
@@ -315,7 +346,12 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                     onPressed: () {
                       // TODO: Add QR code generation
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('QR code feature coming soon!', style: TextStyle(color: Colors.white))),
+                        const SnackBar(
+                          content: Text(
+                            'QR code feature coming soon!',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
                       );
                     },
                     icon: const Icon(Icons.qr_code),
@@ -348,7 +384,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please start web server first', style: TextStyle(color: Colors.white)),
+              content: Text(
+                'Please start web server first',
+                style: TextStyle(color: Colors.white),
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -364,19 +403,27 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       if (file.path == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not access file', style: TextStyle(color: Colors.white))),
+          const SnackBar(
+            content: Text(
+              'Could not access file',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
         );
         return;
       }
 
       // Add file to web server
       final fileId = _discoveryService.shareFileViaWeb(file.path!, file.name);
-      
+
       if (fileId == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to share file. Is web server running?', style: TextStyle(color: Colors.white)),
+            content: Text(
+              'Failed to share file. Is web server running?',
+              style: TextStyle(color: Colors.white),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -386,7 +433,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ ${file.name} is now available for download via web!', style: TextStyle(color: Colors.white)),
+          content: Text(
+            '✅ ${file.name} is now available for download via web!',
+            style: TextStyle(color: Colors.white),
+          ),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 4),
           action: SnackBarAction(
@@ -397,7 +447,11 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         ),
       );
     } catch (e) {
-      AppLogger.w('Error sharing file to web: $e', tag: 'DiscoveryUI', error: e);
+      AppLogger.w(
+        'Error sharing file to web: $e',
+        tag: 'DiscoveryUI',
+        error: e,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -412,8 +466,8 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   void dispose() {
     // Disable wakelock when leaving the screen
     WakelockPlus.disable();
-    
-  _discoveryService.removeIncomingRequestListener(_onIncomingRequest);
+
+    _discoveryService.removeIncomingRequestListener(_onIncomingRequest);
     _discoveryService.removeWebProgressListener(_onWebUploadProgress);
     _discoveryService.dispose();
     super.dispose();
@@ -441,151 +495,148 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         children: [
           Column(
             children: [
-          // VPN Warning Banner (iOS only)
-          if (_isInitialized && _discoveryService.isVpnDetected && Platform.isIOS)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16.0),
-              color: Colors.orange.shade100,
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade900),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'VPN Detected',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'iOS blocks multicast when VPN is active. Please disconnect VPN in Settings.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange.shade900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          
-          // Status badges
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // This Device Info Card
-                Card(
-                  elevation: 1,
-                  color: Colors.blue.shade50,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.smartphone, color: Colors.blue.shade700, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'This Device',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.blue.shade900,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                widget.deviceName,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Status badges row - scrollable to prevent overflow
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
+              // VPN Warning Banner (iOS only)
+              if (_isInitialized &&
+                  _discoveryService.isVpnDetected &&
+                  Platform.isIOS)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16.0),
+                  color: Colors.orange.shade100,
                   child: Row(
                     children: [
-                      _buildStatusBadge(
-                        icon: _isInitialized ? Icons.wifi : Icons.wifi_off,
-                        label: _isInitialized ? 'Discovering' : 'Initializing',
-                        color: _isInitialized ? Colors.green : Colors.orange,
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange.shade900,
                       ),
-                      const SizedBox(width: 8),
-                      _buildStatusBadge(
-                        icon: Icons.link,
-                        label: 'Ready to connect',
-                        color: _isInitialized ? Colors.green : Colors.grey,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildStatusBadge(
-                        icon: Icons.screen_lock_portrait,
-                        label: 'Screen on',
-                        color: Colors.blue,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'VPN Detected',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'iOS blocks multicast when VPN is active. Please disconnect VPN in Settings.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          
-          // Device count
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Text(
-                  'Found ${_discoveredDevices.length} device${_discoveredDevices.length != 1 ? 's' : ''}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+
+              // Status badges
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // This Device Info Card
+                    Card(
+                      elevation: 1,
+                      color: Colors.blue.shade50,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.smartphone,
+                              color: Colors.blue.shade700,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'This Device',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    widget.deviceName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Status badges row - scrollable to prevent overflow
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildStatusBadge(
+                            icon: _isInitialized ? Icons.wifi : Icons.wifi_off,
+                            label: _isInitialized
+                                ? 'Discovering'
+                                : 'Initializing',
+                            color: _isInitialized
+                                ? AppColors.green
+                                : Colors.orange,
+                          ),
+                          const SizedBox(width: 8),
+                          _buildStatusBadge(
+                            icon: Icons.link,
+                            label: 'Ready to connect',
+                            color: _isInitialized
+                                ? AppColors.green
+                                : AppColors.greyLight,
+                          ),
+                          const SizedBox(width: 8),
+                          _buildStatusBadge(
+                            icon: Icons.screen_lock_portrait,
+                            label: 'Screen on',
+                            color: AppColors.skyBlue,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                if (_isRefreshing) ...[
-                  const SizedBox(width: 12),
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ],
-              ],
-            ),
+              ),
+
+              // Device count
+              DeviceCount(
+                discoveredDevices: _discoveredDevices,
+                isRefreshing: _isRefreshing,
+              ),
+
+              const SizedBox(height: 16),
+
+              // Device list
+              Expanded(
+                child: _discoveredDevices.isEmpty
+                    ? _buildEmptyState()
+                    : _buildDeviceList(),
+              ),
+            ],
           ),
-          
-          const SizedBox(height: 16),
-          
-          // Device list
-          Expanded(
-            child: _discoveredDevices.isEmpty
-                ? _buildEmptyState()
-                : _buildDeviceList(),
-          ),
-        ],
-      ),
-          
+
           // Web upload progress overlay
           if (_activeWebUploads.isNotEmpty)
             Positioned(
@@ -621,18 +672,12 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                 const SizedBox(width: 8),
                 const Text(
                   'Receiving from Web',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const Spacer(),
                 Text(
                   '${_activeWebUploads.length} file(s)',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
                 ),
               ],
             ),
@@ -669,15 +714,14 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                     LinearProgressIndicator(
                       value: upload.progress,
                       backgroundColor: Colors.grey[200],
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.blue,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       upload.formattedProgress,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -723,18 +767,11 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.devices_other,
-            size: 64,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.devices_other, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
             _isInitialized ? 'No devices found' : 'Initializing discovery...',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
           ),
           const SizedBox(height: 8),
           if (_isInitialized)
@@ -743,10 +780,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
               child: Text(
                 'Make sure other devices are running this app on the same WiFi network',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[500],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
               ),
             ),
         ],
@@ -769,7 +803,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   Widget _buildDeviceCard(String deviceName, String ipAddress) {
     // Extract device type from name (e.g., "iPhone-xxx", "Mac-xxx", "Android-xxx")
     final deviceInfo = _parseDeviceName(deviceName);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 2,
@@ -821,7 +855,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                       children: [
                         // Platform badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: deviceInfo['color'].withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
@@ -844,7 +881,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                         if (deviceInfo['deviceId'] != null) ...[
                           const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.grey[200],
                               borderRadius: BorderRadius.circular(12),
@@ -852,7 +892,11 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.fingerprint, size: 10, color: Colors.grey[700]),
+                                Icon(
+                                  Icons.fingerprint,
+                                  size: 10,
+                                  color: Colors.grey[700],
+                                ),
                                 const SizedBox(width: 3),
                                 Text(
                                   deviceInfo['deviceId'],
@@ -888,33 +932,31 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey[400],
-              ),
+              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
             ],
           ),
         ),
       ),
     );
   }
-  
+
   /// Parse device name to extract platform and display information
   Map<String, dynamic> _parseDeviceName(String deviceName) {
     AppLogger.v('Parsing device name: "$deviceName"', tag: 'DiscoveryUI');
-    
+
     IconData icon = Icons.devices;
     Color color = Colors.blue;
     String platform = 'Unknown';
     String displayName = deviceName;
     String? deviceId;
-    
+
     // Extract device ID if present (last 4 digits after last hyphen)
     final parts = deviceName.split('-');
     AppLogger.v('Split into ${parts.length} parts: $parts', tag: 'DiscoveryUI');
-    
-    if (parts.length > 1 && parts.last.length == 4 && int.tryParse(parts.last) != null) {
+
+    if (parts.length > 1 &&
+        parts.last.length == 4 &&
+        int.tryParse(parts.last) != null) {
       deviceId = parts.last;
       AppLogger.d('Extracted device ID: $deviceId', tag: 'DiscoveryUI');
       // Rebuild device name without the ID for display
@@ -922,9 +964,12 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       deviceName = nameWithoutId;
       AppLogger.v('Device name without ID: "$deviceName"', tag: 'DiscoveryUI');
     } else {
-      AppLogger.w('No valid device ID found (last: "${parts.last}" len=${parts.last.length})', tag: 'DiscoveryUI');
+      AppLogger.w(
+        'No valid device ID found (last: "${parts.last}" len=${parts.last.length})',
+        tag: 'DiscoveryUI',
+      );
     }
-    
+
     if (deviceName.startsWith('iPhone-')) {
       icon = Icons.phone_iphone;
       color = const Color(0xFF000000); // Apple Black
@@ -956,21 +1001,21 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       platform = 'Legacy';
       color = Colors.grey;
     }
-    
+
     // Clean up display name
-    displayName = displayName
-        .replaceAll('-', ' ')
-        .replaceAll('_', ' ')
-        .trim();
-    
+    displayName = displayName.replaceAll('-', ' ').replaceAll('_', ' ').trim();
+
     // Capitalize each word
     if (displayName.isNotEmpty) {
-      displayName = displayName.split(' ').map((word) {
-        if (word.isEmpty) return word;
-        return word[0].toUpperCase() + word.substring(1).toLowerCase();
-      }).join(' ');
+      displayName = displayName
+          .split(' ')
+          .map((word) {
+            if (word.isEmpty) return word;
+            return word[0].toUpperCase() + word.substring(1).toLowerCase();
+          })
+          .join(' ');
     }
-    
+
     return {
       'icon': icon,
       'color': color,
@@ -981,24 +1026,33 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
   }
 
   void _onDeviceSelected(String deviceName, String ipAddress) {
-    AppLogger.d('Device selected: $deviceName at $ipAddress', tag: 'DiscoveryUI');
-    
+    AppLogger.d(
+      'Device selected: $deviceName at $ipAddress',
+      tag: 'DiscoveryUI',
+    );
+
     // Get connection manager from discovery service
     final connectionManager = _discoveryService.connectionManager;
     if (connectionManager == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Connection service not ready. Please wait...', style: TextStyle(color: Colors.white)),
+          content: Text(
+            'Connection service not ready. Please wait...',
+            style: TextStyle(color: Colors.white),
+          ),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
-    
+
     // Check if already connected to this device
     final existingConnection = connectionManager.getConnection(deviceName);
     if (existingConnection != null && existingConnection.isConnected) {
-      AppLogger.d('Already connected to $deviceName, navigating to existing chat', tag: 'DiscoveryUI');
+      AppLogger.d(
+        'Already connected to $deviceName, navigating to existing chat',
+        tag: 'DiscoveryUI',
+      );
       // Navigate to existing connection without creating new one
       Navigator.push(
         context,
@@ -1015,7 +1069,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       );
       return;
     }
-    
+
     // Navigate to connection screen (will create new connection)
     Navigator.push(
       context,
@@ -1047,7 +1101,7 @@ class _WebUpload {
   });
 
   double get progress => totalBytes > 0 ? bytesReceived / totalBytes : 0.0;
-  
+
   String get formattedProgress {
     final mb = (bytesReceived / 1024 / 1024).toStringAsFixed(1);
     final totalMb = (totalBytes / 1024 / 1024).toStringAsFixed(1);

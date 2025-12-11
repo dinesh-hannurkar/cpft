@@ -2,10 +2,8 @@ import 'package:cpft/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class NetworkIndicator extends StatelessWidget {
-  const NetworkIndicator({
-    super.key,
-    required String? networkName,
-  }) : _networkName = networkName;
+  const NetworkIndicator({super.key, required String? networkName})
+    : _networkName = networkName;
 
   final String? _networkName;
 
@@ -19,20 +17,20 @@ class NetworkIndicator extends StatelessWidget {
               ? Icons.wifi
               : Icons.wifi_off,
           color: (_networkName != null && _networkName != 'Not Connected')
-              ? const Color(0xFF00C853)
+              ? AppColors.green
               : AppColors.red,
           size: 22,
         ),
         const SizedBox(width: 8),
         Text(
           (_networkName != null && _networkName != 'Not Connected')
-              ? (_networkName?.toLowerCase().contains('local') == true
-                  ? 'Personal Hotspot is active'
-                  : 'Connected to $_networkName')
+              ? (_networkName.toLowerCase().contains('local') == true
+                    ? 'Personal Hotspot is active'
+                    : 'Connected to $_networkName')
               : 'Not connected',
           style: TextStyle(
             color: (_networkName != null && _networkName != 'Not Connected')
-                ? const Color(0xFF00C853)
+                ? AppColors.green
                 : AppColors.red,
             fontWeight: FontWeight.w500,
             fontSize: 14,

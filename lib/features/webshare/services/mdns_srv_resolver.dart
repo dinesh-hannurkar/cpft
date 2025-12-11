@@ -2,11 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:multicast_dns/multicast_dns.dart' as mdns;
 
-/// Resolver to get actual .local hostname from mDNS SRV records
-/// This extracts the SRV target hostname that NSD doesn't expose
 class MdnsSrvResolver {
-  /// Resolve the actual .local hostname for a discovered service
-  /// Returns the SRV target hostname (e.g., "Android_CPH2FXOW.local")
   static Future<String?> resolveHostnameForService({
     required String serviceName,
     required String serviceType,
@@ -21,24 +17,21 @@ class MdnsSrvResolver {
       await client.start();
       debugPrint('[MdnsSrvResolver] mDNS client started');
       
-      // Query for SRV record for the specific service instance
       final fullServiceName = '$serviceName.$serviceType.local';
       debugPrint('[MdnsSrvResolver] Querying SRV record: $fullServiceName');
       
-      // Use timeout to prevent hanging
       bool found = false;
       await for (final mdns.SrvResourceRecord srv in client.lookup<mdns.SrvResourceRecord>(
         mdns.ResourceRecordQuery.service(fullServiceName),
         timeout: timeout,
       )) {
-        // The SRV target is the actual hostname where the service is reachable!
         resolvedHostname = srv.target;
         debugPrint('[MdnsSrvResolver] ✅ Found SRV target hostname: $resolvedHostname');
         debugPrint('[MdnsSrvResolver]   - Priority: ${srv.priority}');
         debugPrint('[MdnsSrvResolver]   - Weight: ${srv.weight}');
         debugPrint('[MdnsSrvResolver]   - Port: ${srv.port}');
         found = true;
-        break; // Got what we need
+        break;
       }
       
       if (!found) {
@@ -55,12 +48,9 @@ class MdnsSrvResolver {
         debugPrint('[MdnsSrvResolver] Error stopping client: $e');
       }
     }
-    
     return resolvedHostname;
   }
   
-  /// Discover all services with their actual hostnames from SRV records
-  /// This is more comprehensive than NSD as it directly reads mDNS packets
   static Future<List<ServiceInfo>> discoverServicesWithHostnames({
     required String serviceType,
     Duration timeout = const Duration(seconds: 5),
@@ -69,12 +59,10 @@ class MdnsSrvResolver {
     
     final client = mdns.MDnsClient();
     final List<ServiceInfo> services = [];
-    final Set<String> processedServices = {}; // Avoid duplicates
+    final Set<String> processedServices = {};
     
     try {
       await client.start();
-      
-      // Browse for services using PTR query
       await for (final mdns.PtrResourceRecord ptr in client.lookup<mdns.PtrResourceRecord>(
         mdns.ResourceRecordQuery.serverPointer(serviceType),
         timeout: timeout,
@@ -86,8 +74,6 @@ class MdnsSrvResolver {
           continue;
         }
         processedServices.add(serviceName);
-        
-        debugPrint('[MdnsSrvResolver] Found service: $serviceName');
         
         // Get SRV record for this service instance
         await for (final mdns.SrvResourceRecord srv in client.lookup<mdns.SrvResourceRecord>(
@@ -130,25 +116,19 @@ class MdnsSrvResolver {
           break; // First SRV record is enough
         }
       }
-      
       debugPrint('[MdnsSrvResolver] ✅ Discovery complete: ${services.length} services found');
-      
     } catch (e) {
       debugPrint('[MdnsSrvResolver] ❌ Error discovering services: $e');
     } finally {
       client.stop();
     }
-    
     return services;
   }
   
-  /// Get our own service's actual hostname by discovering ourselves
   static Future<String?> getOwnHostname({
     required String serviceName,
     required String serviceType,
   }) async {
-    debugPrint('[MdnsSrvResolver] Getting own hostname for: $serviceName.$serviceType');
-    
     final hostname = await resolveHostnameForService(
       serviceName: serviceName,
       serviceType: serviceType,
@@ -170,7 +150,6 @@ class MdnsSrvResolver {
   }
 }
 
-/// Service information with actual hostname from SRV records
 class ServiceInfo {
   final String name;           // Full service name (e.g., "dinesh._http._tcp.local")
   final String hostname;       // Actual .local hostname (e.g., "Android_CPH2FXOW.local")
@@ -186,13 +165,10 @@ class ServiceInfo {
     this.txtRecords,
   });
   
-  /// Get the URL using the actual hostname
   String get hostnameUrl => 'http://$hostname:$port';
   
-  /// Get the URL using IP address (fallback)
   String? get ipUrl => ipAddress != null ? 'http://$ipAddress:$port' : null;
   
-  /// Get hostname without .local suffix
   String get hostnameWithoutSuffix {
     if (hostname.endsWith('.local')) {
       return hostname.substring(0, hostname.length - 6);

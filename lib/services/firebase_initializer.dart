@@ -16,8 +16,6 @@ class FirebaseInitializer {
     try {
       return Firebase.apps.length;
     } catch (_) {
-      // On some Safari builds, web plugin registration may lag briefly.
-      // Avoid crashing by reporting 0 until initialization completes.
       return 0;
     }
   }
@@ -46,20 +44,15 @@ class FirebaseInitializer {
 
   static Future<void> _initOnce() async {
     final opts = DefaultFirebaseOptions.currentPlatform;
-
-    // If no app is registered yet (or Safari throws accessing apps), initialize.
     var count = _safeAppsLength();
     if (count == 0) {
       try {
         await Firebase.initializeApp(options: opts);
       } catch (e) {
-        // Ignore "already exists"/race errors and proceed to verification loop
         AppLogger.w('Firebase.initializeApp warning: $e', tag: 'Startup');
       }
     }
 
-    // Wait briefly for web (Safari) to surface the registered app.
-    // Poll a few times to avoid "apps=0" race conditions.
     const attempts = 12; // ~1.8s total
     for (int i = 0; i < attempts; i++) {
       count = _safeAppsLength();
@@ -68,7 +61,6 @@ class FirebaseInitializer {
     }
 
     if (count == 0) {
-      // As a last resort, try initialize again once.
       try {
         await Firebase.initializeApp(options: opts);
         count = _safeAppsLength();
@@ -78,11 +70,9 @@ class FirebaseInitializer {
     }
 
     if (count == 0) {
-      // Surface a clear error for the banner/UI
       throw Exception('Firebase not available after initialization (apps=0)');
     }
 
-    // Derive project id from existing app
     try {
       _projectId = Firebase.apps.first.options.projectId;
     } catch (_) {

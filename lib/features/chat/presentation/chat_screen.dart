@@ -25,7 +25,7 @@ import 'package:cpft/features/chat/presentation/widgets/connecting_banner.dart';
 import 'package:cpft/features/chat/presentation/widgets/error_banner.dart';
 import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
-import 'package:cpft/features/home/presentation/widgets/connected_devices_sheet.dart';
+import 'package:cpft/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:cpft/shared/showcase/showcase_helper.dart';

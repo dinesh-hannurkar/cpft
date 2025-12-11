@@ -56,10 +56,7 @@ class StatusIndicator extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   status,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[700],
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                 ),
               ],
             ),
