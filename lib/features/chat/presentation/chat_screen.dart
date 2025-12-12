@@ -190,6 +190,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
             );
             map[tId]!.updateProgress(bytes.toDouble());
+            map[tId]!.isPending = false; // Clear pending state on progress
+          });
+        }
+        break;
+      case 'file_pending':
+        final tId = message.metadata?['transferId'] as String?;
+        final buffered = message.metadata?['buffered'] as int? ?? 0;
+        final outgoing = message.metadata?['outgoing'] as bool? ?? false;
+        if (tId != null) {
+          setState(() {
+            final map = outgoing ? _outgoingProgress : _incomingProgress;
+            if (map.containsKey(tId)) {
+              map[tId]!.isPending = true;
+              map[tId]!.pendingChunks = buffered;
+            }
           });
         }
         break;

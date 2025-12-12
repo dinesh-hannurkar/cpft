@@ -14,8 +14,8 @@ class TransferProgressTile extends StatelessWidget {
     final tp = progress;
     final percent = tp.total > 0 ? (tp.progress / tp.total * 100).clamp(0, 100) : null;
     final now = DateTime.now();
-    final stalled = now.difference(tp.lastUpdate).inSeconds >= 10 && tp.progress > 0 && (tp.total == 0 || tp.progress < tp.total);
-    final failed = now.difference(tp.lastUpdate).inSeconds >= 60 && tp.progress > 0 && (tp.total == 0 || tp.progress < tp.total);
+    final stalled = now.difference(tp.lastUpdate).inSeconds >= 10 && tp.progress > 0 && (tp.total == 0 || tp.progress < tp.total) && !tp.isPending;
+    final failed = now.difference(tp.lastUpdate).inSeconds >= 60 && tp.progress > 0 && (tp.total == 0 || tp.progress < tp.total) && !tp.isPending;
     return Container(
       margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       padding: const EdgeInsets.only(left: 12, right: 0, top: 12, bottom: 10),
@@ -98,7 +98,9 @@ class TransferProgressTile extends StatelessWidget {
                 child: Text(tp.total > 0 ? '${formatBytes(tp.progress.toInt())} / ${formatBytes(tp.total)}' : 'Preparing…',
                     style: const TextStyle(fontSize: 11, color: Colors.black54)),
               ),
-              if (failed)
+              if (tp.isPending)
+                Text('Pending (${tp.pendingChunks} chunks)', style: const TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600))
+              else if (failed)
                 const Text('Failed', style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.w700))
               else if (stalled)
                 const Text('Stalled', style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.w600))
@@ -106,8 +108,10 @@ class TransferProgressTile extends StatelessWidget {
                 Text(formatSpeed(tp.speed).replaceAll('/s', '/s'),
                     style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.w600)),
               const SizedBox(width: 8),
-              if (percent != null)
+              if (percent != null && !tp.isPending)
                 Text('${percent.toStringAsFixed(0)}% completed', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+              if (tp.isPending)
+                const Text('Processing...', style: TextStyle(fontSize: 11, color: Colors.black54)),
               const SizedBox(width: 8),
               Text(formatTime(DateTime.now()), style: const TextStyle(fontSize: 10, color: Colors.black38)),
             ]),

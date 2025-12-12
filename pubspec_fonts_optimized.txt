@@ -1,0 +1,16 @@
+flutter:
+  uses-material-design: true
+  
+  # Only include font weights actually used in the app to reduce APK size
+  # Using: 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold)
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700

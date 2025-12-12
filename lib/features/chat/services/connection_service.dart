@@ -646,12 +646,29 @@ class ConnectionService {
                 );
                 if (chunk.isLast) {
                   debugPrint(
-                    '[ConnectionService] 📍 Final chunk received for transfer ${chunk.transferId}, waiting for all chunks...',
+                    '[ConnectionService] 📍 Final chunk received for transfer ${chunk.transferId}, waiting for buffered chunks...',
                   );
 
-                  // Wait longer to ensure all buffered chunks are processed
-                  // With parallel channels, chunks can arrive significantly out of order
-                  await Future.delayed(const Duration(seconds: 10));
+                  // Notify UI that transfer is pending (waiting for buffered chunks)
+                  if (incoming._chunkBuffer.isNotEmpty) {
+                    _notifyMessageListeners(
+                      DeviceMessage(
+                        type: 'file_pending',
+                        content: incoming.offer.fileName,
+                        senderName: message.senderName,
+                        timestamp: DateTime.now(),
+                        metadata: {
+                          'transferId': chunk.transferId,
+                          'buffered': incoming._chunkBuffer.length,
+                          'outgoing': false,
+                        },
+                      ),
+                    );
+                  }
+
+                  // Wait briefly for any buffered chunks to be processed
+                  // Most chunks should already be processed, just need a short grace period
+                  await Future.delayed(const Duration(milliseconds: 500));
 
                   // Check if all chunks have been received and processed
                   if (!incoming.isComplete()) {
@@ -661,8 +678,19 @@ class ConnectionService {
                     debugPrint(
                       '[ConnectionService] 📊 Buffer contents: ${incoming._chunkBuffer.keys.toList()}',
                     );
-                    // Don't complete yet, wait for more chunks
-                    continue;
+                    
+                    // Wait a bit longer for straggler chunks (max 2 seconds total)
+                    int attempts = 0;
+                    while (!incoming.isComplete() && attempts < 3) {
+                      await Future.delayed(const Duration(milliseconds: 500));
+                      attempts++;
+                      debugPrint('[ConnectionService] ⏳ Waiting for chunks... attempt $attempts, remaining: ${incoming._chunkBuffer.length}');
+                    }
+                    
+                    if (!incoming.isComplete()) {
+                      debugPrint('[ConnectionService] ❌ Transfer incomplete after waiting');
+                      continue;
+                    }
                   }
 
                   debugPrint(
