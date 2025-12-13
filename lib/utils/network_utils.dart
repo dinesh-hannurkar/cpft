@@ -137,18 +137,16 @@ class NetworkUtils {
         }
       }
 
-      // On Android 10+ location permission (fine + precise) is required for SSID
+      // On Android 10+ location permission is required for SSID
+      // Don't request permission here - just check if it's granted
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         final status = await Permission.location.status;
         if (!status.isGranted) {
-          final req = await Permission.location.request();
-          if (!req.isGranted) {
-            AppLogger.w(
-              'Android location not granted; cannot read SSID',
-              tag: 'Network',
-            );
-            return await _fallbackNetworkName();
-          }
+          AppLogger.d(
+            'Android location not granted; using fallback network name',
+            tag: 'Network',
+          );
+          return await _fallbackNetworkName();
         }
       }
 
@@ -171,14 +169,33 @@ class NetworkUtils {
     try {
       final ip = await getLanIPv4();
       if (ip != null) {
-        if (!kIsWeb &&
-            defaultTargetPlatform == TargetPlatform.iOS &&
-            _isIosHotspotIp(ip)) {
-          return 'Personal Hotspot';
+        AppLogger.d(
+          '[NetworkUtils] Fallback network name for IP: $ip on platform: ${defaultTargetPlatform.name}',
+          tag: 'Network',
+        );
+        // Only check for iOS hotspot on iOS devices
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+          if (_isIosHotspotIp(ip)) {
+            AppLogger.d(
+              '[NetworkUtils] iOS hotspot detected, returning Personal Hotspot',
+              tag: 'Network',
+            );
+            return 'Personal Hotspot';
+          }
         }
+        AppLogger.d(
+          '[NetworkUtils] Returning Local with IP: $ip',
+          tag: 'Network',
+        );
         return 'Local ($ip)';
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.w(
+        '[NetworkUtils] Error in fallback: $e',
+        tag: 'Network',
+        error: e,
+      );
+    }
     return 'Not Connected';
   }
 

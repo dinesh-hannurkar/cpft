@@ -10,12 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
-import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
 import 'package:cpft/features/chat/models/transfer_progress.dart';
 import 'package:cpft/features/chat/models/received_file.dart';
-import 'package:cpft/features/chat/utils/file_utils.dart';
 import 'package:cpft/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_bubble.dart';
 import 'package:cpft/features/chat/presentation/widgets/completed_file_card.dart';
@@ -62,6 +58,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final List<DeviceMessage> _messages = [];
   final Map<String, TransferProgress> _incomingProgress = {};
   final Map<String, TransferProgress> _outgoingProgress = {};
+  final Map<String, String> _savedFilePaths = {}; // Maps original path to new saved path
   final List<ReceivedFile> _receivedFiles = [];
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -291,129 +288,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     if (transferId != null) _shownOfferDialogs.add(transferId);
     if (!mounted) return;
-    final accept = await app_dialog.showAppDialog<bool>(
-      context: context,
-      builder: (ctx) => AppConfirmDialog(
-        title: 'Incoming File Transfer',
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: AppSizes.spaceBtwInputFields),
-                // File icon
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.insert_drive_file,
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            margin: const EdgeInsets.only(right: 6, top: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: const Color(0xFFBBDEFB),
-                              ),
-                            ),
-                            child: Text(
-                              extensionTrim(name.split('.').last),
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1565C0),
-                                letterSpacing: .5,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (size != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            formatBytes(size),
-                            style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      if (mime != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            readableMime(mime),
-                            style: const TextStyle(
-                              color: Colors.black45,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (size != null || mime != null) const SizedBox(height: 8),
-            if (size != null && size > 50 * 1024 * 1024)
-              Row(
-                children: const [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Large file. Keep app in foreground for reliability.',
-                      style: TextStyle(fontSize: 11, color: Colors.orange),
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        cancelLabel: 'Decline',
-        confirmLabel: 'Accept',
-      ),
-    );
-
-    if (accept == true && transferId != null) {
+    
+    // Auto-accept file transfers without showing confirmation dialog
+    if (transferId != null) {
       // On Android and iOS, auto-accept to temp directory for speed
       // User can save/move file later from the completed file card
       String? saveDir;
@@ -625,11 +502,30 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _saveAs(String sourcePath, String originalName) async {
+    // Check if using saved path instead of original
+    final actualSourcePath = _savedFilePaths[sourcePath] ?? sourcePath;
+    
+    // Check if file exists at the source path
+    if (!await io.File(actualSourcePath).exists()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'File has already been saved and is no longer in temp location',
+              style: TextStyle(color: AppColors.white),
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+    
     final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
 
     // On iOS, use Share sheet for better UX
     if (isIOS) {
-      await Share.shareXFiles([XFile(sourcePath)], text: originalName);
+      await Share.shareXFiles([XFile(actualSourcePath)], text: originalName);
       return;
     }
 
@@ -663,7 +559,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       dup++;
     }
     try {
-      final sourceFile = io.File(sourcePath);
+      final sourceFile = io.File(actualSourcePath);
 
       // Use move instead of copy to avoid duplicating storage
       // If move fails (cross-partition), fall back to copy
@@ -681,6 +577,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           debugPrint('[SaveAs] Failed to delete temp file: $e');
         }
       }
+      
+      // Track the new path for future save attempts
+      setState(() {
+        _savedFilePaths[sourcePath] = destPath;
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -904,10 +805,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             final isOutgoing =
                                 msg.metadata?['outgoing'] as bool? ?? isMine;
                             final savedPath = msg.metadata?['path'] as String?;
+                            // Use updated path if file was saved
+                            final actualPath = savedPath != null ? (_savedFilePaths[savedPath] ?? savedPath) : null;
                             return CompletedFileCard(
                               message: msg,
                               isMine: isOutgoing,
-                              savedPath: savedPath,
+                              savedPath: actualPath,
                               onOpen: (p, n) => _openFile(p, n),
                               onSaveAs: (p, n) => _saveAs(p, n),
                             );

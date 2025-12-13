@@ -81,23 +81,27 @@ class CompletedFileCard extends StatelessWidget {
                       ),
                   ]),
                 ),
-                // Show 3-dot menu for received files (not sent files)
+                // Show Save label for received files (not sent files)
                 if (!isMine && savedPath != null)
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 20, color: Colors.black54),
-                    color: Colors.white,
-                    padding: EdgeInsets.zero,
-                    onSelected: (value) async {
-                      if (value == 'open') {
-                        onOpen?.call(savedPath!, name);
-                      } else if (value == 'saveas') {
-                        onSaveAs?.call(savedPath!, name);
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem<String>(value: 'open', child: Text('Open')),
-                      PopupMenuItem<String>(value: 'saveas', child: Text('Save As')),
-                    ],
+                  InkWell(
+                    onTap: () => onSaveAs?.call(savedPath!, name),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Text(
+                        'Save',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ),
                   ),
               ]),
               const SizedBox(height: 6),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
@@ -34,6 +35,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     widget.peerDeviceName,
   );
   bool _completed = false;
+  Timer? _timeoutTimer;
 
   @override
   void initState() {
@@ -43,6 +45,19 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     );
     _service.addStatusListener(_onStatus);
     _connect();
+    
+    // Auto-close after 1 minute if no response
+    _timeoutTimer = Timer(const Duration(minutes: 1), () {
+      if (mounted && !_completed && _status == ConnectionStatus.connecting) {
+        debugPrint('[ConnectionFlowDialog] Connection timeout after 1 minute');
+        setState(() {
+          _status = ConnectionStatus.failed;
+          _error = 'Connection timeout - no response';
+        });
+        _service.disconnect();
+        Navigator.of(context).pop();
+      }
+    });
   }
 
   Future<void> _connect() async {
@@ -141,6 +156,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
 
   @override
   void dispose() {
+    _timeoutTimer?.cancel();
     _service.removeStatusListener(_onStatus);
     // If not connected yet, cancel the attempt
     if (_status != ConnectionStatus.connected) {
@@ -156,23 +172,46 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildTitle(),
-            const SizedBox(height: AppSizes.lg),
-            _buildFacesRow(),
-            const SizedBox(height: AppSizes.md),
-            if (_status == ConnectionStatus.failed && _error != null)
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.red),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppSizes.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTitle(),
+                const SizedBox(height: AppSizes.lg),
+                _buildFacesRow(),
+                const SizedBox(height: AppSizes.md),
+                if (_status == ConnectionStatus.failed && _error != null)
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.red),
+                  ),
+              ],
+            ),
+          ),
+          // Close icon in top-right corner
+          Positioned(
+            top: 8,
+            right: 8,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 20),
+              color: Colors.grey.shade600,
+              onPressed: () {
+                _timeoutTimer?.cancel();
+                _service.disconnect();
+                Navigator.of(context).pop();
+              },
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(
+                minWidth: 32,
+                minHeight: 32,
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
 

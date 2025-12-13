@@ -54,8 +54,11 @@ class NetworkBanner extends StatelessWidget {
       );
     }
 
-    if (hotspotActive) {
+    // Treat explicit networkName 'Personal Hotspot' same as hotspotActive
+    final isPersonalHotspotName = (networkName == 'Personal Hotspot');
+    if (hotspotActive || isPersonalHotspotName) {
       final name = hotspotName ?? 'Hotspot';
+      final displayName = isPersonalHotspotName ? 'Personal Hotspot' : name;
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(
@@ -71,7 +74,7 @@ class NetworkBanner extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  name,
+                  displayName,
                   style: const TextStyle(
                     color: Color(0xFF2962FF),
                     fontWeight: FontWeight.w500,
@@ -134,7 +137,7 @@ class NetworkBanner extends StatelessWidget {
     final icon = isConnected ? Icons.wifi : Icons.wifi_off;
     final text = isConnected
         ? (networkName?.toLowerCase().contains('local') == true
-              ? 'Personal Hotspot is active'
+              ? 'Connected to WiFi'
               : 'Connected to $networkName')
         : 'Not connected';
 

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:cpft/core/logging/app_logger.dart';
+import 'package:cpft/features/home/presentation/widgets/buttons/link_share_button.dart';
 import 'package:cpft/features/home/presentation/widgets/sheets/ios_hotspot_instruction_sheet.dart';
+import 'package:cpft/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
+import 'package:cpft/features/home/presentation/widgets/sheets/incoming_request_dialog.dart';
 import 'package:cpft/features/webshare/presentation/widgets/web_rtc_connection_bottomsheet.dart';
 import 'package:cpft/models/hotspot_info.dart';
 import 'package:flutter/material.dart';
@@ -22,10 +25,9 @@ import 'package:cpft/features/home/controllers/home_controller.dart';
 import 'package:cpft/features/home/presentation/widgets/radar_view.dart';
 import 'package:cpft/features/home/presentation/widgets/device_dot.dart';
 import 'package:cpft/features/home/presentation/widgets/network_banner.dart';
-import 'package:cpft/features/home/presentation/widgets/buttons/link_share_button.dart';
+
 import 'package:cpft/features/home/presentation/widgets/home_app_bar.dart';
-import 'package:cpft/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
-import 'package:cpft/features/home/presentation/widgets/sheets/incoming_request_dialog.dart';
+
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
@@ -64,7 +66,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _localIp;
   Function(String, ConnectionService, bool)? _connectionListener;
   Timer? _networkCheckTimer;
-  bool _iosManualHotspotMode = false;
+  bool _iosManualHotspotMode =
+      false; // Track if iOS user manually enabled hotspot
   late WebRTCFileTransferService _webrtcService;
   late WebShareService _webShareService;
   bool _didStartShowcase = false;
@@ -99,10 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         debugPrint('[HomeScreen] 🎉 WebRTC Connection Established!');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'WebRTC Connected! Ready to transfer files.',
-              style: TextStyle(color: Colors.white),
-            ),
+            content: Text('WebRTC Connected! Ready to transfer files.', style: TextStyle(color: Colors.white),),
             backgroundColor: Colors.green,
           ),
         );
@@ -145,9 +145,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
+    debugPrint(
+      '[HomeScreen] 🎯 Setting up connection listener. Current connections: ${cm.activeConnections.length}',
+    );
+
     _connectionListener = (deviceName, service, isIncoming) {
+      debugPrint(
+        '[HomeScreen] 🔔 Connection listener fired: $deviceName, isIncoming: $isIncoming, isConnected: ${service.isConnected}',
+      );
+
       // ONLY navigate for incoming connections
       if (isIncoming && service.isConnected) {
+        debugPrint(
+          '[HomeScreen] 📲 Auto-navigating to chat for INCOMING connection from $deviceName',
+        );
         if (mounted) {
           Navigator.push(
             context,
@@ -271,14 +282,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       if (isNowDisconnected && !wasDisconnected) {
         widget.discoveryService.clearDevices();
-        // Don't pause radar if iOS user is in manual hotspot mode
-        if (!_iosManualHotspotMode) {
+        // Don't pause radar if iOS user is in manual hotspot mode or Android hotspot is active
+        if (!_iosManualHotspotMode && _hotspotInfo == null) {
           controller.pauseRadar();
         }
         // Auto-start hotspot when no Wi‑Fi
         _maybeStartHotspot();
         if (mounted) setState(() {});
       } else if (!isNowDisconnected && wasDisconnected) {
+        // We reconnected to some network. If hotspot is active, keep it
+        // until the user explicitly switches back to Wi‑Fi.
+        // Clear iOS manual hotspot mode since we're on WiFi now
         if (_iosManualHotspotMode) {
           setState(() {
             _iosManualHotspotMode = false;
@@ -348,26 +362,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final stopped = await LocalHotspotService.stopHotspot();
       if (stopped) {
         _hotspotInfo = null;
+        // Pause radar if no network available after stopping hotspot
+        if (_networkName == 'Not Connected' && !_iosManualHotspotMode) {
+          controller.pauseRadar();
+        }
       }
     }
   }
 
-  Future<void> _maybeStartHotspot() async {
+  Future<void> _maybeStartHotspot({bool autoShowQr = false}) async {
     if (!_autoHotspotEnabled) return;
     if (_hotspotStarting || _hotspotInfo != null) return;
     if (!mounted) return;
     if (!Platform.isAndroid) return;
 
-    _hotspotStarting = true;
+    setState(() {
+      _hotspotStarting = true;
+    });
+    
     try {
       final info = await LocalHotspotService.startHotspot();
       if (info != null && mounted) {
         setState(() {
           _hotspotInfo = info;
+          _hotspotStarting = false;
+        });
+        
+        // Resume radar when hotspot is active
+        controller.resumeRadar();
+        
+        // Auto-show QR code when manually switching to hotspot
+        if (autoShowQr && mounted) {
+          // Small delay to ensure UI is updated
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted) {
+            _showHotspotQrCode();
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _hotspotStarting = false;
         });
       }
-    } finally {
-      _hotspotStarting = false;
     }
   }
 
@@ -816,6 +854,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _switchToHotspot() async {
     // On iOS, show manual instructions since hotspot API is not available
     if (Platform.isIOS) {
+      // Don't set _iosManualHotspotMode = true here
+      // Let the auto-detection in _initializeNetworkName() handle it
+      // when the user actually enables the hotspot
       _showIosHotspotInstructions();
       return;
     }
@@ -828,7 +869,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 500));
     }
-    _maybeStartHotspot();
+    _maybeStartHotspot(autoShowQr: true);
   }
 
   void _showIosHotspotInstructions() {
@@ -856,7 +897,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final prefs = await SharedPreferences.getInstance();
         final hasSeenShowcase = prefs.getBool('home_showcase_seen') ?? false;
-
+        
         if (!hasSeenShowcase && mounted) {
           Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) {
@@ -870,14 +911,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
       _didStartShowcase = true;
     }
-
+    
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
         final hasNetwork =
             _networkName != null && _networkName != 'Not Connected';
         // On iOS, if manual hotspot mode is active, treat it as having network
-        final effectiveHasNetwork = hasNetwork || _iosManualHotspotMode;
+        // On Android, if hotspot is active, treat it as having network
+        final effectiveHasNetwork = hasNetwork || _iosManualHotspotMode || _hotspotInfo != null;
         final devices = effectiveHasNetwork
             ? controller.devices.values.where((d) => d.ip != _localIp).toList()
             : <DeviceInfo>[];
@@ -1150,139 +1192,132 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               description: 'Share files via web without application.',
               tooltipBackgroundColor: Colors.white,
               textColor: Colors.black,
-              descTextStyle: const TextStyle(
-                fontSize: 12,
-                color: Colors.black87,
-              ),
-              titleTextStyle: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-                fontSize: 16,
-              ),
+              descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+              titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
               tooltipBorderRadius: BorderRadius.circular(12),
               targetBorderRadius: BorderRadius.circular(12),
               child: LinkShareButton(
-                onPressed: () async {
+              onPressed: () async {
+                if (!mounted) return;
+
+                // Check if local-only hotspot is active (which blocks internet for WebRTC signaling)
+                final hotspotRunning =
+                    await LocalHotspotService.isHotspotRunning();
+                final lanIp = await NetworkUtils.getLanIPv4();
+                final hasNetwork = lanIp != null;
+
+                AppLogger.d(
+                  'Link share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
+                  tag: 'HomeScreen',
+                );
+
+                if (hotspotRunning) {
+                  // Local-only hotspot is active - this blocks internet access needed for WebRTC
+                  // Show dialog and let user choose to switch to WiFi
                   if (!mounted) return;
-
-                  // Check if local-only hotspot is active (which blocks internet for WebRTC signaling)
-                  final hotspotRunning =
-                      await LocalHotspotService.isHotspotRunning();
-                  final lanIp = await NetworkUtils.getLanIPv4();
-                  final hasNetwork = lanIp != null;
-
-                  AppLogger.d(
-                    'Link share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
-                    tag: 'HomeScreen',
+                  final shouldSwitch = await app_dialog.showAppDialog<bool>(
+                    context: context,
+                    builder: (context) => AppConfirmDialog(
+                      title: 'Internet Connection Required',
+                      content: Text(
+                        'WebRTC connections require internet access for signaling. '
+                        'A local-only hotspot is currently active.\n\n'
+                        'Would you like to stop the hotspot and open WiFi settings to connect to a network with internet access?',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.darkPrimary,
+                        ),
+                      ),
+                      confirmLabel: 'Yes, Switch to WiFi',
+                      cancelLabel: 'Cancel',
+                      destructive: false,
+                    ),
                   );
 
-                  if (hotspotRunning) {
-                    // Local-only hotspot is active - this blocks internet access needed for WebRTC
-                    // Show dialog and let user choose to switch to WiFi
-                    if (!mounted) return;
-                    final shouldSwitch = await app_dialog.showAppDialog<bool>(
-                      context: context,
-                      builder: (context) => AppConfirmDialog(
-                        title: 'Internet Connection Required',
-                        content: Text(
-                          'WebRTC connections require internet access for signaling. '
-                          'A local-only hotspot is currently active.\n\n'
-                          'Would you like to stop the hotspot and open WiFi settings to connect to a network with internet access?',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AppColors.darkPrimary),
-                        ),
-                        confirmLabel: 'Yes, Switch to WiFi',
-                        cancelLabel: 'Cancel',
-                        destructive: false,
-                      ),
-                    );
+                  if (shouldSwitch == true) {
+                    // User confirmed - stop hotspot and open WiFi settings
+                    try {
+                      await LocalHotspotService.stopHotspot();
+                      AppLogger.i(
+                        'Stopped local-only hotspot for WiFi switch',
+                        tag: 'HomeScreen',
+                      );
 
-                    if (shouldSwitch == true) {
-                      // User confirmed - stop hotspot and open WiFi settings
-                      try {
-                        await LocalHotspotService.stopHotspot();
-                        AppLogger.i(
-                          'Stopped local-only hotspot for WiFi switch',
-                          tag: 'HomeScreen',
-                        );
-
-                        // Clear hotspot info to update UI
-                        if (mounted) {
-                          setState(() {
-                            _hotspotInfo = null;
-                            _hotspotStarting = false;
-                          });
-                        }
-
-                        // Open WiFi settings
-                        await WifiService.openWifiSettings();
-                        AppLogger.i(
-                          'Opened WiFi settings for user',
-                          tag: 'HomeScreen',
-                        );
-
-                        // Refresh network name after a short delay to allow WiFi connection
-                        Future.delayed(const Duration(seconds: 2), () async {
-                          if (mounted) {
-                            await _initializeNetworkName();
-                            AppLogger.i(
-                              'Refreshed network name after WiFi switch',
-                              tag: 'HomeScreen',
-                            );
-                          }
+                      // Clear hotspot info to update UI
+                      if (mounted) {
+                        setState(() {
+                          _hotspotInfo = null;
+                          _hotspotStarting = false;
                         });
-
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Hotspot stopped. Please connect to WiFi with internet access.',
-                              ),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        AppLogger.w(
-                          'Failed to stop hotspot or open WiFi settings: $e',
-                          tag: 'HomeScreen',
-                        );
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
                       }
-                    }
-                    return;
-                  }
 
-                  showAppBottomSheet(
-                    context: context,
-                    title: 'Link Share',
-                    subtitle:
-                        'Establish direct web connection for file sharing.',
-                    showCloseButton: true,
-                    child: WebRTCConnectionBottomSheet(
-                      webrtcService: _webrtcService,
-                      webShareService: _webShareService,
-                      onConnected: () {
-                        // Optionally navigate to file transfer screen or show success
-                      },
-                      onError: (error) {
+                      // Open WiFi settings
+                      await WifiService.openWifiSettings();
+                      AppLogger.i(
+                        'Opened WiFi settings for user',
+                        tag: 'HomeScreen',
+                      );
+
+                      // Refresh network name after a short delay to allow WiFi connection
+                      Future.delayed(const Duration(seconds: 2), () async {
+                        if (mounted) {
+                          await _initializeNetworkName();
+                          AppLogger.i(
+                            'Refreshed network name after WiFi switch',
+                            tag: 'HomeScreen',
+                          );
+                        }
+                      });
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Hotspot stopped. Please connect to WiFi with internet access.',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      AppLogger.w(
+                        'Failed to stop hotspot or open WiFi settings: $e',
+                        tag: 'HomeScreen',
+                      );
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Connection Error: $error'),
+                            content: Text('Error: $e'),
                             backgroundColor: Colors.red,
                           ),
                         );
-                      },
-                    ),
-                  );
-                },
+                      }
+                    }
+                  }
+                  return;
+                }
+
+                showAppBottomSheet(
+                  context: context,
+                  title: 'Link Share',
+                  subtitle: 'Establish direct web connection for file sharing.',
+                  showCloseButton: true,
+                  child: WebRTCConnectionBottomSheet(
+                    webrtcService: _webrtcService,
+                    webShareService: _webShareService,
+                    onConnected: () {
+                      // Optionally navigate to file transfer screen or show success
+                    },
+                    onError: (error) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Connection Error: $error'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
               ),
             ),
           ],

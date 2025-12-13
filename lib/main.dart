@@ -216,12 +216,7 @@ class _PermissionWrapperState extends State<PermissionWrapper>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // When app resumes from background (e.g., returning from Settings), re-check permissions
-    if (state == AppLifecycleState.resumed &&
-        (!_permissionsGranted || _locationServiceDisabled)) {
-      AppLogger.d('App resumed - re-checking permissions', tag: 'PermWrap');
-      _checkPermissions();
-    }
+    // Skip permission re-checking since location permissions are no longer required
   }
 
   Future<void> _initialize() async {
@@ -231,7 +226,19 @@ class _PermissionWrapperState extends State<PermissionWrapper>
     await NotificationService().initialize();
     await NotificationService().requestPermissions();
 
-    await _checkPermissions();
+    // Skip location permission checks - set as granted
+    if (mounted) {
+      setState(() {
+        _permissionsGranted = true;
+        _isCheckingPermissions = false;
+      });
+    }
+
+    // For iOS, show Local Network permission instructions (optional)
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      await LocalNetworkPermissionHelper.requestPermission();
+    }
+
     _deviceName = await _getDeviceName();
     AppLogger.d('Device name loaded: $_deviceName', tag: 'PermWrap');
 
