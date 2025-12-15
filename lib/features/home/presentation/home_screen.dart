@@ -16,7 +16,9 @@ import 'package:cpft/features/home/helpers/device_position.dart';
 import 'package:cpft/features/home/helpers/device_dot_layout_helper.dart';
 import 'package:cpft/features/home/helpers/connection_handler.dart';
 import 'package:cpft/features/home/helpers/service_restart_handler.dart';
+import 'package:cpft/shared/widgets/app_snackbar.dart';
 import 'package:cpft/services/discovery_service.dart';
+import 'package:cpft/services/sound_service.dart';
 import 'package:cpft/utils/network_utils.dart';
 import 'package:cpft/utils/permissions.dart';
 import 'package:cpft/services/hotspot_service.dart';
@@ -100,12 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onConnectionEstablished: () {
         if (!mounted) return;
         debugPrint('[HomeScreen] 🎉 WebRTC Connection Established!');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('WebRTC Connected! Ready to transfer files.', style: TextStyle(color: Colors.white),),
-            backgroundColor: Colors.green,
-          ),
-        );
+        AppSnackbar.showSuccess(context, 'WebRTC Connected! Ready to transfer files.');
       },
       onConnectionLost: () {
         if (!mounted) return;
@@ -120,12 +117,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onFileTransferError: (filename, error, isReceive) {
         if (!mounted) return;
         debugPrint('[HomeScreen] ❌ WebRTC Transfer Error: $error');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Transfer Error: $error'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackbar.showError(context, 'Transfer Error: $error');
       },
     );
 
@@ -246,29 +238,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (result == true) {
       await accept();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Connected with $deviceName',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
-          ),
-        ),
-      );
+      AppSnackbar.showSuccess(context, 'Connected with $deviceName');
     } else if (result == false) {
       await decline();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'You rejected the request from $deviceName',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
-          ),
-        ),
-      );
+      AppSnackbar.showInfo(context, 'You rejected the request from $deviceName');
     }
   }
 
@@ -814,27 +788,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: InkWell(
             onTap: () {
               Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text('$label copied'),
-                    ],
-                  ),
-                  duration: const Duration(milliseconds: 1500),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  backgroundColor: Colors.green.shade600,
-                ),
-              );
+              AppSnackbar.showSuccess(context, '$label copied', duration: const Duration(milliseconds: 1500));
             },
             borderRadius: BorderRadius.circular(8),
             child: Container(
@@ -1269,14 +1223,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       });
 
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Hotspot stopped. Please connect to WiFi with internet access.',
-                            ),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
+                        AppSnackbar.showSuccess(context, 'Hotspot stopped. Please connect to WiFi with internet access.');
                       }
                     } catch (e) {
                       AppLogger.w(
@@ -1284,12 +1231,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         tag: 'HomeScreen',
                       );
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        AppSnackbar.showError(context, 'Error: $e');
                       }
                     }
                   }
@@ -1308,12 +1250,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // Optionally navigate to file transfer screen or show success
                     },
                     onError: (error) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Connection Error: $error'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
+                      AppSnackbar.showError(context, 'Connection Error: $error');
                     },
                   ),
                 );

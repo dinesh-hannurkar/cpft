@@ -18,6 +18,11 @@ class ShowcaseHelper {
   static final GlobalKey settingsKey = GlobalKey();
   static final GlobalKey helpKey = GlobalKey();
 
+  // File operation keys
+  static final GlobalKey saveButtonKey = GlobalKey();
+  static final GlobalKey downloadAllKey = GlobalKey();
+  static final GlobalKey receivedFileCardKey = GlobalKey();
+
   /// Starts showcase for a standard flow depending on route
   static void startForWebEntry(BuildContext context) {
     ShowCaseWidget.of(

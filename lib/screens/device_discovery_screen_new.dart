@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:cpft/shared/widgets/app_snackbar.dart';
 import '../services/discovery_service.dart';
 import '../utils/permissions.dart';
 
@@ -44,11 +45,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       final hasPermission = await AppPermissions.requestNetworkPermissions();
       if (!hasPermission) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Network permissions are required for device discovery', style: TextStyle(color: Colors.white)),
-            ),
-          );
+          AppSnackbar.showWarning(context, 'Network permissions are required for device discovery');
         }
         return;
       }
@@ -67,11 +64,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     } catch (e) {
       debugPrint('Failed to initialize discovery: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initialize device discovery: $e', style: const TextStyle(color: Colors.white)),
-          ),
-        );
+        AppSnackbar.showError(context, 'Failed to initialize device discovery: $e');
       }
     }
   }
@@ -268,11 +261,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                         child: InkWell(
                           onTap: () {
                             // Handle device selection
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Selected $deviceName', style: const TextStyle(color: Colors.white)),
-                              ),
-                            );
+                            AppSnackbar.showInfo(context, 'Selected $deviceName');
                           },
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),

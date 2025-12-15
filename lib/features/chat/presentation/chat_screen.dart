@@ -10,6 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cpft/core/constants/app_colors.dart';
+import 'package:cpft/services/sound_service.dart';
+import 'package:cpft/shared/widgets/app_snackbar.dart';
 import 'package:cpft/features/chat/models/transfer_progress.dart';
 import 'package:cpft/features/chat/models/received_file.dart';
 import 'package:cpft/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
@@ -73,6 +75,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   ConnectionInfo? _connectionInfo;
   bool _isConnecting = false;
   bool _didStartShowcase = false;
+  bool _didShowFileReceivedShowcase = false;
 
   // Peer‑to‑peer port constant
   static const int p2pPort = 53318;
@@ -147,17 +150,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       setState(() => _isConnecting = false);
     }
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to connect to ${_connectionService.deviceName}',
-          ),
-          backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: _connectToDevice,
-          ),
+      AppSnackbar.showError(
+        context,
+        'Failed to connect to ${_connectionService.deviceName}',
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _connectToDevice,
         ),
       );
     }
@@ -176,8 +175,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final mime = message.metadata?['mime'] as String?;
         final outgoing = message.metadata?['outgoing'] as bool? ?? false;
         if (tId != null && bytes != null && total != null) {
+          final map = outgoing ? _outgoingProgress : _incomingProgress;
+          final isNewTransfer = !map.containsKey(tId);
+          
           setState(() {
-            final map = outgoing ? _outgoingProgress : _incomingProgress;
             map.putIfAbsent(
               tId,
               () => TransferProgress(
@@ -189,6 +190,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             map[tId]!.updateProgress(bytes.toDouble());
             map[tId]!.isPending = false; // Clear pending state on progress
           });
+          
+          // Play sound when transfer starts (first progress update)
+          if (isNewTransfer) {
+            SoundService().playTransferStart();
+          }
         }
         break;
       case 'file_pending':
@@ -209,6 +215,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final tId = message.metadata?['transferId'] as String?;
         final path = message.metadata?['path'] as String?;
         final isOutgoing = message.metadata?['outgoing'] as bool? ?? false;
+        final wasFirstReceivedFile = _receivedFiles.isEmpty && !isOutgoing;
+        final wasSecondReceivedFile = _receivedFiles.length == 1 && !isOutgoing;
+        
+        // Play transfer complete sound
+        SoundService().playTransferComplete();
+        
         setState(() {
           if (!_messages.any(
             (m) =>
@@ -233,8 +245,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           }
         });
         _scrollToBottom();
+        
+        // Trigger showcase when first file is received
+        if (wasFirstReceivedFile && path != null && !isOutgoing && !_didShowFileReceivedShowcase) {
+          _triggerFileReceivedShowcase();
+        }
+        // Trigger showcase for Download All when second file is received
+        else if (wasSecondReceivedFile && path != null && !isOutgoing && !_didShowFileReceivedShowcase) {
+          _triggerDownloadAllShowcase();
+        }
         break;
       default:
+        // Play sound for received text messages (not sent by me)
+        if (message.senderName != widget.myDeviceName && message.type == 'text') {
+          SoundService().playMessageReceived();
+        }
         setState(() {
           if (!_messages.any(
             (m) =>
@@ -357,50 +382,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       WakelockPlus.enable();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Connected to ${info.deviceName}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        AppSnackbar.showSuccess(context, 'Connected to ${info.deviceName}', duration: const Duration(seconds: 2));
       });
     } else if (info.status == ConnectionStatus.disconnected) {
       WakelockPlus.disable();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Disconnected from ${info.deviceName}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
-            ),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        AppSnackbar.showWarning(context, 'Disconnected from ${info.deviceName}', duration: const Duration(seconds: 2));
       });
     } else if (info.status == ConnectionStatus.failed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Connection failed: ${info.error ?? "Unknown error"}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackbar.showError(context, 'Connection failed: ${info.error ?? "Unknown error"}');
       });
     }
   }
@@ -429,25 +422,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
     final success = await _connectionService.sendMessage(message);
     if (success) {
+      SoundService().playMessageSent();
       setState(() {
         _messages.add(message);
         _messageController.clear();
       });
       _scrollToBottom();
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Failed to send message',
-            style: TextStyle(color: AppColors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+      AppSnackbar.showError(context, 'Failed to send message');
     }
   }
 
   Future<void> _disconnect() async {
+    SoundService().playDisconnect();
     await _connectionService.disconnect();
     if (mounted) Navigator.of(context).pop();
   }
@@ -459,14 +446,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           final status = await Permission.requestInstallPackages.request();
           if (!status.isGranted) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Install permission denied',
-                    style: TextStyle(color: AppColors.white),
-                  ),
-                ),
-              );
+              AppSnackbar.showWarning(context, 'Install permission denied');
             }
             return;
           }
@@ -474,14 +454,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
       final result = await OpenFilex.open(path);
       if (result.type != ResultType.done && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Open failed (${result.message})',
-              style: const TextStyle(color: AppColors.white),
-            ),
-          ),
-        );
+        AppSnackbar.showError(context, 'Open failed (${result.message})');
       }
     } catch (e) {
       try {
@@ -489,15 +462,106 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         await OpenFilex.open(parent);
       } catch (_) {}
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Open failed: $e',
-              style: const TextStyle(color: AppColors.white),
-            ),
-          ),
-        );
+        AppSnackbar.showError(context, 'Open failed: $e');
       }
+    }
+  }
+
+  Future<void> _saveAll() async {
+    // Get all received files that haven't been saved yet
+    final unsavedFiles = _receivedFiles.where((file) {
+      final actualPath = _savedFilePaths[file.path] ?? file.path;
+      return io.File(actualPath).existsSync();
+    }).toList();
+
+    if (unsavedFiles.isEmpty) {
+      if (mounted) {
+        AppSnackbar.showInfo(context, 'All files have already been saved');
+      }
+      return;
+    }
+
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+
+    // On iOS, share all files
+    if (isIOS) {
+      final xFiles = unsavedFiles
+          .map((f) => XFile(_savedFilePaths[f.path] ?? f.path))
+          .toList();
+      await Share.shareXFiles(xFiles);
+      return;
+    }
+
+    // On Android and Desktop, use directory picker
+    String? targetDir;
+    try {
+      targetDir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Choose destination folder for ${unsavedFiles.length} files',
+      );
+    } catch (e) {
+      debugPrint('[SaveAll] Directory picker error: $e');
+    }
+
+    // User cancelled
+    if (targetDir == null || targetDir.isEmpty) {
+      return;
+    }
+
+    int successCount = 0;
+    int failCount = 0;
+
+    for (final file in unsavedFiles) {
+      final actualSourcePath = _savedFilePaths[file.path] ?? file.path;
+      final safeName = file.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      String destPath = '$targetDir/$safeName';
+      
+      // Handle duplicate names
+      int dup = 1;
+      while (await io.File(destPath).exists()) {
+        final dot = safeName.lastIndexOf('.');
+        if (dot > 0) {
+          final base = safeName.substring(0, dot);
+          final ext = safeName.substring(dot);
+          destPath = '$targetDir/$base($dup)$ext';
+        } else {
+          destPath = '$targetDir/$safeName($dup)';
+        }
+        dup++;
+      }
+
+      try {
+        final sourceFile = io.File(actualSourcePath);
+        try {
+          await sourceFile.rename(destPath);
+        } catch (moveError) {
+          await sourceFile.copy(destPath);
+          try {
+            await sourceFile.delete();
+          } catch (e) {
+            debugPrint('[SaveAll] Failed to delete temp file: $e');
+          }
+        }
+        
+        // Track the new path
+        setState(() {
+          _savedFilePaths[file.path] = destPath;
+        });
+        successCount++;
+      } catch (e) {
+        debugPrint('[SaveAll] Failed to save ${file.name}: $e');
+        failCount++;
+      }
+    }
+
+    if (mounted) {
+      AppSnackbar.show(
+        context,
+        successCount > 0
+            ? 'Saved $successCount file${successCount > 1 ? 's' : ''} to: $targetDir${failCount > 0 ? '\n$failCount failed' : ''}'
+            : 'Failed to save files',
+        type: successCount > 0 ? SnackbarType.success : SnackbarType.error,
+        duration: const Duration(seconds: 3),
+      );
     }
   }
 
@@ -508,15 +572,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     // Check if file exists at the source path
     if (!await io.File(actualSourcePath).exists()) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'File has already been saved and is no longer in temp location',
-              style: TextStyle(color: AppColors.white),
-            ),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        AppSnackbar.showInfo(context, 'File has already been saved and is no longer in temp location', duration: const Duration(seconds: 3));
       }
       return;
     }
@@ -584,26 +640,66 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Saved to: $destPath',
-              style: const TextStyle(color: AppColors.white),
-            ),
-          ),
-        );
+        AppSnackbar.showSuccess(context, 'Saved to: $destPath');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Save failed: $e',
-              style: const TextStyle(color: AppColors.white),
-            ),
-          ),
-        );
+        AppSnackbar.showError(context, 'Save failed: $e');
       }
+    }
+  }
+
+  void _triggerFileReceivedShowcase() async {
+    _didShowFileReceivedShowcase = true;
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenFileShowcase = prefs.getBool('file_received_showcase_seen') ?? false;
+    
+    if (!hasSeenFileShowcase && mounted) {
+      // Delay to ensure widgets are built
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) {
+          try {
+            final showcaseKeys = <GlobalKey>[];
+            
+            // Add file card showcase
+            showcaseKeys.add(ShowcaseHelper.receivedFileCardKey);
+            showcaseKeys.add(ShowcaseHelper.saveButtonKey);
+            
+            // Add download all if multiple files
+            if (_receivedFiles.length > 1) {
+              showcaseKeys.add(ShowcaseHelper.downloadAllKey);
+            }
+            
+            ShowCaseWidget.of(context).startShowCase(showcaseKeys);
+            prefs.setBool('file_received_showcase_seen', true);
+          } catch (e) {
+            debugPrint('[ChatScreen] Error starting file showcase: $e');
+          }
+        }
+      });
+    }
+  }
+
+  void _triggerDownloadAllShowcase() async {
+    _didShowFileReceivedShowcase = true;
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenFileShowcase = prefs.getBool('file_received_showcase_seen') ?? false;
+    
+    if (!hasSeenFileShowcase && mounted) {
+      // Delay to ensure Download All button is rendered
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          try {
+            // Only show Download All showcase
+            ShowCaseWidget.of(context).startShowCase([
+              ShowcaseHelper.downloadAllKey,
+            ]);
+            prefs.setBool('file_received_showcase_seen', true);
+          } catch (e) {
+            debugPrint('[ChatScreen] Error starting download all showcase: $e');
+          }
+        }
+      });
     }
   }
 
@@ -661,14 +757,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             await OpenFilex.open(io.File(dirPath).path);
           } catch (e) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Reveal failed: $e',
-                    style: const TextStyle(color: AppColors.white),
-                  ),
-                ),
-              );
+              AppSnackbar.showError(context, 'Reveal failed: $e');
             }
           }
         },
@@ -769,6 +858,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   onShowReceivedFiles: _showReceivedFilesSheet,
                   onShowDevices: _showAllConnectedDevices,
                   onDisconnect: isConnected ? _disconnect : null,
+                  onSaveAll: _receivedFiles.length > 1 ? _saveAll : null,
                   connectionManager: widget.connectionManager,
                   isConnected: isConnected,
                 ),
@@ -807,12 +897,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             final savedPath = msg.metadata?['path'] as String?;
                             // Use updated path if file was saved
                             final actualPath = savedPath != null ? (_savedFilePaths[savedPath] ?? savedPath) : null;
+                            
+                            // Show showcase on first received file only
+                            final isFirstReceivedFile = !isOutgoing && 
+                                _messages.where((m) => 
+                                  m.type == 'file_complete' && 
+                                  (m.metadata?['outgoing'] as bool? ?? false) == false
+                                ).first == msg;
+                            
                             return CompletedFileCard(
                               message: msg,
                               isMine: isOutgoing,
                               savedPath: actualPath,
                               onOpen: (p, n) => _openFile(p, n),
                               onSaveAs: (p, n) => _saveAs(p, n),
+                              showShowcase: isFirstReceivedFile,
                             );
                           }
                           if (msg.type == 'file_offer') {

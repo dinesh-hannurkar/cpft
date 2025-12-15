@@ -6,6 +6,7 @@ import 'utils/permissions.dart';
 import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
 import 'services/notification_service.dart';
+import 'services/sound_service.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/chat/presentation/chat_screen.dart';
 import 'features/chat/services/connection_service.dart';
@@ -28,6 +29,13 @@ void main() async {
   try {
     await FirebaseInitializer.ensure();
   } catch (_) {}
+
+  // Initialize sound service
+  try {
+    await SoundService().init();
+  } catch (e) {
+    debugPrint('[Main] Sound service initialization error: $e');
+  }
 
   // Clean up old received files on Android (async, don't block app startup)
   ConnectionService.cleanupOldReceivedFiles().catchError((e) {

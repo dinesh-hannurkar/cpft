@@ -13,6 +13,11 @@ import 'package:cpft/shared/widgets/primary_text_field.dart';
 import 'package:cpft/shared/widgets/primary_button.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:cpft/shared/showcase/showcase_helper.dart';
+import 'package:cpft/services/sound_service.dart';
+import 'package:cpft/features/settings/presentation/help_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cpft/features/settings/presentation/feedback_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
@@ -32,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late String _deviceName;
   String _appVersion = '';
   bool _isApplying = false;
+  bool _soundsEnabled = true;
 
   @override
   void initState() {
@@ -39,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _deviceName = widget.currentDeviceName;
     _loadVersion();
     _loadDeviceNameFromPrefs();
+    _loadSoundsEnabled();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
       final hasSeenShowcase = prefs.getBool('settings_showcase_seen') ?? false;
@@ -73,6 +80,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final info = await PackageInfo.fromPlatform();
       setState(() => _appVersion = info.version);
     } catch (_) {}
+  }
+
+  Future<void> _loadSoundsEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() => _soundsEnabled = prefs.getBool('sounds_enabled') ?? true);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleSounds(bool value) async {
+    setState(() => _soundsEnabled = value);
+    await SoundService().setSoundsEnabled(value);
+  }
+
+  Future<void> _launchUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open link: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rateApp() async {
+    const String appStoreUrl = 'https://play.google.com/store/apps/details?id=com.cpft.app';
+    const String appStoreUrlIOS = 'https://apps.apple.com/app/cpft/id1234567890'; // Replace with actual App Store ID
+
+    try {
+      if (Theme.of(context).platform == TargetPlatform.iOS) {
+        await _launchUrl(appStoreUrlIOS);
+      } else {
+        await _launchUrl(appStoreUrl);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open app store: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareApp() async {
+    try {
+      await Share.share(
+        'Check out CPFT - Cross-Platform File Transfer! Transfer files between devices instantly over WiFi. '
+        'Download now: https://cpft.app/download',
+        subject: 'CPFT - Cross-Platform File Transfer',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share app: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _promptRename() async {
@@ -343,6 +412,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SettingsTile(
+                            icon: Icons.volume_up_rounded,
+                            title: 'Sounds',
+                            subtitle: 'Enable or disable sound effects',
+                            trailing: Switch(
+                              value: _soundsEnabled,
+                              onChanged: _toggleSounds,
+                              activeColor: AppColors.primary,
+                            ),
+                          ),
+                          SettingsTile(
                             icon: Icons.info_outline_rounded,
                             title: 'Version',
                             subtitle: 'Installed app version',
@@ -354,37 +433,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             icon: Icons.help_outline_rounded,
                             title: 'Help & Support',
                             subtitle: 'Get help, FAQs, and contact support',
-                            onTap: () {},
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const HelpScreen(),
+                              ),
+                            ),
                           ),
                           SettingsTile(
                             icon: Icons.description_outlined,
                             title: 'Terms of Use',
                             subtitle: 'Read the terms and conditions',
-                            onTap: () {},
+                            onTap: () => _launchUrl('https://cpft.app/terms'),
                           ),
                           SettingsTile(
                             icon: Icons.privacy_tip_outlined,
                             title: 'Privacy Policy',
                             subtitle: 'Learn how your data is used',
-                            onTap: () {},
+                            onTap: () => _launchUrl('https://cpft.app/privacy'),
                           ),
                           SettingsTile(
                             icon: Icons.feedback_outlined,
                             title: 'Send Feedback',
                             subtitle: 'Report a bug or suggest a feature',
-                            onTap: () {},
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const FeedbackScreen(),
+                              ),
+                            ),
                           ),
                           SettingsTile(
                             icon: Icons.star_rate_outlined,
                             title: 'Rate Us',
                             subtitle: 'Leave a rating in the store',
-                            onTap: () {},
+                            onTap: _rateApp,
                           ),
                           SettingsTile(
                             icon: Icons.share_outlined,
                             title: 'Share App',
                             subtitle: 'Share CPFT with friends',
-                            onTap: () {},
+                            onTap: _shareApp,
                           ),
                         ],
                       ),

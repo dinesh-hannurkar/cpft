@@ -17,6 +17,7 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onShowReceivedFiles;
   final VoidCallback onShowDevices;
   final VoidCallback? onDisconnect;
+  final VoidCallback? onSaveAll;
   final ConnectionManager connectionManager;
   final bool isConnected;
 
@@ -30,6 +31,7 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onShowReceivedFiles,
     required this.onShowDevices,
     required this.onDisconnect,
+    this.onSaveAll,
     required this.connectionManager,
     required this.isConnected,
   });
@@ -39,6 +41,29 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   List<Widget> _buildTrailingActions() {
     final actions = <Widget>[];
+
+    // Save All button when multiple files received
+    if (onSaveAll != null) {
+      actions.add(
+        Showcase(
+          key: ShowcaseHelper.downloadAllKey,
+          disableBarrierInteraction: false,
+          targetPadding: const EdgeInsets.all(8),
+          title: 'Download All',
+          description: 'Save all received files at once to a folder of your choice',
+          tooltipBackgroundColor: Colors.white,
+          textColor: Colors.black,
+          descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+          titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+          tooltipBorderRadius: BorderRadius.circular(12),
+          targetBorderRadius: BorderRadius.circular(12),
+          child: AppIconButton(
+            icon: Icons.download,
+            onPressed: onSaveAll!,
+          ),
+        ),
+      );
+    }
 
     if (receivedFilesCount > 0) {
       actions.add(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cpft/shared/widgets/app_snackbar.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/widgets/primary_text_field.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -40,14 +41,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen> {
     } catch (e) {
       // Handle error
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to save device name',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        );
+        AppSnackbar.showError(context, 'Failed to save device name');
       }
     } finally {
       if (mounted) {

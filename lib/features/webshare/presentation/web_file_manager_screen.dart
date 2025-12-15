@@ -3,6 +3,7 @@ import 'package:cpft/features/webshare/models/webshare_models.dart';
 import 'package:cpft/utils/time_utils.dart';
 import 'package:cpft/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
+import 'package:cpft/shared/widgets/app_snackbar.dart';
 import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../services/discovery_service.dart';
@@ -337,15 +338,7 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
           widget.discoveryService.removeFileFromWeb(file.id);
           Navigator.pop(context);
           setState(() {});
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Removed "${file.filename}" from web',
-                style: TextStyle(color: Colors.white),
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          AppSnackbar.showWarning(context, 'Removed "${file.filename}" from web');
         },
       ),
     );
@@ -355,14 +348,8 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
     setState(() {
       _receivedFiles.removeAt(index);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Removed from list',
-          style: TextStyle(color: Colors.white),
-        ),
-      ),
-    );
+    AppSnackbar.showInfo(context, 'Removed from list');
+    
   }
 
   void _deleteReceivedFile(ReceivedFileInfo file, int index) {
@@ -387,28 +374,12 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
             });
             if (mounted) {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Deleted "${file.filename}"',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              AppSnackbar.showSuccess(context, 'Deleted "${file.filename}"');
             }
           } catch (e) {
             if (mounted) {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Failed to delete file: $e',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              AppSnackbar.showError(context, 'Failed to delete file: $e');
             }
           }
         },
@@ -431,13 +402,6 @@ class _WebFileManagerScreenState extends State<WebFileManagerScreen>
   }
 
   void _showFileOptions(String path) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'File location: $path',
-          style: TextStyle(color: Colors.white),
-        ),
-      ),
-    );
+    AppSnackbar.showInfo(context, 'File location: $path');
   }
 }

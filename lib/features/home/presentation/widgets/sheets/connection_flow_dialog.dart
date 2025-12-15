@@ -4,6 +4,7 @@ import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import '../../../../chat/services/connection_manager.dart';
 import '../../../../../services/discovery_service.dart';
+import '../../../../../services/sound_service.dart';
 import '../../../../chat/models/connection_state.dart';
 
 class ConnectionFlowDialog extends StatefulWidget {
@@ -112,6 +113,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     // When connected, close this dialog and let caller proceed
     if (info.status == ConnectionStatus.connected && !_completed) {
       _completed = true;
+      SoundService().playConnectionSuccess();
       debugPrint(
         '[ConnectionFlowDialog] Connection established to ${widget.peerDeviceName}, closing dialog',
       );
@@ -120,6 +122,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     } else if ((info.status == ConnectionStatus.failed ||
             info.status == ConnectionStatus.disconnected) &&
         !_completed) {
+      SoundService().playConnectionFailed();
       // Provide quick feedback to the initiator if rejected/disconnected
       final messenger = ScaffoldMessenger.maybeOf(context);
       final isRejected = (info.error ?? '').toLowerCase().contains('rejected');

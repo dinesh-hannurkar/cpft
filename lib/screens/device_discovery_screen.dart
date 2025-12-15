@@ -7,6 +7,7 @@ import 'package:cpft/widgets/device_count.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:cpft/shared/widgets/app_snackbar.dart';
 import '../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../shared/widgets/app_confirm_dialog.dart';
 import '../services/discovery_service.dart';
@@ -166,14 +167,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
     } catch (e) {
       AppLogger.w('Refresh error: $e', tag: 'DiscoveryUI', error: e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Refresh failed: $e',
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
-        );
+        AppSnackbar.showError(context, 'Refresh failed: $e');
       }
     } finally {
       if (mounted) {
@@ -201,15 +195,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
         final success = await _discoveryService.startWebServer(port: 80);
         if (!success) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Failed to start web server',
-                style: TextStyle(color: Colors.white),
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
+          AppSnackbar.showError(context, 'Failed to start web server');
           return;
         }
       }
@@ -218,15 +204,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       final webLink = await _discoveryService.getWebLink();
       if (webLink == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Unable to generate web link. Check network connection.',
-              style: TextStyle(color: Colors.white),
-            ),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        AppSnackbar.showWarning(context, 'Unable to generate web link. Check network connection.');
         return;
       }
 
@@ -292,15 +270,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                         tooltip: 'Copy link',
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: webLink));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Link copied to clipboard!',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
+                          AppSnackbar.showSuccess(context, 'Link copied to clipboard!', duration: const Duration(seconds: 2));
                         },
                       ),
                     ],

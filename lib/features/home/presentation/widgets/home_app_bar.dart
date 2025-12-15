@@ -1,3 +1,4 @@
+import 'package:cpft/core/constants/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
@@ -49,7 +50,7 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
             children: [
               Center(
                 child: Text(
-                  'CPFT',
+                  AppStrings.appName,
                   style: Theme.of(
                     context,
                   ).textTheme.headlineMedium?.apply(color: AppColors.primary),

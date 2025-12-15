@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/shared/widgets/app_action_button.dart';
+import 'package:cpft/services/sound_service.dart';
 
 class IncomingRequestDialog extends StatefulWidget {
   final String deviceName;
@@ -13,6 +14,13 @@ class IncomingRequestDialog extends StatefulWidget {
 }
 
 class _IncomingRequestDialogState extends State<IncomingRequestDialog> {
+  @override
+  void initState() {
+    super.initState();
+    // Play sound when connection request is received
+    SoundService().playConnectionRequest();
+  }
+
   @override
   Widget build(BuildContext context) {
     final initial = widget.deviceName.isNotEmpty

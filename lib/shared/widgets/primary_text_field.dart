@@ -8,6 +8,7 @@ class PrimaryTextField extends StatelessWidget {
   final bool enabled;
   final TextInputType? keyboardType;
   final int? maxLength;
+  final int? maxLines;
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
   final void Function()? onTap;
@@ -24,6 +25,7 @@ class PrimaryTextField extends StatelessWidget {
     this.enabled = true,
     this.keyboardType,
     this.maxLength,
+    this.maxLines,
     this.validator,
     this.onChanged,
     this.onTap,
@@ -51,6 +53,7 @@ class PrimaryTextField extends StatelessWidget {
         enabled: enabled,
         keyboardType: keyboardType,
         maxLength: maxLength,
+        maxLines: maxLines,
         validator: validator,
         onChanged: onChanged,
         onTap: onTap,

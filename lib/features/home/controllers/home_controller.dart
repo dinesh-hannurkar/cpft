@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../../services/discovery_service.dart';
+import '../../../services/sound_service.dart';
 
 class HomeController extends ChangeNotifier {
   final DiscoveryService discoveryService;
@@ -9,6 +10,7 @@ class HomeController extends ChangeNotifier {
   Timer? _radarTimer;
   double _sweepAngle = 0;
   bool _isPaused = false;
+  final Set<String> _knownDevices = {};
 
   // Exposed state
   double get sweepAngle => _sweepAngle;
@@ -21,6 +23,12 @@ class HomeController extends ChangeNotifier {
     await discoveryService.initialize();
 
     discoveryService.addDiscoveryListener((name, ip, port) {
+      // Play sound when new device is discovered
+      final deviceKey = '$name:$ip';
+      if (!_knownDevices.contains(deviceKey)) {
+        _knownDevices.add(deviceKey);
+        SoundService().playDeviceDiscovered();
+      }
       // Handle both device discoveries and cleanup notifications
       notifyListeners();
     });
