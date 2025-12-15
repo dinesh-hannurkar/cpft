@@ -15,6 +15,8 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:cpft/shared/showcase/showcase_helper.dart';
 import 'package:cpft/services/sound_service.dart';
 import 'package:cpft/features/settings/presentation/help_screen.dart';
+import 'package:cpft/features/settings/presentation/terms_of_use_screen.dart';
+import 'package:cpft/features/settings/presentation/privacy_policy_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cpft/features/settings/presentation/feedback_screen.dart';
@@ -444,13 +446,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             icon: Icons.description_outlined,
                             title: 'Terms of Use',
                             subtitle: 'Read the terms and conditions',
-                            onTap: () => _launchUrl('https://cpft.app/terms'),
+                            onTap: () {
+                              if (kIsWeb) {
+                                Navigator.pushNamed(context, '/termsofuse');
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const TermsOfUseScreen(),
+                                  ),
+                                );
+                              }
+                            },
                           ),
                           SettingsTile(
                             icon: Icons.privacy_tip_outlined,
                             title: 'Privacy Policy',
                             subtitle: 'Learn how your data is used',
-                            onTap: () => _launchUrl('https://cpft.app/privacy'),
+                            onTap: () {
+                              if (kIsWeb) {
+                                Navigator.pushNamed(context, '/privacy');
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const PrivacyPolicyScreen(),
+                                  ),
+                                );
+                              }
+                            },
                           ),
                           SettingsTile(
                             icon: Icons.feedback_outlined,

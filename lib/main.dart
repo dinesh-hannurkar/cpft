@@ -13,6 +13,8 @@ import 'features/chat/services/connection_service.dart';
 import 'common/theme/app_theme.dart';
 import 'features/setup/presentation/device_name_setup_screen.dart';
 import 'features/webshare/presentation/web_room_entry_screen.dart';
+import 'features/settings/presentation/privacy_policy_screen.dart';
+import 'features/settings/presentation/terms_of_use_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'services/firebase_initializer.dart';
 
@@ -57,11 +59,58 @@ class MainApp extends StatelessWidget {
         navigatorKey: navigatorKey,
         // On web, only show the WebShare (WebRTC) screen
         initialRoute: kIsWeb ? '/webshare' : '/',
-        routes: {
-          '/': (context) => const PermissionWrapper(),
-          '/setup': (context) => const DeviceNameSetupScreen(),
-          '/home': (context) => const HomeWrapper(),
-          '/webshare': (context) => const WebRoomEntryScreen(),
+        onGenerateRoute: (settings) {
+          // On web, redirect mobile-only routes to webshare
+          if (kIsWeb) {
+            final allowedWebRoutes = ['/webshare', '/privacy', '/termsofuse'];
+            if (!allowedWebRoutes.contains(settings.name)) {
+              return MaterialPageRoute(
+                builder: (context) => const WebRoomEntryScreen(),
+                settings: const RouteSettings(name: '/webshare'),
+              );
+            }
+          }
+          
+          // Use default routes
+          switch (settings.name) {
+            case '/':
+              return MaterialPageRoute(
+                builder: (context) => const PermissionWrapper(),
+                settings: settings,
+              );
+            case '/setup':
+              return MaterialPageRoute(
+                builder: (context) => const DeviceNameSetupScreen(),
+                settings: settings,
+              );
+            case '/home':
+              return MaterialPageRoute(
+                builder: (context) => const HomeWrapper(),
+                settings: settings,
+              );
+            case '/webshare':
+              return MaterialPageRoute(
+                builder: (context) => const WebRoomEntryScreen(),
+                settings: settings,
+              );
+            case '/privacy':
+              return MaterialPageRoute(
+                builder: (context) => const PrivacyPolicyScreen(),
+                settings: settings,
+              );
+            case '/termsofuse':
+              return MaterialPageRoute(
+                builder: (context) => const TermsOfUseScreen(),
+                settings: settings,
+              );
+            default:
+              return MaterialPageRoute(
+                builder: (context) => kIsWeb 
+                  ? const WebRoomEntryScreen() 
+                  : const PermissionWrapper(),
+                settings: settings,
+              );
+          }
         },
         builder: (context, child) {
           final content = Container(
