@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -161,7 +162,7 @@ class NetworkBanner extends StatelessWidget {
               ),
             ],
           ),
-          if (isConnected && onSwitchToHotspot != null) ...[
+          if (isConnected && onSwitchToHotspot != null && !Platform.isMacOS) ...[
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: onSwitchToHotspot,

@@ -1117,9 +1117,13 @@ Feature requests:
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(AppSizes.md),
-                  child: RichText(
-                    text: _parseBoldText(content),
-                    textScaler: const TextScaler.linear(1.0),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: RichText(
+                      text: _parseBoldText(content),
+                      textScaler: const TextScaler.linear(1.0),
+                      textAlign: TextAlign.left,
+                    ),
                   ),
                 ),
               ),
