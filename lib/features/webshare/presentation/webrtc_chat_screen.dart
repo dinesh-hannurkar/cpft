@@ -21,6 +21,7 @@ import 'package:cpft/shared/widgets/primary_app_bar.dart';
 import 'package:cpft/shared/widgets/back_button_chip.dart';
 import 'package:cpft/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:cpft/shared/widgets/app_action_button.dart';
+import 'package:cpft/shared/widgets/temporary_files_warning_banner.dart';
 import 'package:cpft/features/chat/models/transfer_progress.dart';
 import 'package:cpft/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
@@ -1131,6 +1132,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
             child: SafeArea(
               child: Column(
                 children: [
+                  const TemporaryFilesWarningBanner(),
                   Expanded(
                     child: (() {
                       final totalItems =

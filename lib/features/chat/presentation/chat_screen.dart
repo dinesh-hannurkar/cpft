@@ -25,6 +25,7 @@ import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
 import 'package:cpft/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
+import 'package:cpft/shared/widgets/temporary_files_warning_banner.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:cpft/shared/showcase/showcase_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -870,6 +871,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     error: _connectionInfo?.error,
                     onRetry: _connectToDevice,
                   ),
+                const TemporaryFilesWarningBanner(),
                 Expanded(
                   child: (() {
                     final totalItems =
