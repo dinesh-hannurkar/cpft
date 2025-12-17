@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/core/constants/app_sizes.dart';
 import 'package:cpft/shared/widgets/back_button_chip.dart';
@@ -48,18 +49,23 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   void _loadDeviceInfo() {
     final deviceInfo = StringBuffer();
 
-    // Platform info
-    deviceInfo.writeln('Platform: ${Platform.operatingSystem}');
-    deviceInfo.writeln('OS Version: ${Platform.operatingSystemVersion}');
-
-    // App info
-    deviceInfo.writeln('App Version: $_appVersion');
-
-    // Additional device details
-    try {
-      deviceInfo.writeln('Locale: ${Platform.localeName}');
-    } catch (e) {
-      // Ignore locale errors
+    if (kIsWeb) {
+      // Web platform info
+      deviceInfo.writeln('Platform: Web');
+      deviceInfo.writeln('User Agent: ${Uri.base.host}');
+      deviceInfo.writeln('App Version: $_appVersion');
+    } else {
+      // Mobile/Desktop platform info
+      deviceInfo.writeln('Platform: ${Platform.operatingSystem}');
+      deviceInfo.writeln('OS Version: ${Platform.operatingSystemVersion}');
+      deviceInfo.writeln('App Version: $_appVersion');
+      
+      // Additional device details
+      try {
+        deviceInfo.writeln('Locale: ${Platform.localeName}');
+      } catch (e) {
+        // Ignore locale errors
+      }
     }
 
     setState(() => _deviceInfo = deviceInfo.toString());

@@ -1,0 +1,19 @@
+# These files are NOT needed in the dist/ folder for deployment
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/web/
+build/
+.git/
+.gitignore
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+*.iml
+*.lock
+.vscode/
+.idea/
+pubspec.lock

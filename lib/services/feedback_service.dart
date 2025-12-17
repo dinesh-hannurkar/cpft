@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io' show Platform;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 
 enum FeedbackType {
   bug,
@@ -100,7 +100,7 @@ class FeedbackService {
         expectedBehavior: expectedBehavior,
         deviceInfo: deviceInfo,
         appVersion: packageInfo.version,
-        platform: Platform.operatingSystem,
+        platform: kIsWeb ? 'web' : Platform.operatingSystem,
         timestamp: DateTime.now(),
       );
 
@@ -220,15 +220,22 @@ class FeedbackService {
     final buffer = StringBuffer();
     final packageInfo = await PackageInfo.fromPlatform();
 
-    buffer.writeln('Platform: ${Platform.operatingSystem}');
-    buffer.writeln('OS Version: ${Platform.operatingSystemVersion}');
-    buffer.writeln('App Version: ${packageInfo.version}');
-    buffer.writeln('App Build: ${packageInfo.buildNumber}');
+    if (kIsWeb) {
+      buffer.writeln('Platform: Web');
+      buffer.writeln('User Agent: ${Uri.base.host}');
+      buffer.writeln('App Version: ${packageInfo.version}');
+      buffer.writeln('App Build: ${packageInfo.buildNumber}');
+    } else {
+      buffer.writeln('Platform: ${Platform.operatingSystem}');
+      buffer.writeln('OS Version: ${Platform.operatingSystemVersion}');
+      buffer.writeln('App Version: ${packageInfo.version}');
+      buffer.writeln('App Build: ${packageInfo.buildNumber}');
 
-    try {
-      buffer.writeln('Locale: ${Platform.localeName}');
-    } catch (e) {
-      // Ignore locale errors
+      try {
+        buffer.writeln('Locale: ${Platform.localeName}');
+      } catch (e) {
+        // Ignore locale errors
+      }
     }
 
     return buffer.toString();

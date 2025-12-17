@@ -7,23 +7,39 @@ class WebDownload {
     List<int> bytes, {
     String? contentType,
   }) {
-    final data = Uint8List.fromList(bytes);
-    final blob = html.Blob([data], contentType ?? 'application/octet-stream');
-    final url = html.Url.createObjectUrlFromBlob(blob);
+    print('[WebDownload] saveBytes called: filename=$filename, size=${bytes.length}, contentType=$contentType');
+    
     try {
+      final data = Uint8List.fromList(bytes);
+      print('[WebDownload] Created Uint8List, creating blob...');
+      
+      final blob = html.Blob([data], contentType ?? 'application/octet-stream');
+      print('[WebDownload] Blob created, size=${blob.size}');
+      
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      print('[WebDownload] Blob URL created: $url');
+      
       final anchor = html.AnchorElement(href: url)
-        ..download = filename
-        ..target = '_self'
-        ..rel = 'noopener';
-      // Some browsers require the element to be attached before clicking
+        ..setAttribute('download', filename)
+        ..style.display = 'none';
+      
+      print('[WebDownload] Anchor element created, appending to body...');
       html.document.body?.append(anchor);
+      
+      print('[WebDownload] Triggering click...');
       anchor.click();
-      anchor.remove();
-    } catch (_) {
-      // Fallback for Safari quirks: open in a new tab/window
-      html.window.open(url, '_blank');
-    } finally {
-      html.Url.revokeObjectUrl(url);
+      
+      print('[WebDownload] Download triggered successfully');
+      
+      // Clean up after a delay to ensure download starts
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        anchor.remove();
+        html.Url.revokeObjectUrl(url);
+        print('[WebDownload] Cleanup completed');
+      });
+    } catch (e, stackTrace) {
+      print('[WebDownload] Error in saveBytes: $e');
+      print('[WebDownload] Stack trace: $stackTrace');
     }
   }
 
@@ -32,20 +48,47 @@ class WebDownload {
     List<Uint8List> parts, {
     String? contentType,
   }) {
-    final blob = html.Blob(parts, contentType ?? 'application/octet-stream');
-    final url = html.Url.createObjectUrlFromBlob(blob);
+    print('[WebDownload] saveParts called: filename=$filename, parts=${parts.length}, contentType=$contentType');
+    
     try {
+      // Convert List<Uint8List> to a single Uint8List by concatenating
+      final totalLength = parts.fold<int>(0, (sum, part) => sum + part.length);
+      print('[WebDownload] Total size: $totalLength bytes');
+      
+      final combined = Uint8List(totalLength);
+      var offset = 0;
+      for (final part in parts) {
+        combined.setRange(offset, offset + part.length, part);
+        offset += part.length;
+      }
+      
+      print('[WebDownload] Combined into single Uint8List, creating blob...');
+      final blob = html.Blob([combined], contentType ?? 'application/octet-stream');
+      print('[WebDownload] Blob created, size=${blob.size}');
+      
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      print('[WebDownload] Blob URL created: $url');
+      
       final anchor = html.AnchorElement(href: url)
-        ..download = filename
-        ..target = '_self'
-        ..rel = 'noopener';
+        ..setAttribute('download', filename)
+        ..style.display = 'none';
+      
+      print('[WebDownload] Anchor element created, appending to body...');
       html.document.body?.append(anchor);
+      
+      print('[WebDownload] Triggering click...');
       anchor.click();
-      anchor.remove();
-    } catch (_) {
-      html.window.open(url, '_blank');
-    } finally {
-      html.Url.revokeObjectUrl(url);
+      
+      print('[WebDownload] Download triggered successfully');
+      
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        anchor.remove();
+        html.Url.revokeObjectUrl(url);
+        print('[WebDownload] Cleanup completed');
+      });
+    } catch (e, stackTrace) {
+      print('[WebDownload] Error in saveParts: $e');
+      print('[WebDownload] Stack trace: $stackTrace');
     }
   }
 }

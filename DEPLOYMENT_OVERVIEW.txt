@@ -1,0 +1,214 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   CPFT DEPLOYMENT STRUCTURE                               ║
+║              SEO Landing Page + Flutter Web App Hybrid Setup              ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+�� PROJECT STRUCTURE
+═══════════════════════════════════════════════════════════════════════════
+
+DEVELOPMENT (Edit These)
+├── lib/
+│   └── main.dart, pubspec.yaml, etc.  ← Flutter source code
+├── dist/
+│   └── index.html                      ← Landing page (edit directly)
+└── deploy.sh                           ← Run to build & deploy
+
+BUILD OUTPUT (Auto-Generated)
+├── build/web/                          ← Flutter build output
+│   └── (intermediate files)
+└── dist/app/                           ← Deployed Flutter app
+    └── (updated by deploy.sh)
+
+DEPLOYMENT (Upload This)
+dist/
+├── index.html                          ← Root landing page (20KB)
+├── app/                                ← Flutter web app folder
+│   ├── index.html
+│   ├── main.dart.js                    ← App code (3.3MB)
+│   ├── flutter_bootstrap.js
+│   ├── flutter_service_worker.js
+│   ├── canvaskit/                      ← WebAssembly runtime
+│   ├── assets/                         ← Images, fonts, etc.
+│   └── ...
+├── server.js                           ← Local dev server
+└── package.json
+
+
+🚀 DEPLOYMENT FLOW
+═══════════════════════════════════════════════════════════════════════════
+
+STEP 1: Build Flutter App
+   ┌─────────────────────────────────────┐
+   │  $ ./deploy.sh                      │
+   │  (or: flutter build web --base-href /app/)
+   └─────────────────────────────────────┘
+                    ↓
+   Builds Flutter to: build/web/
+
+STEP 2: Copy to Dist
+   ┌─────────────────────────────────────┐
+   │ deploy.sh copies: build/web → dist/app/
+   └─────────────────────────────────────┘
+                    ↓
+   dist/ is now ready to deploy
+
+STEP 3: Upload dist/ to Server
+   ┌─────────────────────────────────────┐
+   │ rsync / FTP / Git / Docker / etc.   │
+   │ Upload: dist/ → your-server:/root/ │
+   └─────────────────────────────────────┘
+                    ↓
+   Live at: your-domain.com
+
+
+🌐 URL ROUTING AFTER DEPLOYMENT
+═══════════════════════════════════════════════════════════════════════════
+
+User visits: your-domain.com/
+                    ↓
+          Server checks: Does / exist?
+                    ↓
+          YES → Serves: dist/index.html (Landing Page)
+
+User visits: your-domain.com/app/
+                    ↓
+          Server checks: Does /app/ exist?
+                    ↓
+          YES → Serves: dist/app/index.html (Flutter App)
+
+User visits: your-domain.com/app/main.dart.js
+                    ↓
+          Server serves: dist/app/main.dart.js (App Code)
+
+
+📁 WHAT TO UPLOAD
+═══════════════════════════════════════════════════════════════════════════
+
+✅ dist/                          ← The entire dist folder
+   ├── index.html                 ← 20 KB
+   ├── app/                       ← 3-5 MB total
+   │   ├── index.html
+   │   ├── main.dart.js           ← Largest file (3.3 MB)
+   │   ├── flutter_*.js           ← Bootstrap & service worker
+   │   ├── canvaskit/             ← 2-3 MB (WebAssembly)
+   │   └── assets/                ← Images, fonts, data
+   └── [optional: server.js for Node.js hosting]
+
+❌ DON'T upload:
+   • build/ or build/web/
+   • lib/ (source code)
+   • .dart_tool/
+   • pubspec.lock
+   • node_modules/
+   • .git/
+
+
+⚡ QUICK COMMANDS
+═══════════════════════════════════════════════════════════════════════════
+
+Local Testing:
+  $ cd dist && node server.js
+  → Visit: http://localhost:3000/
+
+Update Flutter App:
+  $ ./deploy.sh
+  → Rebuilds and updates dist/app/
+
+Deploy to Server:
+  $ rsync -avz dist/ user@server.com:/var/www/cpft/
+
+View Structure:
+  $ ls -lah dist/
+  $ ls -lah dist/app/
+
+
+🎯 KEY POINTS
+═══════════════════════════════════════════════════════════════════════════
+
+✓ Landing page at ROOT (/) for SEO
+  - Static HTML, loads instantly
+  - Contains all marketing content
+  - Links to /app/ for the interactive app
+
+✓ Flutter app at /app/ subfolder
+  - Completely separate from landing page
+  - All assets served from /app/
+  - Uses service workers for offline support
+
+✓ ONE command to update everything:
+  ./deploy.sh
+
+✓ Server needs ONLY the dist/ folder
+  - Nothing else needs to be deployed
+  - Can use any web server (Nginx, Apache, Vercel, etc.)
+
+✓ SPA Routing works automatically
+  - Server rewrites /app/* to /app/index.html
+  - Flutter app handles all internal routing
+
+
+📊 FOLDER SIZES
+═══════════════════════════════════════════════════════════════════════════
+
+Landing page:       ~20 KB
+Flutter app total:  ~5-7 MB
+
+Breakdown:
+├── main.dart.js:        3.3 MB (app code)
+├── canvaskit/:          2-3 MB (WebAssembly runtime)
+├── bootstrap/service:   ~20 KB
+├── assets/icons:        ~500 KB
+└── other files:         ~100 KB
+
+
+🔄 WORKFLOW EXAMPLE
+═══════════════════════════════════════════════════════════════════════════
+
+DAY 1: Initial Setup
+  $ ./deploy.sh          (Build Flutter app)
+  $ rsync ... dist/      (Deploy to server)
+  ✅ Live at cpft.io and cpft.io/app
+
+DAY 2: Update Landing Page
+  $ vim dist/index.html  (Make changes)
+  $ rsync ... dist/      (Redeploy)
+  ✅ Changes live immediately
+
+DAY 3: Update Flutter App
+  $ vim lib/main.dart    (Make changes)
+  $ ./deploy.sh          (Rebuild)
+  $ rsync ... dist/      (Redeploy)
+  ✅ Changes live, landing page unchanged
+
+
+📚 DOCUMENTATION
+═══════════════════════════════════════════════════════════════════════════
+
+README_DEPLOYMENT.md      ← Main overview
+QUICK_START.md            ← Fast reference
+DEPLOYMENT_GUIDE.md       ← Server configs (Nginx, Apache, etc.)
+SETUP_SUMMARY.md          ← Setup details
+
+
+🎓 LEARN MORE
+═══════════════════════════════════════════════════════════════════════════
+
+• How to configure Nginx:  See DEPLOYMENT_GUIDE.md
+• How to deploy on Vercel: See DEPLOYMENT_GUIDE.md
+• Troubleshooting:         See README_DEPLOYMENT.md
+• Local testing:           See QUICK_START.md
+
+
+✅ YOU'RE READY!
+═══════════════════════════════════════════════════════════════════════════
+
+Your CPFT project is fully set up for professional deployment.
+
+Next steps:
+1. Read QUICK_START.md
+2. Test locally: cd dist && node server.js
+3. When ready: ./deploy.sh && upload dist/
+
+Happy deploying! 🚀
+
+═══════════════════════════════════════════════════════════════════════════

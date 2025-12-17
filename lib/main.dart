@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
+// import 'package:flutter_web_plugins/flutter_web_plugins.dart'
+//     if (dart.library.io) 'package:flutter/foundation.dart'
+//     as web_plugins; // uncomment when deploying on web
 import 'utils/permissions.dart';
 import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
@@ -27,6 +30,12 @@ String? globalDeviceName;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Enable path-based routing on web (instead of hash-based) //uncomment when deploying on web
+  // if (kIsWeb) {
+  //   web_plugins.usePathUrlStrategy();
+  // }
+
   // Initialize Firebase early and robustly; log but don't block UI on failure
   try {
     await FirebaseInitializer.ensure();
@@ -70,7 +79,7 @@ class MainApp extends StatelessWidget {
               );
             }
           }
-          
+
           // Use default routes
           switch (settings.name) {
             case '/':
@@ -105,9 +114,9 @@ class MainApp extends StatelessWidget {
               );
             default:
               return MaterialPageRoute(
-                builder: (context) => kIsWeb 
-                  ? const WebRoomEntryScreen() 
-                  : const PermissionWrapper(),
+                builder: (context) => kIsWeb
+                    ? const WebRoomEntryScreen()
+                    : const PermissionWrapper(),
                 settings: settings,
               );
           }

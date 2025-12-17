@@ -34,6 +34,16 @@ class WebRTCFileTransferService {
       AppLogger.w('Cannot send text: data channel is null', tag: 'WebRTC');
       return;
     }
+    
+    // Check if data channel is open
+    if (_dataChannel!.state != RTCDataChannelState.RTCDataChannelOpen) {
+      AppLogger.w(
+        'Cannot send text: data channel state is ${_dataChannel!.state}',
+        tag: 'WebRTC',
+      );
+      return;
+    }
+    
     final payload = {
       'type': 'text-message',
       'message': message,
@@ -261,6 +271,9 @@ class WebRTCFileTransferService {
 
   bool get isInitialized => _isInitialized;
   bool get isConnected => _isConnected;
+  bool get isDataChannelReady =>
+      _dataChannel != null &&
+      _dataChannel!.state == RTCDataChannelState.RTCDataChannelOpen;
   String? get mySocketId => _mySocketId;
   String? get roomId => _roomId;
   String? get receivedFileName => _expectedFileName;
@@ -764,178 +777,205 @@ class WebRTCFileTransferService {
           );
           _fsAnswerHandled = true;
           await _fsAnswerSub?.cancel();
+          await _fsIceSub?.cancel();
+          AppLogger.i(
+            '✅ Firestore signaling subscriptions cancelled (offerer)',
+            tag: 'WebRTC',
+          );
         }
       });
     } else {
-      // Wait for offer and respond with answer
-      _fsOfferSub = session.onOffer().listen((off) async {
-        if (off != null && _peerConnection != null && !_fsOfferHandled) {
-          // Enforce session filter
-          final sid = off['sessionId'];
-          if (_fsSessionId != null && sid != null && sid != _fsSessionId) {
-            return;
-          }
-          var state = _peerConnection!.signalingState;
-
-          // If not stable, handle glare by resetting the connection to accept remote offer
-          // This includes null state which can happen during initialization
-          if (state == null ||
-              state != RTCSignalingState.RTCSignalingStateStable) {
-            final stateDesc = state == null
-                ? 'null (uninitialized)'
-                : state.toString();
-            AppLogger.w(
-              'Remote offer arrived in non-stable state ($stateDesc). Resetting to accept remote offer.',
+      // Answerer path: Check for existing offer first, then listen for new ones
+      final existingOffer = existing2?['offer'] as Map<String, dynamic>?;
+      
+      // If offer already exists when we join, handle it immediately
+      if (existingOffer != null && !_fsOfferHandled) {
+        final sid = existingOffer['sessionId'];
+        if (_fsSessionId == null || sid == null || sid == _fsSessionId) {
+          AppLogger.i(
+            'Processing existing offer from Firestore (joiner path)',
+            tag: 'WebRTC',
+          );
+          await _handleFirestoreOffer(existingOffer, session);
+        }
+      }
+      
+      // ONLY set up listener if we haven't already handled an offer
+      // This prevents duplicate processing when offer exists at join time
+      if (!_fsOfferHandled) {
+        _fsOfferSub = session.onOffer().listen((off) async {
+          if (off != null && _peerConnection != null && !_fsOfferHandled) {
+            // Enforce session filter
+            final sid = off['sessionId'];
+            if (_fsSessionId != null && sid != null && sid != _fsSessionId) {
+              return;
+            }
+            AppLogger.i(
+              'Processing NEW offer from Firestore listener (joiner path)',
               tag: 'WebRTC',
             );
+            await _handleFirestoreOffer(off, session);
+          }
+        });
+      } else {
+        AppLogger.i(
+          'Skipping offer listener setup - offer already handled',
+          tag: 'WebRTC',
+        );
+      }
+    }
+  }
 
-            try {
-              await _peerConnection?.close();
-              await _dataChannel?.close();
-            } catch (_) {}
-            _peerConnection = null;
-            _dataChannel = null;
-            _isConnected = false;
-            connectionEstablished.value = false;
+  /// Helper to handle Firestore offer (avoid duplication)
+  Future<void> _handleFirestoreOffer(
+    Map<String, dynamic> off,
+    FirestoreSession session,
+  ) async {
+    if (_fsOfferHandled) return;
+    
+    var state = _peerConnection?.signalingState;
 
-            // Recreate a fresh peer connection (as answerer, do NOT create data channel)
-            await _createPeerConnectionForPeer(
-              'firestore-peer',
-              createDataChannel: false,
-            );
+    // If not stable, handle glare by resetting the connection to accept remote offer
+    // This includes null state which can happen during initialization
+    if (state == null ||
+        state != RTCSignalingState.RTCSignalingStateStable) {
+      final stateDesc = state == null
+          ? 'null (uninitialized)'
+          : state.toString();
+      AppLogger.w(
+        'Remote offer arrived in non-stable state ($stateDesc). Resetting to accept remote offer.',
+        tag: 'WebRTC',
+      );
 
-            // Reattach Firestore ICE emission for the new connection (role: answerer)
-            _peerConnection!.onIceCandidate = (c) {
-              if (c.candidate != null) {
-                session.addIce({
-                  'candidate': c.candidate,
-                  'sdpMid': c.sdpMid,
-                  'sdpMLineIndex': c.sdpMLineIndex,
-                  'role': 'answerer',
-                  'sessionId': _fsSessionId,
-                });
+      try {
+        await _peerConnection?.close();
+        await _dataChannel?.close();
+      } catch (_) {}
+
+      await _createPeerConnectionForPeer(
+        'firestore-peer',
+        createDataChannel: false,
+      );
+
+      // Re-setup ICE listener for the new peer connection
+      _peerConnection!.onIceCandidate = (c) {
+        if (c.candidate != null) {
+          session.addIce({
+            'candidate': c.candidate,
+            'sdpMid': c.sdpMid,
+            'sdpMLineIndex': c.sdpMLineIndex,
+            'role': 'answerer',
+            'sessionId': _fsSessionId,
+          });
+        }
+      };
+      _fsIceSub = session.onIce().listen((snapshot) async {
+        for (final change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.added) {
+            final data = change.doc.data();
+            final cand = data?['candidate'] as Map<String, dynamic>?;
+            final role = data?['role'] as String?;
+            final sid = data?['sessionId'] as String?;
+            if (cand != null) {
+              if (_fsSessionId != null && sid != null && sid != _fsSessionId) {
+                continue;
               }
-            };
-            _fsIceSub = session.onIce().listen((snapshot) async {
-              for (final change in snapshot.docChanges) {
-                if (change.type == DocumentChangeType.added) {
-                  final data = change.doc.data();
-                  final cand = data?['candidate'] as Map<String, dynamic>?;
-                  final role =
-                      data?['role'] as String?; // who produced this candidate
-                  final sid = data?['sessionId'] as String?;
-                  if (cand != null) {
-                    // Ignore ICE from different session rounds
-                    if (_fsSessionId != null &&
-                        sid != null &&
-                        sid != _fsSessionId) {
-                      continue;
-                    }
-                    // Ignore our own ICE candidates
-                    final producedByOfferer = role == 'offerer';
-                    final amOfferer = false; // We're now the answerer
-                    if (role != null && producedByOfferer == amOfferer) {
-                      continue;
-                    }
-                    final remoteCand = RTCIceCandidate(
-                      cand['candidate'] as String?,
-                      cand['sdpMid'] as String?,
-                      (cand['sdpMLineIndex'] as num?)?.toInt(),
+              // Ignore our own ICE (answerer ignores answerer ICE)
+              if (role == 'answerer') continue;
+              
+              final remoteCand = RTCIceCandidate(
+                cand['candidate'] as String?,
+                cand['sdpMid'] as String?,
+                (cand['sdpMLineIndex'] as num?)?.toInt(),
+              );
+              if (_fsRemoteDescriptionSet) {
+                if (_peerConnection != null &&
+                    _peerConnection!.connectionState !=
+                        RTCPeerConnectionState.RTCPeerConnectionStateClosed &&
+                    _peerConnection!.connectionState !=
+                        RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+                  try {
+                    await _peerConnection?.addCandidate(remoteCand);
+                  } catch (e) {
+                    AppLogger.e(
+                      'Failed to add ICE candidate: $e',
+                      tag: 'WebRTC',
                     );
-                    if (_fsRemoteDescriptionSet) {
-                      // Check if peer connection is still valid before adding candidate
-                      if (_peerConnection != null &&
-                          _peerConnection!.connectionState !=
-                              RTCPeerConnectionState
-                                  .RTCPeerConnectionStateClosed &&
-                          _peerConnection!.connectionState !=
-                              RTCPeerConnectionState
-                                  .RTCPeerConnectionStateFailed) {
-                        try {
-                          await _peerConnection?.addCandidate(remoteCand);
-                        } catch (e) {
-                          AppLogger.e(
-                            'Failed to add ICE candidate (post-remote SDP): $e',
-                            tag: 'WebRTC',
-                          );
-                        }
-                      } else {
-                        AppLogger.w(
-                          'Skipping ICE candidate addition - peer connection is closed or failed',
-                          tag: 'WebRTC',
-                        );
-                      }
-                    } else {
-                      _fsPendingRemoteCandidates.add(remoteCand);
-                    }
                   }
                 }
+              } else {
+                _fsPendingRemoteCandidates.add(remoteCand);
               }
-            });
-
-            // Update state after recreation
-            state = _peerConnection!.signalingState;
-          }
-
-          // Apply remote offer and generate answer (guard against races)
-          final pc = _peerConnection;
-          if (pc == null) {
-            AppLogger.w(
-              'PeerConnection became null before applying remote offer (answerer path). Aborting.',
-              tag: 'WebRTC',
-            );
-            return;
-          }
-          await pc.setRemoteDescription(
-            RTCSessionDescription(off['sdp'], off['type']),
-          );
-          _fsRemoteDescriptionSet = true;
-          final answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          final ansMap = answer.toMap();
-          ansMap['sessionId'] = _fsSessionId;
-          await session.writeAnswer(ansMap);
-
-          // Drain any buffered remote ICE now that remote SDP is set
-          for (final cand in List<RTCIceCandidate>.from(
-            _fsPendingRemoteCandidates,
-          )) {
-            // Check if peer connection is still valid before adding candidate
-            if (_peerConnection != null &&
-                _peerConnection!.connectionState !=
-                    RTCPeerConnectionState.RTCPeerConnectionStateClosed &&
-                _peerConnection!.connectionState !=
-                    RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-              try {
-                await _peerConnection?.addCandidate(cand);
-              } catch (e) {
-                AppLogger.e(
-                  'Failed to add buffered ICE candidate: $e',
-                  tag: 'WebRTC',
-                );
-              }
-            } else {
-              AppLogger.w(
-                'Skipping buffered ICE candidate addition - peer connection is closed or failed',
-                tag: 'WebRTC',
-              );
             }
           }
-          _fsPendingRemoteCandidates.clear();
-
-          // Clean up signaling once connected and schedule deletion
-          unawaited(_firestoreSession?.cleanup());
-          unawaited(
-            Future.delayed(
-              const Duration(minutes: 5),
-              () => _firestoreSession?.deleteRoom(),
-            ),
-          );
-          _fsOfferHandled = true;
-          await _fsOfferSub?.cancel();
         }
       });
+
+      // Update state after recreation
+      state = _peerConnection!.signalingState;
     }
+
+    // Apply remote offer and generate answer (guard against races)
+    final pc = _peerConnection;
+    if (pc == null) {
+      AppLogger.w(
+        'PeerConnection became null before applying remote offer (answerer path). Aborting.',
+        tag: 'WebRTC',
+      );
+      return;
+    }
+    await pc.setRemoteDescription(
+      RTCSessionDescription(off['sdp'], off['type']),
+    );
+    _fsRemoteDescriptionSet = true;
+    final answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    final ansMap = answer.toMap();
+    ansMap['sessionId'] = _fsSessionId;
+    await session.writeAnswer(ansMap);
+
+    // Drain any buffered remote ICE now that remote SDP is set
+    for (final cand in List<RTCIceCandidate>.from(
+      _fsPendingRemoteCandidates,
+    )) {
+      // Check if peer connection is still valid before adding candidate
+      if (_peerConnection != null &&
+          _peerConnection!.connectionState !=
+              RTCPeerConnectionState.RTCPeerConnectionStateClosed &&
+          _peerConnection!.connectionState !=
+              RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+        try {
+          await _peerConnection?.addCandidate(cand);
+        } catch (e) {
+          AppLogger.e(
+            'Failed to add buffered ICE candidate: $e',
+            tag: 'WebRTC',
+          );
+        }
+      } else {
+        AppLogger.w(
+          'Skipping buffered ICE candidate addition - peer connection is closed or failed',
+          tag: 'WebRTC',
+        );
+      }
+    }
+    _fsPendingRemoteCandidates.clear();
+
+    // Clean up signaling once connected and schedule deletion
+    unawaited(_firestoreSession?.cleanup());
+    unawaited(
+      Future.delayed(
+        const Duration(minutes: 5),
+        () => _firestoreSession?.deleteRoom(),
+      ),
+    );
+    _fsOfferHandled = true;
+    await _fsOfferSub?.cancel();
+    await _fsIceSub?.cancel();
+    AppLogger.i(
+      '✅ Firestore signaling subscriptions cancelled (answerer)',
+      tag: 'WebRTC',
+    );
   }
 
   // ===== Local WebSocket signaling support =====
@@ -1669,11 +1709,11 @@ class WebRTCFileTransferService {
     bool createDataChannel = false,
   }) async {
     _connectedPeerSocketId = peerSocketId;
-    // LAN-only: gather host candidates only (no STUN/TURN)
+    // On web: Use STUN servers for peer discovery across networks
+    // On native: LAN-only (no STUN/TURN)
     final configuration = <String, dynamic>{
       'iceServers': <Map<String, dynamic>>[],
       'iceCandidatePoolSize': 2,
-      // 'iceTransportPolicy': 'all', // default; host only since no servers provided
     };
 
     _peerConnection = await createPeerConnection(configuration);
@@ -1688,6 +1728,16 @@ class WebRTCFileTransferService {
       if (_isConnected && !wasConnected) {
         AppLogger.i('🎉 WebRTC connection ESTABLISHED!', tag: 'WebRTC');
         onConnectionEstablished?.call();
+        // Cancel Firestore ICE subscription once connected to save costs
+        if (useFirestoreSignaling && _fsIceSub != null) {
+          _fsIceSub?.cancel().then((_) {
+            AppLogger.i(
+              '💰 Firestore ICE subscription cancelled - connection established',
+              tag: 'WebRTC',
+            );
+          });
+          _fsIceSub = null;
+        }
       } else if (!_isConnected && wasConnected) {
         AppLogger.i('❌ WebRTC connection LOST!', tag: 'WebRTC');
         onConnectionLost?.call();

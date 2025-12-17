@@ -150,8 +150,8 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       });
       // Auto-exchange names when connected (after a short delay to ensure channel ready)
       if (kIsWeb) {
-        // Delay on web to let mobile's chat screen open first
-        Future.delayed(const Duration(seconds: 2), () {
+        // Delay on web to let mobile's chat screen open first and data channel stabilize
+        Future.delayed(const Duration(seconds: 3), () {
           if (mounted && widget.webrtcService.connectionEstablished.value) {
             _sendLocalNameToPeer();
           }
@@ -292,8 +292,8 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // If already connected (e.g., on web), send name immediately
     if (widget.webrtcService.connectionEstablished.value) {
       if (kIsWeb) {
-        // Delay on web to let mobile's chat screen open first
-        Future.delayed(const Duration(seconds: 2), () {
+        // Delay on web to let mobile's chat screen open first and data channel stabilize
+        Future.delayed(const Duration(seconds: 3), () {
           if (mounted) _sendLocalNameToPeer();
         });
       } else {

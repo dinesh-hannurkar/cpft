@@ -1,6 +1,6 @@
 {
     "hosting": {
-        "public": "build/web",
+        "public": "dist",
         "ignore": [
             "firebase.json",
             "**/.*",
@@ -17,7 +17,7 @@
                 ]
             },
             {
-                "source": "/flutter_service_worker.js",
+                "source": "/app/index.html",
                 "headers": [
                     {
                         "key": "Cache-Control",
@@ -26,7 +26,16 @@
                 ]
             },
             {
-                "source": "/assets/**",
+                "source": "/app/flutter_service_worker.js",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    }
+                ]
+            },
+            {
+                "source": "/app/assets/**",
                 "headers": [
                     {
                         "key": "Cache-Control",
@@ -35,7 +44,7 @@
                 ]
             },
             {
-                "source": "/main.dart.js",
+                "source": "/app/main.dart.js",
                 "headers": [
                     {
                         "key": "Cache-Control",
@@ -45,6 +54,10 @@
             }
         ],
         "rewrites": [
+            {
+                "source": "/app/**",
+                "destination": "/app/index.html"
+            },
             {
                 "source": "**",
                 "destination": "/index.html"

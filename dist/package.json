@@ -1,0 +1,11 @@
+{
+  "name": "cpft-server",
+  "version": "1.0.0",
+  "description": "Local development server for CPFT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {}
+}

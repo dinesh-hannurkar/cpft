@@ -299,8 +299,8 @@ class _WebRTCConnectionBottomSheetState
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: AppSizes.spaceBtwInputFields * 0.5),
-            NetworkIndicator(networkName: _networkName),
-            const SizedBox(height: AppSizes.spaceBtwItems),
+            // NetworkIndicator(networkName: _networkName),
+            // const SizedBox(height: AppSizes.spaceBtwItems),
             ConnectionInstructions(),
 
             // Discovery status (for join mode)
