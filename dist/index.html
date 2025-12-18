@@ -17,6 +17,23 @@
       // Redirect to /app/ + the same path
       window.location.href = '/app' + currentPath;
     }
+
+    // Smooth scroll for anchor links
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function(e) {
+          e.preventDefault();
+          const targetId = this.getAttribute('href').substring(1);
+          const targetElement = document.getElementById(targetId);
+          if (targetElement) {
+            targetElement.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }
+        });
+      });
+    });
   </script>
   <style>
     body {
@@ -327,30 +344,54 @@
       align-items: center;
       justify-content: center;
       transition: transform 0.2s;
+      position: relative;
+      padding: 15px;
     }
 
     .platform-card:hover {
       transform: translateY(-5px);
     }
 
+    .platform-card.coming-soon {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .platform-card.coming-soon:hover {
+      transform: none;
+    }
+
+    .coming-soon-text {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      font-weight: 500;
+      color: #666666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
     .platform-icon-box {
-      height: 100px;
+      height: 80px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       width: 100%;
     }
 
     .platform-icon {
-      max-height: 80px;
-      max-width: 80px;
+      max-height: 60px;
+      max-width: 60px;
     }
 
     .platform-name {
       font-size: 16px;
       font-weight: 600;
       color: #000000;
+      margin-bottom: 20px;
     }
 
     @media (max-width: 768px) {
@@ -564,43 +605,46 @@
       <h2 class="download-title">Download Now</h2>
       <div class="platforms-container">
         <!-- Android -->
-        <div class="platform-card">
+        <a href="https://play.google.com/store/apps/details?id=com.example.cpft" class="platform-card" target="_blank" rel="noopener noreferrer">
           <div class="platform-icon-box">
             <img src="img/android-logo-5e3c95.svg" alt="Android" class="platform-icon" />
           </div>
           <span class="platform-name">Android</span>
-        </div>
+        </a>
 
         <!-- iOS -->
-        <div class="platform-card">
+        <a href="https://apps.apple.com/app/cpft/id1234567890" class="platform-card" target="_blank" rel="noopener noreferrer">
           <div class="platform-icon-box">
               <img src="img/ios-logo-cb4ee2.svg" alt="" class="platform-icon" />
           </div>
           <span class="platform-name">iOS</span>
-        </div>
+        </a>
 
         <!-- Windows -->
-        <div class="platform-card">
+        <div class="platform-card coming-soon">
           <div class="platform-icon-box">
             <img src="img/windows-logo-e86ea3.svg" alt="Windows" class="platform-icon" />
           </div>
           <span class="platform-name">Windows</span>
+          <span class="coming-soon-text">Coming Soon</span>
         </div>
 
         <!-- MacOS -->
-        <div class="platform-card">
+        <div class="platform-card coming-soon">
           <div class="platform-icon-box">
             <img src="img/mac-logo-208af3.svg" alt="MacOS" class="platform-icon" />
           </div>
           <span class="platform-name">MacOS</span>
+          <span class="coming-soon-text">Coming Soon</span>
         </div>
 
         <!-- Linux -->
-        <div class="platform-card">
+        <div class="platform-card coming-soon">
           <div class="platform-icon-box">
             <img src="img/linux-logo-39c4d2.svg" alt="Linux" class="platform-icon" />
           </div>
           <span class="platform-name">Linux</span>
+          <span class="coming-soon-text">Coming Soon</span>
         </div>
       </div>
     </div>
