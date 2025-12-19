@@ -21,6 +21,7 @@ import 'features/settings/presentation/terms_of_use_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'services/firebase_initializer.dart';
 import 'services/share_intent_service.dart';
+import 'services/update_service_simple.dart';
 
 // Global navigator key for navigation from anywhere (e.g., notifications)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -56,6 +57,7 @@ void main() async {
 
   runApp(const MainApp());
 }
+
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
@@ -329,6 +331,11 @@ class _PermissionWrapperState extends State<PermissionWrapper>
       }
     }
 
+    // Check for app updates after device setup is complete
+    if (_deviceName != null && mounted) {
+      await UpdateService.checkForUpdates(context);
+    }
+
     if (mounted) {
       setState(() {});
     }
@@ -492,6 +499,7 @@ class _PermissionWrapperState extends State<PermissionWrapper>
       globalDeviceName = _deviceName;
       // Set up notification handler
       _setupNotificationHandler();
+
       return HomeScreen(
         discoveryService: discovery,
         myDeviceName: _deviceName!,
