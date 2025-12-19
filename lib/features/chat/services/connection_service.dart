@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:cpft/models/file_transfer.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cpft/services/notification_service.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 /// Service for managing device-to-device connections
 class ConnectionService {
@@ -719,14 +720,7 @@ class ConnectionService {
                       debugPrint(
                         '[ConnectionService] ✅ Hash verified for ${incoming.offer.fileName}',
                       );
-                      _notifyMessageListeners(
-                        DeviceMessage(
-                          type: 'text',
-                          content: 'File verified: ${incoming.offer.fileName}',
-                          senderName: deviceName,
-                          timestamp: DateTime.now(),
-                        ),
-                      );
+                      // File verification successful - no need to show message to user
                     }
                   }
                   _notifyMessageListeners(
@@ -1125,6 +1119,184 @@ class ConnectionService {
           forceFlush: true,
         );
         await otFinal.completer!.future; // Wait for final ack
+      }
+    }
+  }
+
+  /// Send shared files from share intent
+  Future<void> sendSharedFiles(List<SharedMediaFile> sharedFiles) async {
+    debugPrint('[ConnectionService] 📤 sendSharedFiles called with ${sharedFiles.length} files');
+    if (!isConnected || _socket == null) {
+      debugPrint('[ConnectionService] ⚠️ Not connected; cannot send shared files');
+      return;
+    }
+
+    // Work with a copy to avoid concurrent modification issues
+    final filesToSend = List<SharedMediaFile>.from(sharedFiles);
+
+    for (final sharedFile in filesToSend) {
+      debugPrint('[ConnectionService] 📄 Processing shared file: ${sharedFile.path}');
+      final filePath = sharedFile.path;
+      final file = File(filePath);
+      if (!await file.exists()) {
+        debugPrint('[ConnectionService] ⚠️ Shared file does not exist: $filePath');
+        continue;
+      }
+
+      debugPrint('[ConnectionService] ✅ File exists, size: ${await file.length()} bytes');
+      final name = sharedFile.path.split('/').last;
+      final size = await file.length();
+      final mime = sharedFile.mimeType ?? 'application/octet-stream';
+      final transferId = generateTransferId();
+
+      // Optional: compute sha256 in isolate for integrity
+      String? sha;
+      try {
+        final bytes = await file.readAsBytes();
+        sha = sha256.convert(bytes).toString();
+      } catch (_) {}
+
+      final offer = FileOffer(
+        transferId: transferId,
+        fileName: name,
+        fileSize: size,
+        mimeType: mime,
+        sha256: sha,
+      );
+
+      await sendMessage(
+        DeviceMessage(
+          type: 'file_offer',
+          content: name,
+          senderName: deviceName,
+          metadata: {'payload': offer.toJson(), 'name': name},
+        ),
+      );
+
+      // Stream chunks
+      const chunkSize = 256 * 1024; // 256KB per chunk
+      int index = 0;
+      final stream = file.openRead();
+
+      // Register outgoing transfer
+      _outgoingTransfers[transferId] = _OutgoingTransfer(
+        fileName: name,
+        lastAckIndex: -1,
+        totalSize: size,
+        mime: mime,
+        path: filePath,
+      );
+
+      // Emit initial progress event
+      _notifyMessageListeners(
+        DeviceMessage(
+          type: 'file_progress',
+          content: name,
+          senderName: deviceName,
+          timestamp: DateTime.now(),
+          metadata: {
+            'transferId': transferId,
+            'bytes': 0,
+            'total': size,
+            'mime': mime,
+            'outgoing': true,
+          },
+        ),
+      );
+
+      // Wait for initial ACK
+      final starter = _outgoingTransfers[transferId];
+      if (starter != null) {
+        starter.chunkPermit = Completer<void>();
+        debugPrint(
+          '[ConnectionService] ⏳ Waiting for initial ACK for shared transfer $transferId',
+        );
+        try {
+          await starter.chunkPermit!.future.timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint(
+                '[ConnectionService] ⚠️ Initial ACK timeout for shared $transferId',
+              );
+              throw TimeoutException('No initial ACK received');
+            },
+          );
+          debugPrint(
+            '[ConnectionService] ✅ Initial ACK received, starting chunk stream for shared $transferId',
+          );
+          _startOutgoingWatchdog(transferId);
+        } catch (e) {
+          debugPrint('[ConnectionService] ❌ Initial ACK error: $e');
+          _outgoingTransfers.remove(transferId);
+          continue;
+        }
+      }
+
+      await for (final data in stream) {
+        int offset = 0;
+        while (offset < data.length) {
+          final end = (offset + chunkSize).clamp(0, data.length);
+          final slice = data.sublist(offset, end);
+          final ot = _outgoingTransfers[transferId];
+          if (ot == null) break;
+
+          final pendingChunks = index - ot.lastAckIndex - 1;
+          if (pendingChunks >= _maxPendingChunks) {
+            ot.chunkPermit = Completer<void>();
+            debugPrint(
+              '[ConnectionService] ⏳ Flow control: waiting at chunk $index (pending=$pendingChunks)',
+            );
+            await ot.chunkPermit!.future;
+          }
+
+          ot.chunkSizes[index] = slice.length;
+          final chunk = FileChunk(
+            transferId: transferId,
+            index: index++,
+            dataBase64: base64Encode(slice),
+            isLast: false,
+          );
+          await _sendRaw(
+            DeviceMessage(
+              type: 'file_chunk',
+              content: '',
+              senderName: deviceName,
+              metadata: {'payload': chunk.toJson()},
+            ),
+          );
+          ot.resetWatchdog();
+          offset = end;
+        }
+      }
+
+      // Final marker
+      final otFinal = _outgoingTransfers[transferId];
+      if (otFinal != null) {
+        final pendingChunks = index - otFinal.lastAckIndex - 1;
+        if (pendingChunks >= _maxPendingChunks) {
+          otFinal.chunkPermit = Completer<void>();
+          debugPrint(
+            '[ConnectionService] ⏳ Final: waiting for ACK (pending=$pendingChunks)',
+          );
+          await otFinal.chunkPermit!.future;
+        }
+        final finalChunk = FileChunk(
+          transferId: transferId,
+          index: index,
+          dataBase64: base64Encode(Uint8List(0)),
+          isLast: true,
+        );
+        otFinal.completer = Completer<void>();
+        await _sendRaw(
+          DeviceMessage(
+            type: 'file_chunk',
+            content: '',
+            senderName: deviceName,
+            metadata: {'payload': finalChunk.toJson()},
+          ),
+          forceFlush: true,
+        );
+        await otFinal.completer!.future;
       }
     }
   }

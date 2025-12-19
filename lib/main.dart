@@ -20,6 +20,7 @@ import 'features/settings/presentation/privacy_policy_screen.dart';
 import 'features/settings/presentation/terms_of_use_screen.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'services/firebase_initializer.dart';
+import 'services/share_intent_service.dart';
 
 // Global navigator key for navigation from anywhere (e.g., notifications)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -291,6 +292,11 @@ class _PermissionWrapperState extends State<PermissionWrapper>
     // Initialize notification service
     await NotificationService().initialize();
     await NotificationService().requestPermissions();
+
+    // Initialize share intent service (only on mobile platforms)
+    if (!kIsWeb) {
+      ShareIntentService().initialize();
+    }
 
     // Skip location permission checks - set as granted
     if (mounted) {

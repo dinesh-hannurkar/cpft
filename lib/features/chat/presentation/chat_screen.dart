@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
+import 'package:cpft/features/chat/models/connection_state.dart';
 import 'package:cpft/features/chat/presentation/widgets/constants/file_icons_list.dart';
 import 'package:cpft/features/chat/presentation/widgets/empty_data_widget.dart';
+import 'package:cpft/features/chat/services/connection_manager.dart';
+import 'package:cpft/features/chat/services/connection_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
@@ -30,9 +33,9 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:cpft/shared/showcase/showcase_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import '../models/connection_state.dart';
-import '../services/connection_service.dart';
-import '../services/connection_manager.dart';
+import 'package:cpft/services/share_intent_service.dart';
+import 'package:cpft/features/chat/presentation/widgets/shared_files_banner.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 class ChatScreen extends StatefulWidget {
   final String deviceName;
@@ -61,12 +64,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final List<DeviceMessage> _messages = [];
   final Map<String, TransferProgress> _incomingProgress = {};
   final Map<String, TransferProgress> _outgoingProgress = {};
-  final Map<String, String> _savedFilePaths = {}; // Maps original path to new saved path
+  final Map<String, String> _savedFilePaths =
+      {}; // Maps original path to new saved path
   final List<ReceivedFile> _receivedFiles = [];
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocus = FocusNode();
   final Set<String> _shownOfferDialogs = {};
+
+  late final ShareIntentService _shareIntentService;
+  List<SharedMediaFile> _sharedFiles = [];
 
   int _fileIconIndex = 0;
   bool _slideFromLeft = true;
@@ -125,6 +132,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _checkPendingFileOffers(),
     );
+
+    _shareIntentService = ShareIntentService();
+    _shareIntentService.sharedFilesStream.listen((files) {
+      print('ChatScreen: Stream listener received ${files.length} shared files');
+      if (mounted) {
+        print('ChatScreen: Received ${files.length} shared files from external app');
+        setState(() => _sharedFiles = List<SharedMediaFile>.from(files));
+      }
+    });
+
+    // Also check for any existing shared files that might have been received before init
+    final existingFiles = _shareIntentService.getCurrentSharedFiles();
+    if (existingFiles.isNotEmpty) {
+      print('ChatScreen: Found ${existingFiles.length} existing shared files on init');
+      setState(() => _sharedFiles = List<SharedMediaFile>.from(existingFiles));
+    }
   }
 
   @override
@@ -137,6 +160,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _scrollController.dispose();
     _inputFocus.dispose();
     WakelockPlus.disable();
+    _shareIntentService.dispose();
     super.dispose();
   }
 
@@ -178,7 +202,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         if (tId != null && bytes != null && total != null) {
           final map = outgoing ? _outgoingProgress : _incomingProgress;
           final isNewTransfer = !map.containsKey(tId);
-          
+
           setState(() {
             map.putIfAbsent(
               tId,
@@ -191,7 +215,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             map[tId]!.updateProgress(bytes.toDouble());
             map[tId]!.isPending = false; // Clear pending state on progress
           });
-          
+
           // Play sound when transfer starts (first progress update)
           if (isNewTransfer) {
             SoundService().playTransferStart();
@@ -218,10 +242,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final isOutgoing = message.metadata?['outgoing'] as bool? ?? false;
         final wasFirstReceivedFile = _receivedFiles.isEmpty && !isOutgoing;
         final wasSecondReceivedFile = _receivedFiles.length == 1 && !isOutgoing;
-        
+
         // Play transfer complete sound
         SoundService().playTransferComplete();
-        
+
         setState(() {
           if (!_messages.any(
             (m) =>
@@ -246,19 +270,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           }
         });
         _scrollToBottom();
-        
+
         // Trigger showcase when first file is received
-        if (wasFirstReceivedFile && path != null && !isOutgoing && !_didShowFileReceivedShowcase) {
+        if (wasFirstReceivedFile &&
+            path != null &&
+            !isOutgoing &&
+            !_didShowFileReceivedShowcase) {
           _triggerFileReceivedShowcase();
         }
         // Trigger showcase for Download All when second file is received
-        else if (wasSecondReceivedFile && path != null && !isOutgoing && !_didShowFileReceivedShowcase) {
+        else if (wasSecondReceivedFile &&
+            path != null &&
+            !isOutgoing &&
+            !_didShowFileReceivedShowcase) {
           _triggerDownloadAllShowcase();
         }
         break;
       default:
         // Play sound for received text messages (not sent by me)
-        if (message.senderName != widget.myDeviceName && message.type == 'text') {
+        if (message.senderName != widget.myDeviceName &&
+            message.type == 'text') {
           SoundService().playMessageReceived();
         }
         setState(() {
@@ -314,7 +345,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     if (transferId != null) _shownOfferDialogs.add(transferId);
     if (!mounted) return;
-    
+
     // Auto-accept file transfers without showing confirmation dialog
     if (transferId != null) {
       // On Android and iOS, auto-accept to temp directory for speed
@@ -372,6 +403,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _onStatusChanged(ConnectionInfo info) {
+    print('ChatScreen: Connection status changed to: ${info.status}');
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -383,18 +415,41 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       WakelockPlus.enable();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        AppSnackbar.showSuccess(context, 'Connected to ${info.deviceName}', duration: const Duration(seconds: 2));
+        AppSnackbar.showSuccess(
+          context,
+          'Connected to ${info.deviceName}',
+          duration: const Duration(seconds: 2),
+        );
       });
+
+      // Auto-send shared files when connection is established
+      if (_sharedFiles.isNotEmpty) {
+        print('ChatScreen: Auto-send triggered - sharedFiles: ${_sharedFiles.length}');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          print('ChatScreen: Executing auto-send for ${_sharedFiles.length} files');
+          _sendSharedFiles();
+        });
+      } else {
+        print('ChatScreen: No shared files to auto-send');
+      }
     } else if (info.status == ConnectionStatus.disconnected) {
       WakelockPlus.disable();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        AppSnackbar.showWarning(context, 'Disconnected from ${info.deviceName}', duration: const Duration(seconds: 2));
+        AppSnackbar.showWarning(
+          context,
+          'Disconnected from ${info.deviceName}',
+          duration: const Duration(seconds: 2),
+        );
       });
     } else if (info.status == ConnectionStatus.failed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        AppSnackbar.showError(context, 'Connection failed: ${info.error ?? "Unknown error"}');
+        AppSnackbar.showError(
+          context,
+          'Connection failed: ${info.error ?? "Unknown error"}',
+        );
       });
     }
   }
@@ -431,6 +486,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _scrollToBottom();
     } else if (mounted) {
       AppSnackbar.showError(context, 'Failed to send message');
+    }
+  }
+
+  void _sendSharedFiles() {
+    print('ChatScreen: _sendSharedFiles called with ${_sharedFiles.length} files');
+    if (_sharedFiles.isNotEmpty) {
+      print('ChatScreen: Sending shared files to connection service');
+      _connectionService.sendSharedFiles(_sharedFiles);
+      setState(() {
+        _sharedFiles = [];
+      });
+      _shareIntentService.clearSharedFiles();
+      print('ChatScreen: Shared files sent and cleared');
+    } else {
+      print('ChatScreen: No shared files to send');
     }
   }
 
@@ -497,7 +567,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     String? targetDir;
     try {
       targetDir = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Choose destination folder for ${unsavedFiles.length} files',
+        dialogTitle:
+            'Choose destination folder for ${unsavedFiles.length} files',
       );
     } catch (e) {
       debugPrint('[SaveAll] Directory picker error: $e');
@@ -515,7 +586,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       final actualSourcePath = _savedFilePaths[file.path] ?? file.path;
       final safeName = file.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
       String destPath = '$targetDir/$safeName';
-      
+
       // Handle duplicate names
       int dup = 1;
       while (await io.File(destPath).exists()) {
@@ -542,7 +613,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             debugPrint('[SaveAll] Failed to delete temp file: $e');
           }
         }
-        
+
         // Track the new path
         setState(() {
           _savedFilePaths[file.path] = destPath;
@@ -569,15 +640,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Future<void> _saveAs(String sourcePath, String originalName) async {
     // Check if using saved path instead of original
     final actualSourcePath = _savedFilePaths[sourcePath] ?? sourcePath;
-    
+
     // Check if file exists at the source path
     if (!await io.File(actualSourcePath).exists()) {
       if (mounted) {
-        AppSnackbar.showInfo(context, 'File has already been saved and is no longer in temp location', duration: const Duration(seconds: 3));
+        AppSnackbar.showInfo(
+          context,
+          'File has already been saved and is no longer in temp location',
+          duration: const Duration(seconds: 3),
+        );
       }
       return;
     }
-    
+
     final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
 
     // On iOS, use Share sheet for better UX
@@ -634,7 +709,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           debugPrint('[SaveAs] Failed to delete temp file: $e');
         }
       }
-      
+
       // Track the new path for future save attempts
       setState(() {
         _savedFilePaths[sourcePath] = destPath;
@@ -653,24 +728,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _triggerFileReceivedShowcase() async {
     _didShowFileReceivedShowcase = true;
     final prefs = await SharedPreferences.getInstance();
-    final hasSeenFileShowcase = prefs.getBool('file_received_showcase_seen') ?? false;
-    
+    final hasSeenFileShowcase =
+        prefs.getBool('file_received_showcase_seen') ?? false;
+
     if (!hasSeenFileShowcase && mounted) {
       // Delay to ensure widgets are built
       Future.delayed(const Duration(milliseconds: 800), () {
         if (mounted) {
           try {
             final showcaseKeys = <GlobalKey>[];
-            
+
             // Add file card showcase
             showcaseKeys.add(ShowcaseHelper.receivedFileCardKey);
             showcaseKeys.add(ShowcaseHelper.saveButtonKey);
-            
+
             // Add download all if multiple files
             if (_receivedFiles.length > 1) {
               showcaseKeys.add(ShowcaseHelper.downloadAllKey);
             }
-            
+
             ShowCaseWidget.of(context).startShowCase(showcaseKeys);
             prefs.setBool('file_received_showcase_seen', true);
           } catch (e) {
@@ -684,17 +760,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _triggerDownloadAllShowcase() async {
     _didShowFileReceivedShowcase = true;
     final prefs = await SharedPreferences.getInstance();
-    final hasSeenFileShowcase = prefs.getBool('file_received_showcase_seen') ?? false;
-    
+    final hasSeenFileShowcase =
+        prefs.getBool('file_received_showcase_seen') ?? false;
+
     if (!hasSeenFileShowcase && mounted) {
       // Delay to ensure Download All button is rendered
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           try {
             // Only show Download All showcase
-            ShowCaseWidget.of(context).startShowCase([
-              ShowcaseHelper.downloadAllKey,
-            ]);
+            ShowCaseWidget.of(
+              context,
+            ).startShowCase([ShowcaseHelper.downloadAllKey]);
             prefs.setBool('file_received_showcase_seen', true);
           } catch (e) {
             debugPrint('[ChatScreen] Error starting download all showcase: $e');
@@ -833,6 +910,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     final isConnected = _connectionInfo?.status == ConnectionStatus.connected;
+    // print(
+    //   'ChatScreen: isConnected = $isConnected, sharedFiles = ${_sharedFiles.length}',
+    // );
+    print('ChatScreen: Build - isConnected = $isConnected, sharedFiles = ${_sharedFiles.length}, connectionInfo = ${_connectionInfo?.status}');
     // ignore: deprecated_member_use
     return ShowCaseWidget(
       builder: (context) => Scaffold(
@@ -898,15 +979,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                 msg.metadata?['outgoing'] as bool? ?? isMine;
                             final savedPath = msg.metadata?['path'] as String?;
                             // Use updated path if file was saved
-                            final actualPath = savedPath != null ? (_savedFilePaths[savedPath] ?? savedPath) : null;
-                            
+                            final actualPath = savedPath != null
+                                ? (_savedFilePaths[savedPath] ?? savedPath)
+                                : null;
+
                             // Show showcase on first received file only
-                            final isFirstReceivedFile = !isOutgoing && 
-                                _messages.where((m) => 
-                                  m.type == 'file_complete' && 
-                                  (m.metadata?['outgoing'] as bool? ?? false) == false
-                                ).first == msg;
-                            
+                            final isFirstReceivedFile =
+                                !isOutgoing &&
+                                _messages
+                                        .where(
+                                          (m) =>
+                                              m.type == 'file_complete' &&
+                                              (m.metadata?['outgoing']
+                                                          as bool? ??
+                                                      false) ==
+                                                  false,
+                                        )
+                                        .first ==
+                                    msg;
+
                             return CompletedFileCard(
                               message: msg,
                               isMine: isOutgoing,
@@ -1000,6 +1091,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       slideFromLeft: _slideFromLeft,
                     ),
                   ),
+                if (_sharedFiles.isNotEmpty && isConnected) // Auto-send enabled, banner disabled
+                  // print('ChatScreen: Showing shared files banner, files: ${_sharedFiles.length}, connected: $isConnected');
+                  SharedFilesBanner(
+                    files: _sharedFiles,
+                    onSend: _sendSharedFiles,
+                  ),
+
                 MessageInputBar(
                   controller: _messageController,
                   focusNode: _inputFocus,

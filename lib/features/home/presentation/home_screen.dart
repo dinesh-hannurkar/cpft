@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:cpft/core/logging/app_logger.dart';
 import 'package:cpft/features/home/presentation/widgets/buttons/link_share_button.dart';
 import 'package:cpft/features/home/presentation/widgets/sheets/ios_hotspot_instruction_sheet.dart';
@@ -33,6 +34,7 @@ import 'package:cpft/features/home/presentation/widgets/home_app_bar.dart';
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
+import 'package:cpft/shared/widgets/shared_content_banner.dart';
 import 'package:cpft/features/chat/presentation/chat_screen.dart';
 import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
 import 'package:cpft/features/webshare/services/webshare_service.dart';
@@ -904,6 +906,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: SafeArea(
               child: Column(
                 children: [
+                  // Show shared content banner if available (only on mobile)
+                  if (!kIsWeb) const SharedContentBanner(),
                   const SizedBox(height: AppSizes.spaceBtwSections),
                   Padding(
                     padding: const EdgeInsets.symmetric(
