@@ -19,7 +19,6 @@ import 'package:cpft/features/home/helpers/connection_handler.dart';
 import 'package:cpft/features/home/helpers/service_restart_handler.dart';
 import 'package:cpft/shared/widgets/app_snackbar.dart';
 import 'package:cpft/services/discovery_service.dart';
-import 'package:cpft/services/sound_service.dart';
 import 'package:cpft/utils/network_utils.dart';
 import 'package:cpft/utils/permissions.dart';
 import 'package:cpft/services/hotspot_service.dart';
@@ -35,6 +34,7 @@ import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
 import 'package:cpft/shared/widgets/app_confirm_dialog.dart';
 import 'package:cpft/shared/widgets/shared_content_banner.dart';
+import 'package:cpft/shared/widgets/drag_overlay.dart';
 import 'package:cpft/features/chat/presentation/chat_screen.dart';
 import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
 import 'package:cpft/features/webshare/services/webshare_service.dart';
@@ -1035,52 +1035,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ),
                   // Drag overlay
-                  if (_dragging)
-                    Container(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 10,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.file_upload_rounded,
-                                size: 48,
-                                color: AppColors.primary,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Drop files to share',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Release to send files to nearby devices',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Colors.grey[600],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                  ...(_dragging ? [
+                    DragOverlay(
+                      title: 'Drop files to share',
+                      subtitle: 'Release to send files to nearby devices',
+                      iconSize: 48,
+                      showBorder: false,
                     ),
+                  ] : []),
                 ],
               ),
             ),

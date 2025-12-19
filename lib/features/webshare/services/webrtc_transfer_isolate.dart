@@ -344,9 +344,8 @@ void _processBinaryChunk(
       chunkData.offsetInBytes,
       chunkData.lengthInBytes,
     );
-    final offsetHigh = byteData.getUint32(0, Endian.big);
-    final offsetLow = byteData.getUint32(4, Endian.big);
-    final offset = (offsetHigh << 32) | offsetLow;
+    byteData.getUint32(0, Endian.big);
+    byteData.getUint32(4, Endian.big);
 
     final actualData = Uint8List.view(
       chunkData.buffer,

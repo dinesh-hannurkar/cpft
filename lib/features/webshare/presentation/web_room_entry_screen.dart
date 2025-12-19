@@ -31,7 +31,6 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
   bool _isJoining = false;
   bool _serviceTransferred = false;
   bool _didAutoRetry = false;
-  bool _hasAutoJoined = false; // Prevent duplicate auto-joins
   String? _errorText;
   Timer? _loadingTimeout;
 
@@ -45,7 +44,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
     final roomIdFromUrl = WebUrlUtils.getRoomIdFromUrl();
     if (roomIdFromUrl != null && roomIdFromUrl.isNotEmpty) {
       _roomIdController.text = roomIdFromUrl;
-      _hasAutoJoined = true; // Set immediately to prevent any duplicate triggers
+// Set immediately to prevent any duplicate triggers
     }
     
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -196,7 +195,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         setState(() {
           _isJoining = false;
           _didAutoRetry = false;
-          _hasAutoJoined = false; // Reset for potential re-join
+// Reset for potential re-join
           _serviceTransferred = false;
           _webrtcService = WebRTCFileTransferService();
         });
@@ -276,7 +275,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
             setState(() {
               _isJoining = false;
               _didAutoRetry = false;
-              _hasAutoJoined = false; // Reset for potential re-join
+// Reset for potential re-join
               _serviceTransferred = false;
               _webrtcService = WebRTCFileTransferService();
             });

@@ -12,7 +12,6 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cpft/core/constants/app_colors.dart';
 import 'package:cpft/services/sound_service.dart';
 import 'package:cpft/shared/widgets/app_snackbar.dart';
 import 'package:cpft/features/chat/models/transfer_progress.dart';
@@ -38,6 +37,7 @@ import 'package:cpft/features/chat/presentation/widgets/shared_files_banner.dart
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:cpft/shared/widgets/drag_overlay.dart';
 
 class ChatScreen extends StatefulWidget {
   final String deviceName;
@@ -208,7 +208,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (await file.exists()) {
         final fileName = xFile.name;
         final filePath = xFile.path;
-        final fileSize = await file.length();
+        await file.length();
         
         // Determine MIME type
         String? mimeType;
@@ -1213,54 +1213,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
           // Drag overlay
           ...(_dragging ? [
-            IgnorePointer(
-              child: Center(
-                child: Container(
-                  margin: const EdgeInsets.all(40),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.file_upload_rounded,
-                        size: 64,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Drop files to send',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Release to send files to this device',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.grey[700],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            DragOverlay(
+              title: 'Drop files to send',
+              subtitle: 'Release to send files to this device',
             ),
           ] : []),
         ],

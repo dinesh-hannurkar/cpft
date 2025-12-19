@@ -786,7 +786,7 @@ class WebRTCFileTransferService {
       });
     } else {
       // Answerer path: Check for existing offer first, then listen for new ones
-      final existingOffer = existing2?['offer'] as Map<String, dynamic>?;
+      final existingOffer = existing2['offer'] as Map<String, dynamic>?;
       
       // If offer already exists when we join, handle it immediately
       if (existingOffer != null && !_fsOfferHandled) {

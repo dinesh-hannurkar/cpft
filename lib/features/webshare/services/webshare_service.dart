@@ -715,6 +715,7 @@ class WebShareService {
       '[WebShareService] New received files count: ${receivedFiles.value.length}',
     );
     debugPrint(
+      // ignore: invalid_use_of_protected_member
       '[WebShareService] Notifying ${receivedFiles.hasListeners ? "YES" : "NO"} listeners',
     );
   }

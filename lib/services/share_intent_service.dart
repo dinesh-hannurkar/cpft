@@ -74,11 +74,6 @@ class ShareIntentService {
     }
   }
 
-  void _handleSharedText(String text) {
-    print('Shared text: $text');
-    // You can handle text sharing here if needed
-    // For now, we'll focus on file sharing
-  }
 
   List<SharedMediaFile> getCurrentSharedFiles() {
     return List<SharedMediaFile>.from(_currentSharedFiles);

@@ -29,7 +29,9 @@ class _SharedContentBannerState extends State<SharedContentBanner> {
     });
 
     // Check for initial shared files
-    _sharedFiles = List<SharedMediaFile>.from(ShareIntentService().getCurrentSharedFiles());
+    _sharedFiles = List<SharedMediaFile>.from(
+      ShareIntentService().getCurrentSharedFiles(),
+    );
   }
 
   @override
@@ -59,11 +61,7 @@ class _SharedContentBannerState extends State<SharedContentBanner> {
               color: Colors.white.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.share,
-              color: Colors.white,
-              size: 20,
-            ),
+            child: const Icon(Icons.share, color: Colors.white, size: 20),
           ),
           const SizedBox(width: AppSizes.md),
           Expanded(
@@ -82,18 +80,10 @@ class _SharedContentBannerState extends State<SharedContentBanner> {
                 _sharedFiles.clear();
               });
             },
-            icon: const Icon(
-              Icons.close,
-              color: Colors.white,
-              size: 20,
-            ),
+            icon: const Icon(Icons.close, color: Colors.white, size: 20),
           ),
         ],
       ),
     );
-  }
-
-  void _handleSharedFiles(BuildContext context) {
-    // Removed - send files option should be in chat
   }
 }
