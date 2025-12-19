@@ -43,6 +43,8 @@ import 'package:cpft/features/chat/services/connection_service.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:cpft/shared/showcase/showcase_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 
 class HomeScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
@@ -75,6 +77,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late WebRTCFileTransferService _webrtcService;
   late WebShareService _webShareService;
   bool _didStartShowcase = false;
+  bool _dragging = false;
+  List<XFile> _droppedFiles = []; // Files waiting to be sent to a device
 
   @override
   void initState() {
@@ -894,114 +898,189 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onShowConnectedDevices: _showConnectedDevicesDialog,
             onQrScan: _handleQrScan,
           ),
-          body: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                stops: [0.0, 1.0],
+          body: DropTarget(
+            onDragDone: (detail) async {
+              setState(() {
+                _dragging = false;
+              });
+              
+              // Handle dropped files
+              if (detail.files.isNotEmpty) {
+                await _handleDroppedFiles(detail.files);
+              }
+            },
+            onDragEntered: (detail) {
+              setState(() {
+                _dragging = true;
+              });
+            },
+            onDragExited: (detail) {
+              setState(() {
+                _dragging = false;
+              });
+            },
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                  stops: [0.0, 1.0],
+                ),
               ),
-            ),
-            child: SafeArea(
-              child: Column(
+              child: Stack(
                 children: [
-                  // Show shared content banner if available (only on mobile)
-                  if (!kIsWeb) const SharedContentBanner(),
-                  const SizedBox(height: AppSizes.spaceBtwSections),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSizes.md,
-                    ),
-                    child: Row(
-                      textDirection: TextDirection.rtl,
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  SafeArea(
+                    child: Column(
                       children: [
-                        IconButton(
-                          icon: _isRestartingServices
-                              ? SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      AppColors.primary,
-                                    ),
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.refresh_rounded,
-                                  color: AppColors.primary,
-                                  size: 24,
-                                ),
-                          onPressed: _isRestartingServices
-                              ? null
-                              : _handleServiceRestart,
-                          tooltip: 'Restart Services',
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            'Finding nearby devices....',
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                            overflow: TextOverflow.ellipsis,
+                        // Show shared content banner if available (only on mobile)
+                        if (!kIsWeb) const SharedContentBanner(),
+                        // Show dropped files banner if files are waiting
+                        if (_droppedFiles.isNotEmpty) _buildDroppedFilesBanner(),
+                        const SizedBox(height: AppSizes.spaceBtwSections),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSizes.md,
                           ),
+                          child: Row(
+                            textDirection: TextDirection.rtl,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                icon: _isRestartingServices
+                                    ? SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            AppColors.primary,
+                                          ),
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.refresh_rounded,
+                                        color: AppColors.primary,
+                                        size: 24,
+                                      ),
+                                onPressed: _isRestartingServices
+                                    ? null
+                                    : _handleServiceRestart,
+                                tooltip: 'Restart Services',
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  'Finding nearby devices....',
+                                  style: Theme.of(context).textTheme.headlineMedium
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSizes.spaceBtwSections),
+                        Expanded(
+                          child: Center(
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSizes.sm,
+                                ),
+                                child: RadarView(
+                                  sweepAngle: controller.sweepAngle,
+                                  deviceDots: deviceDots,
+                                  center: _buildRadarCenter(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSizes.md),
+                        NetworkBanner(
+                          networkName: _networkName,
+                          hotspotActive:
+                              _hotspotInfo != null || _iosManualHotspotMode,
+                          hotspotStarting: _hotspotStarting,
+                          hotspotName:
+                              _hotspotInfo?.ssid ??
+                              (_iosManualHotspotMode ? 'Personal Hotspot' : null),
+                          iosPersonalHotspot: _iosManualHotspotMode,
+                          onSwitchToWifi:
+                              (_hotspotInfo != null || _iosManualHotspotMode)
+                              ? _switchToWifi
+                              : null,
+                          onShowQrCode: _hotspotInfo != null
+                              ? _showHotspotQrCode
+                              : null,
+                          onSwitchToHotspot:
+                              (_networkName != null &&
+                                  _networkName != 'Not Connected' &&
+                                  _hotspotInfo == null &&
+                                  !_iosManualHotspotMode)
+                              ? _switchToHotspot
+                              : null,
+                        ),
+                        const SizedBox(height: AppSizes.lg),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSizes.lg),
+                          child: _buildShareOptionsSection(),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: AppSizes.spaceBtwSections),
-                  Expanded(
-                    child: Center(
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSizes.sm,
+                  // Drag overlay
+                  if (_dragging)
+                    Container(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
-                          child: RadarView(
-                            sweepAngle: controller.sweepAngle,
-                            deviceDots: deviceDots,
-                            center: _buildRadarCenter(),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.file_upload_rounded,
+                                size: 48,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Drop files to share',
+                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Release to send files to nearby devices',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Colors.grey[600],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: AppSizes.md),
-                  NetworkBanner(
-                    networkName: _networkName,
-                    hotspotActive:
-                        _hotspotInfo != null || _iosManualHotspotMode,
-                    hotspotStarting: _hotspotStarting,
-                    hotspotName:
-                        _hotspotInfo?.ssid ??
-                        (_iosManualHotspotMode ? 'Personal Hotspot' : null),
-                    iosPersonalHotspot: _iosManualHotspotMode,
-                    onSwitchToWifi:
-                        (_hotspotInfo != null || _iosManualHotspotMode)
-                        ? _switchToWifi
-                        : null,
-                    onShowQrCode: _hotspotInfo != null
-                        ? _showHotspotQrCode
-                        : null,
-                    onSwitchToHotspot:
-                        (_networkName != null &&
-                            _networkName != 'Not Connected' &&
-                            _hotspotInfo == null &&
-                            !_iosManualHotspotMode)
-                        ? _switchToHotspot
-                        : null,
-                  ),
-                  const SizedBox(height: AppSizes.lg),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSizes.lg),
-                    child: _buildShareOptionsSection(),
-                  ),
                 ],
               ),
             ),
@@ -1089,6 +1168,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       connectionManager: manager,
       discoveryService: widget.discoveryService,
       myDeviceName: widget.myDeviceName,
+      droppedFiles: _droppedFiles.isNotEmpty ? List<XFile>.from(_droppedFiles) : null,
+      onFilesSent: _droppedFiles.isNotEmpty ? () {
+        setState(() {
+          _droppedFiles.clear();
+        });
+      } : null,
     );
   }
 
@@ -1320,11 +1405,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: ConnectedDevicesBottomSheet(
         connectionManager: connectionManager,
         onDeviceTap: _navigateToDeviceChat,
+        onFilesSent: _droppedFiles.isNotEmpty ? () {
+          setState(() {
+            _droppedFiles.clear();
+          });
+        } : null,
       ),
     );
   }
 
-  void _navigateToDeviceChat(String deviceId, [String? ipAddress, int? port]) {
+  void _navigateToDeviceChat(String deviceId, [String? ipAddress, int? port, VoidCallback? onFilesSent]) {
     final connectionManager = widget.discoveryService.connectionManager;
     if (connectionManager == null) return;
 
@@ -1338,7 +1428,83 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           myDeviceName: widget.myDeviceName,
           connectionManager: connectionManager,
           initialDeviceId: deviceId,
+          droppedFiles: _droppedFiles.isNotEmpty ? List<XFile>.from(_droppedFiles) : null,
+          onFilesSent: onFilesSent,
         ),
+      ),
+    );
+  }
+
+  Future<void> _handleDroppedFiles(List<XFile> files) async {
+    if (files.isEmpty) return;
+
+    // Add the dropped files to the existing list (avoid duplicates)
+    setState(() {
+      for (final file in files) {
+        // Check if file already exists (by path)
+        if (!_droppedFiles.any((existing) => existing.path == file.path)) {
+          _droppedFiles.add(file);
+        }
+      }
+    });
+
+    // Show confirmation that files are ready
+    AppSnackbar.showInfo(context, '${_droppedFiles.length} file${_droppedFiles.length > 1 ? 's' : ''} ready to send - tap a device to share');
+  }
+
+  Widget _buildDroppedFilesBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.md,
+        vertical: AppSizes.sm,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.orange.shade400, Colors.deepOrange.shade500],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.file_present,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: AppSizes.md),
+          Expanded(
+            child: Text(
+              '${_droppedFiles.length} file${_droppedFiles.length > 1 ? 's' : ''} selected to transfer - select device to start transfer',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () {
+              setState(() {
+                _droppedFiles.clear();
+              });
+              AppSnackbar.showInfo(context, 'Files cleared');
+            },
+            icon: const Icon(
+              Icons.close,
+              color: Colors.white,
+              size: 20,
+            ),
+            tooltip: 'Clear files',
+          ),
+        ],
       ),
     );
   }

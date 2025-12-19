@@ -62,7 +62,9 @@ class ShareIntentService {
 
   void _handleSharedFiles(List<SharedMediaFile> files) {
     _currentSharedFiles = List<SharedMediaFile>.from(files);
-    _sharedFilesController.add(List<SharedMediaFile>.from(files));
+    if (!_sharedFilesController.isClosed) {
+      _sharedFilesController.add(List<SharedMediaFile>.from(files));
+    }
 
     // Log shared files for debugging
     for (var file in files) {
@@ -102,7 +104,9 @@ class ShareIntentService {
 
   void clearSharedFiles() {
     _currentSharedFiles.clear();
-    _sharedFilesController.add([]);
+    if (!_sharedFilesController.isClosed) {
+      _sharedFilesController.add([]);
+    }
   }
 
   void dispose() {

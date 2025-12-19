@@ -10,7 +10,8 @@ class ConnectedDevicesBottomSheet extends StatefulWidget {
   final ConnectionManager? connectionManager;
   final List<MapEntry<String, ConnectionService>>? staticConnections;
   final String? currentDeviceId;
-  final Function(String deviceId, [String? ipAddress, int? port])? onDeviceTap;
+  final Function(String deviceId, [String? ipAddress, int? port, VoidCallback? onFilesSent])? onDeviceTap;
+  final VoidCallback? onFilesSent;
 
   const ConnectedDevicesBottomSheet({
     super.key,
@@ -18,6 +19,7 @@ class ConnectedDevicesBottomSheet extends StatefulWidget {
     this.staticConnections,
     this.currentDeviceId,
     this.onDeviceTap,
+    this.onFilesSent,
   }) : assert(
          connectionManager != null || staticConnections != null,
          'Either connectionManager or staticConnections must be provided',
@@ -171,9 +173,9 @@ class _ConnectedDevicesBottomSheetState
                       Navigator.pop(context);
                       // Support both callback signatures
                       if (ipAddress.isNotEmpty) {
-                        widget.onDeviceTap!(deviceId, ipAddress, 53318);
+                        widget.onDeviceTap!(deviceId, ipAddress, 53318, widget.onFilesSent);
                       } else {
-                        widget.onDeviceTap!(deviceId);
+                        widget.onDeviceTap!(deviceId, null, null, widget.onFilesSent);
                       }
                     }
                   },

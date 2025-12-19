@@ -36,6 +36,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cpft/services/share_intent_service.dart';
 import 'package:cpft/features/chat/presentation/widgets/shared_files_banner.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 
 class ChatScreen extends StatefulWidget {
   final String deviceName;
@@ -44,6 +46,8 @@ class ChatScreen extends StatefulWidget {
   final String myDeviceName;
   final ConnectionManager connectionManager;
   final String? initialDeviceId;
+  final List<XFile>? droppedFiles;
+  final VoidCallback? onFilesSent;
 
   const ChatScreen({
     super.key,
@@ -53,6 +57,8 @@ class ChatScreen extends StatefulWidget {
     required this.myDeviceName,
     required this.connectionManager,
     this.initialDeviceId,
+    this.droppedFiles,
+    this.onFilesSent,
   });
 
   @override
@@ -84,6 +90,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isConnecting = false;
   bool _didStartShowcase = false;
   bool _didShowFileReceivedShowcase = false;
+
+  bool _dragging = false; // For drag and drop visual feedback
 
   // Peer‑to‑peer port constant
   static const int p2pPort = 53318;
@@ -148,6 +156,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       print('ChatScreen: Found ${existingFiles.length} existing shared files on init');
       setState(() => _sharedFiles = List<SharedMediaFile>.from(existingFiles));
     }
+
+    // Handle dropped files if provided
+    if (widget.droppedFiles != null && widget.droppedFiles!.isNotEmpty) {
+      _handleDroppedFiles(widget.droppedFiles!);
+    }
   }
 
   @override
@@ -184,6 +197,71 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           onPressed: _connectToDevice,
         ),
       );
+    }
+  }
+
+  Future<void> _handleDroppedFiles(List<XFile> droppedFiles) async {
+    final sharedMediaFiles = <SharedMediaFile>[];
+    
+    for (final xFile in droppedFiles) {
+      final file = io.File(xFile.path);
+      if (await file.exists()) {
+        final fileName = xFile.name;
+        final filePath = xFile.path;
+        final fileSize = await file.length();
+        
+        // Determine MIME type
+        String? mimeType;
+        final extension = fileName.split('.').last.toLowerCase();
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'gif':
+            mimeType = 'image/gif';
+            break;
+          case 'mp4':
+            mimeType = 'video/mp4';
+            break;
+          case 'pdf':
+            mimeType = 'application/pdf';
+            break;
+          case 'txt':
+            mimeType = 'text/plain';
+            break;
+          case 'zip':
+            mimeType = 'application/zip';
+            break;
+          default:
+            mimeType = 'application/octet-stream';
+        }
+
+        sharedMediaFiles.add(SharedMediaFile(
+          path: filePath,
+          type: mimeType.contains('image') ? SharedMediaType.image : 
+                mimeType.contains('video') ? SharedMediaType.video : 
+                SharedMediaType.file,
+          mimeType: mimeType,
+          duration: null, // Not needed for dropped files
+          thumbnail: null, // Not needed for dropped files
+        ));
+      }
+    }
+
+    if (sharedMediaFiles.isNotEmpty) {
+      setState(() {
+        for (final file in sharedMediaFiles) {
+          // Check if file already exists (by path)
+          if (!_sharedFiles.any((existing) => existing.path == file.path)) {
+            _sharedFiles.add(file);
+          }
+        }
+      });
+      AppSnackbar.showSuccess(context, 'Files ready to send. Tap send button.');
     }
   }
 
@@ -498,6 +576,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _sharedFiles = [];
       });
       _shareIntentService.clearSharedFiles();
+      // Notify that files were sent
+      widget.onFilesSent?.call();
       print('ChatScreen: Shared files sent and cleared');
     } else {
       print('ChatScreen: No shared files to send');
@@ -855,7 +935,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         staticConnections: widget.connectionManager.activeConnections.entries
             .toList(),
         currentDeviceId: widget.initialDeviceId ?? widget.deviceName,
-        onDeviceTap: (deviceId, [ipAddress, port]) {
+        onDeviceTap: (deviceId, [ipAddress, port, onFilesSent]) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -918,15 +998,38 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return ShowCaseWidget(
       builder: (context) => Scaffold(
         backgroundColor: Colors.transparent,
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-              stops: [0.0, 1.0],
-            ),
-          ),
+        body: DropTarget(
+          onDragDone: (detail) async {
+            setState(() {
+              _dragging = false;
+            });
+            
+            // Handle dropped files
+            if (detail.files.isNotEmpty) {
+              await _handleDroppedFiles(detail.files);
+            }
+          },
+          onDragEntered: (detail) {
+            setState(() {
+              _dragging = true;
+            });
+          },
+          onDragExited: (detail) {
+            setState(() {
+              _dragging = false;
+            });
+          },
+          child: Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                    stops: [0.0, 1.0],
+                  ),
+                ),
           child: SafeArea(
             child: Column(
               children: [
@@ -1107,8 +1210,61 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
-        ),
+          ),
+          // Drag overlay
+          ...(_dragging ? [
+            IgnorePointer(
+              child: Center(
+                child: Container(
+                  margin: const EdgeInsets.all(40),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.file_upload_rounded,
+                        size: 64,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Drop files to send',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Release to send files to this device',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Colors.grey[700],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ] : []),
+        ],
       ),
-    );
+    )));
   }
 }

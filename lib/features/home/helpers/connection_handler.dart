@@ -5,6 +5,7 @@ import 'package:cpft/features/chat/presentation/chat_screen.dart';
 import 'package:cpft/features/home/presentation/widgets/sheets/connection_flow_dialog.dart';
 import 'package:cpft/services/discovery_service.dart';
 import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
+import 'package:share_plus/share_plus.dart';
 
 /// Helper class for handling device connection logic
 class ConnectionHandler {
@@ -15,6 +16,8 @@ class ConnectionHandler {
     required ConnectionManager connectionManager,
     required DiscoveryService discoveryService,
     required String myDeviceName,
+    List<XFile>? droppedFiles,
+    VoidCallback? onFilesSent,
   }) async {
     debugPrint('[ConnectionHandler] 🔍 Tapped device: ${device.name} (IP: ${device.ip})');
     debugPrint('[ConnectionHandler] 🔍 Active connections keys: ${connectionManager.activeConnections.keys.join(", ")}');
@@ -41,6 +44,8 @@ class ConnectionHandler {
           ipAddress: device.ip,
           myDeviceName: myDeviceName,
           connectionManager: connectionManager,
+          droppedFiles: droppedFiles,
+          onFilesSent: onFilesSent,
         );
         return;
       } else if (status == ConnectionStatus.disconnected) {
@@ -52,6 +57,8 @@ class ConnectionHandler {
           ipAddress: device.ip,
           myDeviceName: myDeviceName,
           connectionManager: connectionManager,
+          droppedFiles: droppedFiles,
+          onFilesSent: onFilesSent,
         );
         return;
       }
@@ -78,6 +85,8 @@ class ConnectionHandler {
         ipAddress: device.ip,
         myDeviceName: myDeviceName,
         connectionManager: connectionManager,
+        droppedFiles: droppedFiles,
+        onFilesSent: onFilesSent,
       );
     }
   }
@@ -88,6 +97,8 @@ class ConnectionHandler {
     required String ipAddress,
     required String myDeviceName,
     required ConnectionManager connectionManager,
+    List<XFile>? droppedFiles,
+    VoidCallback? onFilesSent,
   }) {
     Navigator.push(
       context,
@@ -99,6 +110,8 @@ class ConnectionHandler {
           myDeviceName: myDeviceName,
           connectionManager: connectionManager,
           initialDeviceId: deviceName,
+          droppedFiles: droppedFiles,
+          onFilesSent: onFilesSent,
         ),
       ),
     );

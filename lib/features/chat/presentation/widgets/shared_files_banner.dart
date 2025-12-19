@@ -6,11 +6,13 @@ import 'package:cpft/core/constants/app_sizes.dart';
 class SharedFilesBanner extends StatelessWidget {
   final List<SharedMediaFile> files;
   final VoidCallback onSend;
+  final bool enabled;
 
   const SharedFilesBanner({
     super.key,
     required this.files,
     required this.onSend,
+    this.enabled = true,
   });
 
   @override
@@ -53,16 +55,16 @@ class SharedFilesBanner extends StatelessWidget {
             ),
           ),
           ElevatedButton(
-            onPressed: onSend,
+            onPressed: enabled ? onSend : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.orange.shade600,
+              backgroundColor: enabled ? Colors.white : Colors.grey.shade300,
+              foregroundColor: enabled ? Colors.orange.shade600 : Colors.grey.shade600,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            child: const Text('Send', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('Send', style: TextStyle(fontWeight: FontWeight.bold, color: enabled ? Colors.orange.shade600 : Colors.grey.shade600)),
           ),
         ],
       ),
