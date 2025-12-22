@@ -20,26 +20,34 @@ class _SharedContentBannerState extends State<SharedContentBanner> {
   }
 
   void _listenForSharedContent() {
+    print('SharedContentBanner: Setting up listener for shared files stream');
     ShareIntentService().sharedFilesStream.listen((files) {
+      print('SharedContentBanner: Received ${files.length} files from stream');
       if (mounted) {
         setState(() {
           _sharedFiles = List<SharedMediaFile>.from(files);
         });
+        print('SharedContentBanner: Updated state with ${files.length} files');
+      } else {
+        print('SharedContentBanner: Widget not mounted, skipping state update');
       }
     });
 
     // Check for initial shared files
-    _sharedFiles = List<SharedMediaFile>.from(
-      ShareIntentService().getCurrentSharedFiles(),
-    );
+    final initialFiles = ShareIntentService().getCurrentSharedFiles();
+    print('SharedContentBanner: Initial shared files: ${initialFiles.length}');
+    _sharedFiles = List<SharedMediaFile>.from(initialFiles);
   }
 
   @override
   Widget build(BuildContext context) {
+    print('SharedContentBanner: Building with ${_sharedFiles.length} files');
     if (_sharedFiles.isEmpty) {
+      print('SharedContentBanner: No shared files, returning SizedBox.shrink()');
       return const SizedBox.shrink();
     }
 
+    print('SharedContentBanner: Building banner with ${_sharedFiles.length} files');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
@@ -81,7 +89,7 @@ class _SharedContentBannerState extends State<SharedContentBanner> {
               });
             },
             icon: const Icon(Icons.close, color: Colors.white, size: 20),
-          ),
+          ), 
         ],
       ),
     );

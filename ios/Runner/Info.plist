@@ -34,7 +34,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>cpft</string>
-				<string>ShareMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+				<string>ShareMedia-com.example.cpft</string>
 			</array>
 		</dict>
 	</array>

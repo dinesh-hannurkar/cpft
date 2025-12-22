@@ -3,6 +3,18 @@ import UIKit
 import Foundation
 import NetworkExtension
 
+enum SharedMediaType: String {
+    case image
+    case video
+    case text
+    case file
+    case url
+    
+    static func fromString(_ string: String) -> SharedMediaType? {
+        return SharedMediaType(rawValue: string)
+    }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var netServiceBrowser: NetServiceBrowser?
@@ -196,6 +208,11 @@ import NetworkExtension
       return false
     }
 
+    // If this is a ShareMedia URL, try to read shared data directly
+    if isShareMedia {
+      readAndSendSharedData()
+    }
+
     // Bring app to foreground if needed
     // Flutter will already be running; shared content will be picked up by polling.
     // Optionally, post a notification to trigger immediate check.
@@ -211,6 +228,111 @@ import NetworkExtension
       NSLog("[CPFT] messengerRef nil; cannot invoke share-events")
     }
     return true
+  }
+  
+  private func readAndSendSharedData() {
+    // Read shared data from app group UserDefaults
+    // Use the same app group ID as configured in entitlements
+    let appGroupId = "group.com.example.cpft.share"
+    let userDefaults = UserDefaults(suiteName: appGroupId)
+    
+    NSLog("[CPFT] Reading shared data from app group: \(appGroupId)")
+    
+    // Debug: check if UserDefaults suite exists
+    if userDefaults == nil {
+      NSLog("[CPFT] ERROR: UserDefaults suite is nil for app group \(appGroupId)")
+      return
+    }
+    
+    // Debug: list all keys in UserDefaults
+    if let dict = userDefaults?.dictionaryRepresentation() {
+      NSLog("[CPFT] UserDefaults contents: \(dict.keys)")
+    }
+    
+    let jsonData = userDefaults?.data(forKey: "ShareKey")
+    let message = userDefaults?.string(forKey: "ShareMessageKey")
+    
+    NSLog("[CPFT] ShareKey data exists: \(jsonData != nil), message exists: \(message != nil)")
+    
+    guard let jsonData = jsonData else {
+      NSLog("[CPFT] No shared data found in UserDefaults")
+      return
+    }
+    
+    // Parse the JSON data (simplified version of what receive_sharing_intent does)
+    do {
+      if let jsonArray = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [[String: Any]] {
+        var sharedFiles: [[String: Any]] = []
+        
+        for item in jsonArray {
+          if let path = item["path"] as? String,
+             let typeString = item["type"] as? String,
+             let type = SharedMediaType.fromString(typeString) {
+            
+            var processedItem: [String: Any] = [
+              "path": path,
+              "type": typeString
+            ]
+            
+            if let mimeType = item["mimeType"] as? String {
+              processedItem["mimeType"] = mimeType
+            }
+            
+            if let thumbnail = item["thumbnail"] as? String {
+              processedItem["thumbnail"] = thumbnail
+            }
+            
+            if let duration = item["duration"] as? Double {
+              processedItem["duration"] = duration
+            }
+            
+            if let itemMessage = item["message"] as? String {
+              processedItem["message"] = itemMessage
+            } else if let message = message, !message.isEmpty {
+              processedItem["message"] = message
+            }
+            
+            // For text and URL types, use path directly
+            // For file types, try to resolve the path
+            if type == .text || type == .url {
+              // Use path as-is
+            } else {
+              // Try to get the actual file path
+              if let resolvedPath = getAbsolutePath(for: path) {
+                processedItem["path"] = resolvedPath
+              }
+            }
+            
+            sharedFiles.append(processedItem)
+          }
+        }
+        
+        // Send the data to Flutter
+        if let messenger = self.messengerRef {
+          let shareChannel = FlutterMethodChannel(name: "com.example.cpft/share-events", binaryMessenger: messenger)
+          NSLog("[CPFT] About to send sharedDataReceived with \(sharedFiles.count) files")
+          for (index, file) in sharedFiles.enumerated() {
+            NSLog("[CPFT] File \(index): \(file)")
+          }
+          shareChannel.invokeMethod("sharedDataReceived", arguments: sharedFiles)
+          NSLog("[CPFT] Sent \(sharedFiles.count) shared files to Flutter")
+        }
+      }
+    } catch {
+      NSLog("[CPFT] Error parsing shared data: \(error)")
+    }
+  }
+  
+  private func getAbsolutePath(for identifier: String?) -> String? {
+    guard let identifier = identifier else { return nil }
+    
+    if identifier.hasPrefix("file://") {
+      return identifier.replacingOccurrences(of: "file://", with: "")
+    }
+    
+    // For PHAsset identifiers, we can't easily resolve them here
+    // The receive_sharing_intent plugin handles this
+    return identifier
   }
   
   private func resolveServiceHostname(serviceName: String, serviceType: String, result: @escaping FlutterResult) {
@@ -274,27 +396,62 @@ extension AppDelegate: NetServiceDelegate {
     NSLog("[CPFT] getSharedContent invoked")
     let sharedDefaults = UserDefaults(suiteName: "group.com.example.cpft.share")
 
-    guard let type = sharedDefaults?.string(forKey: "sharedType"),
-          let timestamp = sharedDefaults?.object(forKey: "sharedTimestamp") as? Date else {
-      NSLog("[CPFT] No sharedType or sharedTimestamp found")
+    var type: String?
+    var timestamp: Date?
+    var content: String?
+    var fileURLString: String?
+
+    // First try to get data from the metadata file (primary method for share extension)
+    if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.example.cpft.share") {
+      let metadataURL = containerURL.appendingPathComponent("shared_metadata.plist")
+
+      if let data = try? Data(contentsOf: metadataURL),
+         let metadata = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
+
+        type = metadata["type"] as? String
+        timestamp = metadata["timestamp"] as? Date
+        if let text = metadata["text"] as? String {
+          if type == "text" || type == "url" {
+            content = text
+          } else {
+            fileURLString = text
+          }
+        }
+
+        // Clean up the metadata file
+        try? FileManager.default.removeItem(at: metadataURL)
+        NSLog("[CPFT] Loaded data from metadata file (primary source)")
+      }
+    }
+
+    // If metadata file doesn't have data, try UserDefaults as fallback
+    if type == nil || timestamp == nil {
+      NSLog("[CPFT] Metadata file empty, trying UserDefaults as fallback")
+      type = sharedDefaults?.string(forKey: "sharedType")
+      timestamp = sharedDefaults?.object(forKey: "sharedTimestamp") as? Date
+      content = sharedDefaults?.string(forKey: "sharedText")
+      fileURLString = sharedDefaults?.string(forKey: "sharedFileURL")
+    }
+
+    guard let finalType = type, let finalTimestamp = timestamp else {
+      NSLog("[CPFT] No shared data found in UserDefaults or metadata file")
       result(nil)
       return
     }
 
     var sharedData: [String: Any] = [
-      "type": type,
-      "timestamp": Int(timestamp.timeIntervalSince1970)
+      "type": finalType,
+      "timestamp": Int(finalTimestamp.timeIntervalSince1970)
     ]
 
-    if type == "text" || type == "url" {
-      if let content = sharedDefaults?.string(forKey: "sharedText") {
-        sharedData["content"] = content
+    if finalType == "text" || finalType == "url" {
+      if let finalContent = content {
+        sharedData["content"] = finalContent
       } else {
-        NSLog("[CPFT] No sharedText found for type \(type)")
+        NSLog("[CPFT] No content found for type \(finalType)")
       }
-    } else if type == "image" || type == "video" || type == "file" {
-      if let fileURLString = sharedDefaults?.string(forKey: "sharedFileURL"),
-         let fileURL = URL(string: fileURLString) {
+    } else if finalType == "image" || finalType == "video" || finalType == "file" {
+      if let finalFileURLString = fileURLString, let fileURL = URL(string: finalFileURLString) {
 
         // Copy the file to the app's documents directory
         let fileManager = FileManager.default
@@ -318,7 +475,7 @@ extension AppDelegate: NetServiceDelegate {
           return
         }
       } else {
-        NSLog("[CPFT] No sharedFileURL found for type \(type)")
+        NSLog("[CPFT] No fileURL found for type \(finalType)")
       }
     }
 
