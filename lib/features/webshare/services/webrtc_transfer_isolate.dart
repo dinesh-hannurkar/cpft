@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 
 class WebRTCTransferIsolate {
   Isolate? _processingIsolate;

@@ -1,7 +1,7 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/chat/utils/file_utils.dart';
-import 'package:cpft/widgets/file_icon.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/features/chat/utils/file_utils.dart';
+import 'package:fylooo/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
 
 class FileCard extends StatelessWidget {

@@ -1,9 +1,9 @@
 import 'dart:io';
-import 'package:cpft/features/webshare/models/webshare_models.dart';
-import 'package:cpft/utils/time_utils.dart';
-import 'package:cpft/widgets/file_icon.dart';
+import 'package:fylooo/features/webshare/models/webshare_models.dart';
+import 'package:fylooo/utils/time_utils.dart';
+import 'package:fylooo/widgets/file_icon.dart';
 import 'package:flutter/material.dart';
-import 'package:cpft/shared/widgets/app_snackbar.dart';
+import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import '../../../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../services/discovery_service.dart';

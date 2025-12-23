@@ -1,4 +1,4 @@
-import 'package:cpft/features/home/presentation/widgets/buttons/settings_button.dart';
+import 'package:fylooo/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:flutter/material.dart';
 
 class BackButtonChip extends StatelessWidget {

@@ -1,6 +1,6 @@
 import 'dart:io'
-    if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
-import 'package:cpft/core/logging/app_logger.dart';
+    if (dart.library.html) 'package:fylooo/features/webshare/services/io_stub.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';

@@ -1,4 +1,4 @@
-# 🚀 CPFT - Quick Start Guide
+# 🚀 fylooo - Quick Start Guide
 
 ## Project Structure
 
@@ -152,7 +152,7 @@ See **DEPLOYMENT_GUIDE.md** for:
 
 ## 🎉 Done!
 
-Your CPFT project is ready for:
+Your fylooo project is ready for:
 - ✅ Local development
 - ✅ Testing
 - ✅ Production deployment

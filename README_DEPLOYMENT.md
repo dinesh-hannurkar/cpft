@@ -1,4 +1,4 @@
-# 🚀 CPFT - Hybrid SEO + Flutter Deployment
+# 🚀 fylooo - Hybrid SEO + Flutter Deployment
 
 A professional setup serving a static HTML landing page at the root (`/`) for SEO, with the Flutter web app in a subfolder (`/app/`).
 
@@ -188,7 +188,7 @@ X-XSS-Protection: 1; mode=block
 
 ## 🎉 You're Ready!
 
-Your CPFT project is fully set up for:
+Your fylooo project is fully set up for:
 - ✅ Local development
 - ✅ Testing
 - ✅ Production deployment

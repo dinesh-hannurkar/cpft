@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io'
-    if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
+    if (dart.library.html) 'package:fylooo/features/webshare/services/io_stub.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 
 class LocalWebSocketSignalingServer {
   static final LocalWebSocketSignalingServer _instance =

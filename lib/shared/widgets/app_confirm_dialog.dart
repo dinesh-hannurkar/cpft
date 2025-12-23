@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_strings.dart';
 import 'app_action_button.dart';
 
 class AppConfirmDialog extends StatelessWidget {
@@ -16,8 +17,8 @@ class AppConfirmDialog extends StatelessWidget {
     super.key,
     required this.title,
     this.content,
-    this.confirmLabel = 'Confirm',
-    this.cancelLabel = 'Cancel',
+    this.confirmLabel = AppStrings.confirmText,
+    this.cancelLabel = AppStrings.cancelText,
     this.onConfirm,
     this.onCancel,
     this.destructive = false,

@@ -176,8 +176,8 @@ open class RSIShareViewController: SLComposeServiceViewController {
     
     private func loadIds() {
         // Use the same app group ID as configured in entitlements
-        appGroupId = "group.com.example.cpft.share"
-        hostAppBundleIdentifier = "com.example.cpft" // main app bundle ID
+        appGroupId = "group.com.omnity.fylooo.share"
+        hostAppBundleIdentifier = "com.omnity.fylooo" // main app bundle ID
     }
     
     

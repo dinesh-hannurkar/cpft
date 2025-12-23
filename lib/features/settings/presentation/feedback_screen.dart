@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/shared/widgets/back_button_chip.dart';
-import 'package:cpft/shared/widgets/primary_app_bar.dart';
-import 'package:cpft/shared/widgets/primary_text_field.dart';
-import 'package:cpft/shared/widgets/primary_button.dart';
-import 'package:cpft/shared/widgets/app_snackbar.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/shared/widgets/back_button_chip.dart';
+import 'package:fylooo/shared/widgets/primary_app_bar.dart';
+import 'package:fylooo/shared/widgets/primary_text_field.dart';
+import 'package:fylooo/shared/widgets/primary_button.dart';
+import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io' show Platform;
-import 'package:cpft/services/feedback_service.dart';
+import 'package:fylooo/services/feedback_service.dart';
 
 class FeedbackScreen extends StatefulWidget {
   const FeedbackScreen({super.key});

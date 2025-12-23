@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/features/chat/models/connection_state.dart';
-import 'package:cpft/features/chat/services/connection_manager.dart';
-import 'package:cpft/features/chat/presentation/chat_screen.dart';
-import 'package:cpft/features/home/presentation/widgets/sheets/connection_flow_dialog.dart';
-import 'package:cpft/services/discovery_service.dart';
-import 'package:cpft/shared/widgets/dialog_helpers.dart' as app_dialog;
+import 'package:fylooo/features/chat/models/connection_state.dart';
+import 'package:fylooo/features/chat/services/connection_manager.dart';
+import 'package:fylooo/features/chat/presentation/chat_screen.dart';
+import 'package:fylooo/features/home/presentation/widgets/sheets/connection_flow_dialog.dart';
+import 'package:fylooo/services/discovery_service.dart';
+import 'package:fylooo/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:share_plus/share_plus.dart';
 
 /// Helper class for handling device connection logic

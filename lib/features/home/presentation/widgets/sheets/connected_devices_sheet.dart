@@ -1,8 +1,8 @@
-import 'package:cpft/features/home/presentation/widgets/tiles/device_list_tile.dart';
+import 'package:fylooo/features/home/presentation/widgets/tiles/device_list_tile.dart';
 import 'package:flutter/material.dart';
-import 'package:cpft/features/chat/models/connection_state.dart';
-import 'package:cpft/features/chat/services/connection_manager.dart';
-import 'package:cpft/features/chat/services/connection_service.dart';
+import 'package:fylooo/features/chat/models/connection_state.dart';
+import 'package:fylooo/features/chat/services/connection_manager.dart';
+import 'package:fylooo/features/chat/services/connection_service.dart';
 
 /// Bottom sheet showing connected devices
 /// Can be used with ConnectionManager for live updates or static list

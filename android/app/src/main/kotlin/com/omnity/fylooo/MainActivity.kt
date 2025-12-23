@@ -1,4 +1,4 @@
-package com.example.cpft
+package com.omnity.fylooo
 
 import android.content.Context
 import android.content.Intent
@@ -17,12 +17,12 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.example.cpft/multicast"
-    private val SETTINGS_CHANNEL = "cpft/settings"
-    private val MDNS_CHANNEL = "com.example.cpft/mdns"
-    private val HOSTNAME_CHANNEL = "com.example.cpft/hostname"
-    private val WIFI_CHANNEL = "com.example.cpft/wifi"
-    private val HOTSPOT_CHANNEL = "com.example.cpft/hotspot"
+    private val CHANNEL = "com.omnity.fylooo/multicast"
+    private val SETTINGS_CHANNEL = "fylooo/settings"
+    private val MDNS_CHANNEL = "com.omnity.fylooo/mdns"
+    private val HOSTNAME_CHANNEL = "com.omnity.fylooo/hostname"
+    private val WIFI_CHANNEL = "com.omnity.fylooo/wifi"
+    private val HOTSPOT_CHANNEL = "com.omnity.fylooo/hotspot"
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var nsdManager: NsdManager? = null

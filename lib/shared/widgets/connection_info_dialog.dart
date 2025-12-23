@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/utils/network_utils.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/utils/network_utils.dart';
 
 class ConnectionInfoDialog extends StatefulWidget {
   final String? peerName;

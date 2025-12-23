@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class WifiService {
-  static const MethodChannel _channel = MethodChannel('com.example.cpft/wifi');
+  static const MethodChannel _channel = MethodChannel('com.omnity.fylooo/wifi');
   static Future<Map<String, dynamic>> connectToWifi({
     required String ssid,
     String? password,

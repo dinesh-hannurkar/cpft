@@ -1,7 +1,7 @@
 import 'dart:math';
-import 'package:cpft/features/home/helpers/device_dot_position.dart';
-import 'package:cpft/features/home/helpers/device_position.dart';
-import 'package:cpft/services/discovery_service.dart';
+import 'package:fylooo/features/home/helpers/device_dot_position.dart';
+import 'package:fylooo/features/home/helpers/device_position.dart';
+import 'package:fylooo/services/discovery_service.dart';
 
 /// Helper class for calculating device dot positions on the radar
 class DeviceDotLayoutHelper {

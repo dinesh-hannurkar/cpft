@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:cpft/core/logging/app_logger.dart';
-import 'package:cpft/features/webshare/services/web_server.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
+import 'package:fylooo/features/webshare/services/web_server.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';

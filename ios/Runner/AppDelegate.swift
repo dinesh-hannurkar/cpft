@@ -25,15 +25,15 @@ enum SharedMediaType: String {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    NSLog("[CPFT] App didFinishLaunchingWithOptions")
+    NSLog("[Fylooo] App didFinishLaunchingWithOptions")
     // Diagnostic: verify App Group access from main app
-    let groupId = "group.com.example.cpft.share"
+    let groupId = "group.com.omnity.fylooo.share"
     let defaults = UserDefaults(suiteName: groupId)
     let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupId)
-    NSLog("[CPFT][Diag] containerURL nil? \(container == nil) path=\(container?.path ?? "<nil>")")
+    NSLog("[Fylooo][Diag] containerURL nil? \(container == nil) path=\(container?.path ?? "<nil>")")
     defaults?.set("ok", forKey: "diag_ping")
     let val = defaults?.string(forKey: "diag_ping") ?? "<nil>"
-    NSLog("[CPFT][Diag] defaults write/read diag_ping=\(val)")
+    NSLog("[Fylooo][Diag] defaults write/read diag_ping=\(val)")
     GeneratedPluginRegistrant.register(with: self)
     
     // Set up mDNS hostname resolution channel (avoid relying on rootViewController)
@@ -41,7 +41,7 @@ enum SharedMediaType: String {
       if let vc = self.window?.rootViewController as? FlutterViewController {
         return vc.binaryMessenger
       }
-      if let reg = self.registrar(forPlugin: "cpft-messenger") {
+      if let reg = self.registrar(forPlugin: "fylooo-messenger") {
         return reg.messenger()
       }
       // Fallback (may be nil in rare cases)
@@ -50,7 +50,7 @@ enum SharedMediaType: String {
     // Keep a reference for later use (deep link notifications)
     self.messengerRef = messenger
 
-    let mdnsChannel = FlutterMethodChannel(name: "com.example.cpft/mdns",
+    let mdnsChannel = FlutterMethodChannel(name: "com.omnity.fylooo/mdns",
                                            binaryMessenger: messenger)
     
     mdnsChannel.setMethodCallHandler { [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) in
@@ -69,7 +69,7 @@ enum SharedMediaType: String {
     }
 
     // WiFi connect channel (iOS: show system join dialog)
-    let wifiChannel = FlutterMethodChannel(name: "com.example.cpft/wifi",
+    let wifiChannel = FlutterMethodChannel(name: "com.omnity.fylooo/wifi",
                          binaryMessenger: messenger)
 
     wifiChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
@@ -179,7 +179,7 @@ enum SharedMediaType: String {
     }
 
     // Register custom share channel handler
-    let shareChannel = FlutterMethodChannel(name: "com.example.cpft/share",
+    let shareChannel = FlutterMethodChannel(name: "com.omnity.fylooo/share",
                          binaryMessenger: messenger)
     shareChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
       if call.method == "getSharedContent" {
@@ -192,19 +192,19 @@ enum SharedMediaType: String {
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // Handle cpft:// deep links (including from Share Extension)
+  // Handle fylooo:// deep links (including from Share Extension)
   override func application(
     _ app: UIApplication,
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
-    NSLog("[CPFT] application open url: \(url.absoluteString)")
+    NSLog("[Fylooo] application open url: \(url.absoluteString)")
     // Handle both custom scheme and ShareMedia-<bundle id>
     guard let scheme = url.scheme?.lowercased() else { return false }
-    let isCpft = (scheme == "cpft")
+    let isFylooo = (scheme == "fylooo")
     let isShareMedia = scheme.hasPrefix("sharemedia-")
-    guard isCpft || isShareMedia else {
-      NSLog("[CPFT] Unknown scheme: \(scheme)")
+    guard isFylooo || isShareMedia else {
+      NSLog("[Fylooo] Unknown scheme: \(scheme)")
       return false
     }
 
@@ -216,16 +216,16 @@ enum SharedMediaType: String {
     // Bring app to foreground if needed
     // Flutter will already be running; shared content will be picked up by polling.
     // Optionally, post a notification to trigger immediate check.
-    NotificationCenter.default.post(name: Notification.Name("CPFTDeepLinkOpened"), object: nil)
-    NSLog("[CPFT] cpft:// handled and notification posted")
+    NotificationCenter.default.post(name: Notification.Name("fyloooDeepLinkOpened"), object: nil)
+    NSLog("[Fylooo] fylooo:// handled and notification posted")
 
     // Immediately notify Flutter to fetch shared content now
     if let messenger = self.messengerRef {
-      let shareEvents = FlutterMethodChannel(name: "com.example.cpft/share-events", binaryMessenger: messenger)
+      let shareEvents = FlutterMethodChannel(name: "com.omnity.fylooo/share-events", binaryMessenger: messenger)
       shareEvents.invokeMethod("shareOpened", arguments: nil)
-      NSLog("[CPFT] invoked share-events: shareOpened")
+      NSLog("[Fylooo] invoked share-events: shareOpened")
     } else {
-      NSLog("[CPFT] messengerRef nil; cannot invoke share-events")
+      NSLog("[Fylooo] messengerRef nil; cannot invoke share-events")
     }
     return true
   }
@@ -233,29 +233,29 @@ enum SharedMediaType: String {
   private func readAndSendSharedData() {
     // Read shared data from app group UserDefaults
     // Use the same app group ID as configured in entitlements
-    let appGroupId = "group.com.example.cpft.share"
+    let appGroupId = "group.com.omnity.fylooo.share"
     let userDefaults = UserDefaults(suiteName: appGroupId)
     
-    NSLog("[CPFT] Reading shared data from app group: \(appGroupId)")
+    NSLog("[Fylooo] Reading shared data from app group: \(appGroupId)")
     
     // Debug: check if UserDefaults suite exists
     if userDefaults == nil {
-      NSLog("[CPFT] ERROR: UserDefaults suite is nil for app group \(appGroupId)")
+      NSLog("[Fylooo] ERROR: UserDefaults suite is nil for app group \(appGroupId)")
       return
     }
     
     // Debug: list all keys in UserDefaults
     if let dict = userDefaults?.dictionaryRepresentation() {
-      NSLog("[CPFT] UserDefaults contents: \(dict.keys)")
+      NSLog("[Fylooo] UserDefaults contents: \(dict.keys)")
     }
     
     let jsonData = userDefaults?.data(forKey: "ShareKey")
     let message = userDefaults?.string(forKey: "ShareMessageKey")
     
-    NSLog("[CPFT] ShareKey data exists: \(jsonData != nil), message exists: \(message != nil)")
+    NSLog("[Fylooo] ShareKey data exists: \(jsonData != nil), message exists: \(message != nil)")
     
     guard let jsonData = jsonData else {
-      NSLog("[CPFT] No shared data found in UserDefaults")
+      NSLog("[Fylooo] No shared data found in UserDefaults")
       return
     }
     
@@ -309,17 +309,17 @@ enum SharedMediaType: String {
         
         // Send the data to Flutter
         if let messenger = self.messengerRef {
-          let shareChannel = FlutterMethodChannel(name: "com.example.cpft/share-events", binaryMessenger: messenger)
-          NSLog("[CPFT] About to send sharedDataReceived with \(sharedFiles.count) files")
+          let shareChannel = FlutterMethodChannel(name: "com.omnity.fylooo/share-events", binaryMessenger: messenger)
+          NSLog("[Fylooo] About to send sharedDataReceived with \(sharedFiles.count) files")
           for (index, file) in sharedFiles.enumerated() {
-            NSLog("[CPFT] File \(index): \(file)")
+            NSLog("[Fylooo] File \(index): \(file)")
           }
           shareChannel.invokeMethod("sharedDataReceived", arguments: sharedFiles)
-          NSLog("[CPFT] Sent \(sharedFiles.count) shared files to Flutter")
+          NSLog("[Fylooo] Sent \(sharedFiles.count) shared files to Flutter")
         }
       }
     } catch {
-      NSLog("[CPFT] Error parsing shared data: \(error)")
+      NSLog("[Fylooo] Error parsing shared data: \(error)")
     }
   }
   
@@ -393,8 +393,8 @@ extension AppDelegate: NetServiceDelegate {
   }
 
   private func getSharedContent(result: @escaping FlutterResult) {
-    NSLog("[CPFT] getSharedContent invoked")
-    let sharedDefaults = UserDefaults(suiteName: "group.com.example.cpft.share")
+    NSLog("[Fylooo] getSharedContent invoked")
+    let sharedDefaults = UserDefaults(suiteName: "group.com.omnity.fylooo.share")
 
     var type: String?
     var timestamp: Date?
@@ -402,7 +402,7 @@ extension AppDelegate: NetServiceDelegate {
     var fileURLString: String?
 
     // First try to get data from the metadata file (primary method for share extension)
-    if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.example.cpft.share") {
+    if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.omnity.fylooo.share") {
       let metadataURL = containerURL.appendingPathComponent("shared_metadata.plist")
 
       if let data = try? Data(contentsOf: metadataURL),
@@ -420,13 +420,13 @@ extension AppDelegate: NetServiceDelegate {
 
         // Clean up the metadata file
         try? FileManager.default.removeItem(at: metadataURL)
-        NSLog("[CPFT] Loaded data from metadata file (primary source)")
+        NSLog("[Fylooo] Loaded data from metadata file (primary source)")
       }
     }
 
     // If metadata file doesn't have data, try UserDefaults as fallback
     if type == nil || timestamp == nil {
-      NSLog("[CPFT] Metadata file empty, trying UserDefaults as fallback")
+      NSLog("[Fylooo] Metadata file empty, trying UserDefaults as fallback")
       type = sharedDefaults?.string(forKey: "sharedType")
       timestamp = sharedDefaults?.object(forKey: "sharedTimestamp") as? Date
       content = sharedDefaults?.string(forKey: "sharedText")
@@ -434,7 +434,7 @@ extension AppDelegate: NetServiceDelegate {
     }
 
     guard let finalType = type, let finalTimestamp = timestamp else {
-      NSLog("[CPFT] No shared data found in UserDefaults or metadata file")
+      NSLog("[Fylooo] No shared data found in UserDefaults or metadata file")
       result(nil)
       return
     }
@@ -448,7 +448,7 @@ extension AppDelegate: NetServiceDelegate {
       if let finalContent = content {
         sharedData["content"] = finalContent
       } else {
-        NSLog("[CPFT] No content found for type \(finalType)")
+        NSLog("[Fylooo] No content found for type \(finalType)")
       }
     } else if finalType == "image" || finalType == "video" || finalType == "file" {
       if let finalFileURLString = fileURLString, let fileURL = URL(string: finalFileURLString) {
@@ -468,14 +468,14 @@ extension AppDelegate: NetServiceDelegate {
           // Copy the file
           try fileManager.copyItem(at: fileURL, to: destinationURL)
           sharedData["filePath"] = destinationURL.path
-          NSLog("[CPFT] Copied shared file to: \(destinationURL.path)")
+          NSLog("[Fylooo] Copied shared file to: \(destinationURL.path)")
         } catch {
           print("Error copying shared file: \(error)")
           result(nil)
           return
         }
       } else {
-        NSLog("[CPFT] No fileURL found for type \(finalType)")
+        NSLog("[Fylooo] No fileURL found for type \(finalType)")
       }
     }
 

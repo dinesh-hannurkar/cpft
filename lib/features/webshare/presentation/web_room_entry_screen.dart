@@ -1,18 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
-import 'package:cpft/features/webshare/services/webshare_service.dart';
-import 'package:cpft/features/webshare/presentation/webrtc_chat_screen.dart';
-import 'package:cpft/shared/widgets/primary_app_bar.dart';
-import 'package:cpft/features/home/presentation/widgets/buttons/settings_button.dart';
-import 'package:cpft/features/settings/presentation/settings_screen.dart';
-import 'package:cpft/utils/web_url_utils.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/features/webshare/services/webrtc_file_transfer_service.dart';
+import 'package:fylooo/features/webshare/services/webshare_service.dart';
+import 'package:fylooo/features/webshare/presentation/webrtc_chat_screen.dart';
+import 'package:fylooo/shared/widgets/primary_app_bar.dart';
+import 'package:fylooo/features/home/presentation/widgets/buttons/settings_button.dart';
+import 'package:fylooo/features/settings/presentation/settings_screen.dart';
+import 'package:fylooo/utils/web_url_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
-import 'package:cpft/shared/showcase/showcase_helper.dart';
+import 'package:fylooo/shared/showcase/showcase_helper.dart';
 
 class WebRoomEntryScreen extends StatefulWidget {
   const WebRoomEntryScreen({super.key});
@@ -330,6 +330,10 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final logoHeight = 64.0;
+    final logoCacheHeight = (logoHeight * dpr).round();
+
     return PopScope(
       canPop:
           !kIsWeb, // On web, prevent back navigation since this is the home page
@@ -344,17 +348,15 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
                   Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
                 }
               },
-              child: Padding(
-                padding: const EdgeInsets.only(left: AppSizes.sm),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Text(
-                    'CPFT',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Image.asset(
+                  'assets/images/web-app-logo.webp',
+                  height: logoHeight,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.high,
+                  isAntiAlias: true,
+                  cacheHeight: logoCacheHeight,
                 ),
               ),
             ),

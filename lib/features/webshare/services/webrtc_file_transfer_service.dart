@@ -3,22 +3,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io'
     as io
-    if (dart.library.html) 'package:cpft/features/webshare/services/io_stub.dart';
+    if (dart.library.html) 'package:fylooo/features/webshare/services/io_stub.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:cpft/services/firebase_initializer.dart';
+import 'package:fylooo/services/firebase_initializer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cpft/features/webshare/services/firestore_signaling_service.dart';
-import 'package:cpft/features/webshare/services/local_websocket_signaling_server.dart';
-import 'package:cpft/core/logging/app_logger.dart';
-import 'package:cpft/services/notification_service.dart';
+import 'package:fylooo/features/webshare/services/firestore_signaling_service.dart';
+import 'package:fylooo/features/webshare/services/local_websocket_signaling_server.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
+import 'package:fylooo/services/notification_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:cpft/features/webshare/services/websocket_compat.dart';
-import 'package:cpft/features/webshare/services/web_received_cache.dart';
-import 'package:cpft/features/webshare/services/webrtc_transfer_isolate.dart';
+import 'package:fylooo/features/webshare/services/websocket_compat.dart';
+import 'package:fylooo/features/webshare/services/web_received_cache.dart';
+import 'package:fylooo/features/webshare/services/webrtc_transfer_isolate.dart';
 
 /// WebRTC-based peer-to-peer file transfer service
 class WebRTCFileTransferService {

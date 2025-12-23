@@ -1,4 +1,4 @@
-import 'package:cpft/features/webshare/presentation/webrtc_chat_screen.dart';
+import 'package:fylooo/features/webshare/presentation/webrtc_chat_screen.dart';
 
 class ChatMessage {
   final String id;

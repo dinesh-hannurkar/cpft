@@ -5,9 +5,9 @@ import 'dart:io';
 import '../models/connection_state.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:cpft/models/file_transfer.dart';
+import 'package:fylooo/models/file_transfer.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:cpft/services/notification_service.dart';
+import 'package:fylooo/services/notification_service.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 /// Service for managing device-to-device connections

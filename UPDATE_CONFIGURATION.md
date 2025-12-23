@@ -18,7 +18,7 @@ In your Firebase Console, go to Remote Config and create the following parameter
 - `update_required`: Boolean flag to enable/disable mandatory updates (true/false)
 - `update_message`: The message shown to users when update is required
 - `update_title`: The title of the update dialog
-- `update_url_android`: URL to Google Play Store (e.g., "https://play.google.com/store/apps/details?id=com.example.cpft")
+- `update_url_android`: URL to Google Play Store (e.g., "https://play.google.com/store/apps/details?id=com.omnity.fylooo")
 - `update_url_ios`: URL to Apple App Store (e.g., "https://apps.apple.com/app/cpft/id1234567890")
 
 ### 2. Default Values
@@ -29,7 +29,7 @@ The app includes sensible defaults:
 - `update_required`: false
 - `update_message`: "A new version of the app is available. Please update to continue using the app."
 - `update_title`: "Update Required"
-- `update_url_android`: "https://play.google.com/store/apps/details?id=com.example.cpft"
+- `update_url_android`: "https://play.google.com/store/apps/details?id=com.omnity.fylooo"
 - `update_url_ios`: "https://apps.apple.com/app/cpft/id1234567890"
 
 ## How It Works

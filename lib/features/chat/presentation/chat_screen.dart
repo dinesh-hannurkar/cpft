@@ -1,43 +1,44 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
-import 'package:cpft/features/chat/models/connection_state.dart';
-import 'package:cpft/features/chat/presentation/widgets/constants/file_icons_list.dart';
-import 'package:cpft/features/chat/presentation/widgets/empty_data_widget.dart';
-import 'package:cpft/features/chat/services/connection_manager.dart';
-import 'package:cpft/features/chat/services/connection_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:fylooo/features/chat/models/connection_state.dart';
+import 'package:fylooo/features/chat/presentation/widgets/constants/file_icons_list.dart';
+import 'package:fylooo/features/chat/presentation/widgets/empty_data_widget.dart';
+import 'package:fylooo/features/chat/services/connection_manager.dart';
+import 'package:fylooo/features/chat/services/connection_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cpft/services/sound_service.dart';
-import 'package:cpft/shared/widgets/app_snackbar.dart';
-import 'package:cpft/features/chat/models/transfer_progress.dart';
-import 'package:cpft/features/chat/models/received_file.dart';
-import 'package:cpft/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
-import 'package:cpft/features/chat/presentation/widgets/message_bubble.dart';
-import 'package:cpft/features/chat/presentation/widgets/completed_file_card.dart';
-import 'package:cpft/features/chat/presentation/widgets/received_files_sheet.dart';
-import 'package:cpft/features/chat/presentation/widgets/chat_top_bar.dart';
-import 'package:cpft/features/chat/presentation/widgets/connecting_banner.dart';
-import 'package:cpft/features/chat/presentation/widgets/error_banner.dart';
-import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
-import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
-import 'package:cpft/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
-import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
-import 'package:cpft/shared/widgets/temporary_files_warning_banner.dart';
+import 'package:fylooo/services/sound_service.dart';
+import 'package:fylooo/shared/widgets/app_snackbar.dart';
+import 'package:fylooo/features/chat/models/transfer_progress.dart';
+import 'package:fylooo/features/chat/models/received_file.dart';
+import 'package:fylooo/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
+import 'package:fylooo/features/chat/presentation/widgets/message_bubble.dart';
+import 'package:fylooo/features/chat/presentation/widgets/completed_file_card.dart';
+import 'package:fylooo/features/chat/presentation/widgets/received_files_sheet.dart';
+import 'package:fylooo/features/chat/presentation/widgets/chat_top_bar.dart';
+import 'package:fylooo/features/chat/presentation/widgets/connecting_banner.dart';
+import 'package:fylooo/features/chat/presentation/widgets/error_banner.dart';
+import 'package:fylooo/features/chat/presentation/widgets/file_tagline_bar.dart';
+import 'package:fylooo/features/chat/presentation/widgets/message_input_bar.dart';
+import 'package:fylooo/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
+import 'package:fylooo/shared/widgets/app_bottom_sheet.dart';
+import 'package:fylooo/shared/widgets/temporary_files_warning_banner.dart';
 import 'package:showcaseview/showcaseview.dart';
-import 'package:cpft/shared/showcase/showcase_helper.dart';
+import 'package:fylooo/shared/showcase/showcase_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:cpft/services/share_intent_service.dart';
-import 'package:cpft/features/chat/presentation/widgets/shared_files_banner.dart';
+import 'package:fylooo/services/share_intent_service.dart';
+import 'package:fylooo/features/chat/presentation/widgets/shared_files_banner.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:cpft/shared/widgets/drag_overlay.dart';
+import 'package:fylooo/shared/widgets/drag_overlay.dart';
 
 class ChatScreen extends StatefulWidget {
   final String deviceName;
@@ -173,7 +174,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _scrollController.dispose();
     _inputFocus.dispose();
     WakelockPlus.disable();
-    _shareIntentService.dispose();
     super.dispose();
   }
 
@@ -964,8 +964,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             prefs.getBool('p2p_chat_showcase_seen') ?? false;
 
         if (!hasSeenShowcase && mounted) {
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) {
+          // Skip showcase on web to prevent layout crashes
+          if (kIsWeb) {
+            prefs.setBool('p2p_chat_showcase_seen', true);
+            return;
+          }
+
+          // Add delay and additional frame check for mobile compatibility
+          await Future.delayed(const Duration(milliseconds: 1000));
+          if (!mounted) return;
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (!mounted) return;
+
               try {
                 // Only showcase widgets that are guaranteed to be present
                 final showcaseKeys = <GlobalKey>[
@@ -981,8 +995,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
                 ShowCaseWidget.of(context).startShowCase(showcaseKeys);
                 prefs.setBool('p2p_chat_showcase_seen', true);
-              } catch (_) {}
-            }
+              } catch (e) {
+                // Silently ignore showcase errors
+                debugPrint('Chat showcase initialization failed: $e');
+              }
+            });
           });
         }
       });

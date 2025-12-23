@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
-import 'package:cpft/shared/showcase/showcase_helper.dart';
+import 'package:fylooo/shared/showcase/showcase_helper.dart';
 import '../../utils/file_utils.dart';
 import 'file_type_icon.dart';
 import '../../models/connection_state.dart';

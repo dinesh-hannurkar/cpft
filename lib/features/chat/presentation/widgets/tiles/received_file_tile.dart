@@ -1,4 +1,4 @@
-import 'package:cpft/features/chat/presentation/widgets/lists/received_files_list.dart';
+import 'package:fylooo/features/chat/presentation/widgets/lists/received_files_list.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 

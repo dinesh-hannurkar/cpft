@@ -20,7 +20,7 @@ class ShareIntentService {
   List<SharedMediaFile> _currentSharedFiles = [];
   bool _hasReceivedDirectData = false;
 
-  static const MethodChannel _events = MethodChannel('com.example.cpft/share-events');
+  static const MethodChannel _events = MethodChannel('com.omnity.fylooo/share-events');
 
   void initialize() {
     // Reset state
@@ -69,7 +69,7 @@ class ShareIntentService {
               try {
                 // Handle dynamic typing from platform channel
                 if (item is Map) {
-                  final map = Map<String, dynamic>.from(item as Map);
+                  final map = Map<String, dynamic>.from(item);
                   final path = map['path']?.toString() ?? '';
                   final type = map['type']?.toString() ?? '';
                   

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
 
 class FileTaglineBar extends StatelessWidget {
   final VoidCallback onTapMain;

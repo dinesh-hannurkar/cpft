@@ -1,6 +1,6 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/features/chat/models/connection_state.dart';
-import 'package:cpft/features/chat/presentation/widgets/lists/connected_devices_list.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/features/chat/models/connection_state.dart';
+import 'package:fylooo/features/chat/presentation/widgets/lists/connected_devices_list.dart';
 import 'package:flutter/material.dart';
 
 class DeviceConnectionTile extends StatelessWidget {

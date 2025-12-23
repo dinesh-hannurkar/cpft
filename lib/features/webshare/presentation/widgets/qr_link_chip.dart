@@ -1,6 +1,6 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/webshare/services/webshare_service.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/features/webshare/services/webshare_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 class MulticastPlatformHelper {
   static const MethodChannel _channel = MethodChannel(
-    'com.example.cpft/multicast',
+    'com.omnity.fylooo/multicast',
   );
   static Future<bool> acquireMulticastLock() async {
     if (!Platform.isAndroid) {

@@ -1,16 +1,16 @@
 import 'dart:io';
-import 'package:cpft/models/hotspot_info.dart';
+import 'package:fylooo/models/hotspot_info.dart';
 import 'package:flutter/services.dart';
 
 class LocalHotspotService {
-  static const platform = MethodChannel('com.example.cpft/hotspot');
+  static const platform = MethodChannel('com.omnity.fylooo/hotspot');
   static Future<HotspotInfo?> startHotspot() async {
     if (!Platform.isAndroid) {
       return null;
     }
     try {
       try {
-        const wifiChannel = MethodChannel('com.example.cpft/wifi');
+        const wifiChannel = MethodChannel('com.omnity.fylooo/wifi');
         await wifiChannel.invokeMethod('disconnectWifi');
       } catch (_) {}
 

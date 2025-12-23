@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cpft/firebase_options.dart';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/firebase_options.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 
 class FirebaseInitializer {
   static Future<void>? _inFlight;

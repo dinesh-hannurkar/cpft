@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCS8cJ9SwhG_hm0KfJkck1Puq13y3Ywq00',
-    appId: '1:962041178714:android:720015f37599a0bbac4663',
+    appId: '1:962041178714:android:862c64b4a9ac1715ac4663',
     messagingSenderId: '962041178714',
     projectId: 'cpft-bf8a0',
     storageBucket: 'cpft-bf8a0.firebasestorage.app',
@@ -60,29 +60,30 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyASrZpTaWvjTkvV69966UPlNxXCq9WJz0A',
-    appId: '1:962041178714:ios:bda046e250af0e68ac4663',
+    appId: '1:962041178714:ios:176670ccaaa233b7ac4663',
     messagingSenderId: '962041178714',
     projectId: 'cpft-bf8a0',
     storageBucket: 'cpft-bf8a0.firebasestorage.app',
-    iosBundleId: 'com.example.cpft',
+    iosBundleId: 'com.omnity.fylooo',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyASrZpTaWvjTkvV69966UPlNxXCq9WJz0A',
-    appId: '1:962041178714:ios:bda046e250af0e68ac4663',
+    appId: '1:962041178714:ios:176670ccaaa233b7ac4663',
     messagingSenderId: '962041178714',
     projectId: 'cpft-bf8a0',
     storageBucket: 'cpft-bf8a0.firebasestorage.app',
-    iosBundleId: 'com.example.cpft',
+    iosBundleId: 'com.omnity.fylooo',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyDKGuKkrZilyAYaqsdBXYagcGffp8Om1O8',
-    appId: '1:962041178714:web:db22eb94d9102b2dac4663',
+    appId: '1:962041178714:web:5836a601f5d0ae2dac4663',
     messagingSenderId: '962041178714',
     projectId: 'cpft-bf8a0',
     authDomain: 'cpft-bf8a0.firebaseapp.com',
     storageBucket: 'cpft-bf8a0.firebasestorage.app',
-    measurementId: 'G-694KK3ZZBY',
+    measurementId: 'G-JKCRD6HPD0',
   );
+
 }

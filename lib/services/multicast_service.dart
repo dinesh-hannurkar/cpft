@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 import 'dart:convert';
 import 'dart:io';
 

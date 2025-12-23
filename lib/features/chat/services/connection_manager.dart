@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 import 'dart:io';
 import 'connection_service.dart';
-import 'package:cpft/services/background_service.dart';
-import 'package:cpft/services/notification_service.dart';
-import 'package:cpft/utils/connection_logger.dart';
+import 'package:fylooo/services/background_service.dart';
+import 'package:fylooo/services/notification_service.dart';
+import 'package:fylooo/utils/connection_logger.dart';
 import '../models/connection_state.dart';
 
 class ConnectionManager {

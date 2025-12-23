@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
-import 'package:cpft/core/logging/app_logger.dart';
-import 'package:cpft/features/webshare/helpers/received_file.dart';
-import 'package:cpft/features/webshare/helpers/shared_file.dart';
-import 'package:cpft/services/notification_service.dart';
-import 'package:cpft/utils/network_utils.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
+import 'package:fylooo/features/webshare/helpers/received_file.dart';
+import 'package:fylooo/features/webshare/helpers/shared_file.dart';
+import 'package:fylooo/services/notification_service.dart';
+import 'package:fylooo/utils/network_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:nsd/nsd.dart';
@@ -22,7 +22,7 @@ class WebShareService {
 
   // mDNS advertising
   static const MethodChannel _hostnameChannel = MethodChannel(
-    'com.example.cpft/hostname',
+    'com.omnity.fylooo/hostname',
   );
   Registration? _nsdRegistration;
   bool _isAdvertising = false;

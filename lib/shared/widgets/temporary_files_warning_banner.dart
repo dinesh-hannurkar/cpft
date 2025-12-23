@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
 
 class TemporaryFilesWarningBanner extends StatelessWidget {
   const TemporaryFilesWarningBanner({super.key});

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 import 'package:http/http.dart' as http;
 import '../models/multicast_dto.dart';
 

@@ -120,5 +120,5 @@ If discovery still doesn't work on Android:
 
 **Method Channel**:
 - Flutter → Kotlin communication
-- Channel: `com.example.cpft/multicast`
+- Channel: `com.omnity.fylooo/multicast`
 - Methods: `acquireMulticastLock`, `releaseMulticastLock`

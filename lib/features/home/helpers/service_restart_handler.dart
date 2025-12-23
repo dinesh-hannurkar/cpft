@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/services/discovery_service.dart';
-import 'package:cpft/features/webshare/services/web_server.dart';
+import 'package:fylooo/services/discovery_service.dart';
+import 'package:fylooo/features/webshare/services/web_server.dart';
 
 /// Helper class for managing service restarts
 class ServiceRestartHandler {

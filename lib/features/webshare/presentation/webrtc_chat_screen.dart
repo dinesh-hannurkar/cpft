@@ -1,39 +1,47 @@
 import 'dart:async';
 import 'dart:io' as io;
-import 'package:cpft/features/chat/models/connection_state.dart';
-import 'package:cpft/features/chat/presentation/widgets/message_bubble.dart';
-import 'package:cpft/features/webshare/models/chat_message_model.dart';
-import 'package:cpft/shared/widgets/connection_info_dialog.dart';
-import 'package:cpft/utils/file_saver.dart';
-import 'package:cpft/utils/mime_utils.dart';
+import 'package:fylooo/features/chat/models/connection_state.dart';
+import 'package:fylooo/features/chat/presentation/widgets/message_bubble.dart';
+import 'package:fylooo/features/webshare/models/chat_message_model.dart';
+import 'package:fylooo/shared/widgets/app_bottom_sheet.dart';
+import 'package:fylooo/shared/widgets/connection_info_dialog.dart';
+import 'package:fylooo/utils/file_saver.dart';
+import 'package:fylooo/utils/mime_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
-import 'package:cpft/features/webshare/services/webshare_service.dart';
-import 'package:cpft/features/webshare/services/web_download.dart';
-import 'package:cpft/features/webshare/services/web_received_cache.dart';
-import 'package:cpft/shared/widgets/primary_app_bar.dart';
-import 'package:cpft/shared/widgets/back_button_chip.dart';
-import 'package:cpft/features/home/presentation/widgets/buttons/settings_button.dart';
-import 'package:cpft/shared/widgets/app_action_button.dart';
-import 'package:cpft/shared/widgets/temporary_files_warning_banner.dart';
-import 'package:cpft/features/chat/models/transfer_progress.dart';
-import 'package:cpft/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
-import 'package:cpft/features/chat/presentation/widgets/message_input_bar.dart';
-import 'package:cpft/features/chat/presentation/widgets/file_tagline_bar.dart';
-import 'package:cpft/features/webshare/presentation/widgets/file_card.dart';
-import 'package:cpft/features/webshare/services/file_action_handler.dart';
-import 'package:cpft/services/background_service.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_strings.dart';
+import 'package:fylooo/features/webshare/services/webrtc_file_transfer_service.dart';
+import 'package:fylooo/features/webshare/services/webshare_service.dart';
+import 'package:fylooo/features/webshare/services/web_download.dart';
+import 'package:fylooo/features/webshare/services/web_received_cache.dart';
+import 'package:fylooo/shared/widgets/primary_app_bar.dart';
+import 'package:fylooo/shared/widgets/back_button_chip.dart';
+import 'package:fylooo/features/home/presentation/widgets/buttons/settings_button.dart';
+import 'package:fylooo/shared/widgets/app_action_button.dart';
+import 'package:fylooo/shared/widgets/temporary_files_warning_banner.dart';
+import 'package:fylooo/features/chat/models/transfer_progress.dart';
+import 'package:fylooo/features/chat/presentation/widgets/tiles/transfer_progress_tile.dart';
+import 'package:fylooo/features/chat/presentation/widgets/message_input_bar.dart';
+import 'package:fylooo/features/chat/presentation/widgets/file_tagline_bar.dart';
+import 'package:fylooo/features/webshare/presentation/widgets/file_card.dart';
+import 'package:fylooo/features/webshare/services/file_action_handler.dart';
+import 'package:fylooo/services/background_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
-import 'package:cpft/shared/showcase/showcase_helper.dart';
+import 'package:fylooo/shared/showcase/showcase_helper.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:cpft/shared/widgets/app_bottom_sheet.dart';
+import 'package:fylooo/services/share_intent_service.dart';
+import 'package:fylooo/features/chat/presentation/widgets/shared_files_banner.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:fylooo/shared/widgets/app_snackbar.dart';
+import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:fylooo/shared/widgets/drag_overlay.dart';
 
 class WebRTCChatScreen extends StatefulWidget {
   final WebRTCFileTransferService webrtcService;
@@ -74,6 +82,17 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   final Map<String, TransferProgress> _outgoingProgress = {};
   final Map<String, TransferProgress> _incomingProgress = {};
 
+  // Shared files handling
+  late final ShareIntentService _shareIntentService;
+  List<SharedMediaFile> _sharedFiles = [];
+
+  // Drag and drop handling
+  bool _dragging = false;
+
+  // Web-specific file storage (since file paths don't work on web)
+  final Map<String, List<int>> _webFileBytes = {};
+  final Map<String, int> _webFileSizes = {};
+
   // Floating button animation state
   final List<IconData> _fileIcons = const [
     Icons.text_snippet,
@@ -97,6 +116,29 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
     // Initialize background service for keeping connection alive
     BackgroundService.initialize();
+
+    // Initialize share intent service for handling shared files
+    _shareIntentService = ShareIntentService();
+    _shareIntentService.sharedFilesStream.listen((files) {
+      print('WebRTCChatScreen: Stream listener received ${files.length} shared files');
+      if (mounted) {
+        print('WebRTCChatScreen: Received ${files.length} shared files from external app');
+        setState(() => _sharedFiles = List<SharedMediaFile>.from(files));
+        print('WebRTCChatScreen: Updated _sharedFiles to ${files.length} files');
+      } else {
+        print('WebRTCChatScreen: Not mounted, skipping setState');
+      }
+    });
+
+    // Also check for any existing shared files that might have been received before init
+    final existingFiles = _shareIntentService.getCurrentSharedFiles();
+    if (existingFiles.isNotEmpty) {
+      print('WebRTCChatScreen: Found ${existingFiles.length} existing shared files on init');
+      setState(() => _sharedFiles = List<SharedMediaFile>.from(existingFiles));
+      print('WebRTCChatScreen: Set _sharedFiles from existing files: ${existingFiles.length}');
+    } else {
+      print('WebRTCChatScreen: No existing shared files found on init');
+    }
 
     // Clear received files for this WebRTC session to start fresh
     if (widget.webShareService != null) {
@@ -310,7 +352,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       final fallback = (widget.deviceName ?? '').trim();
       String localName = saved.isNotEmpty ? saved : fallback;
       if (localName.isEmpty && kIsWeb) {
-        localName = 'Web User';
+        localName = AppStrings.webUser;
       }
       if (localName.isNotEmpty) {
         final message = 'peer-info: $localName';
@@ -564,9 +606,186 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   }
 
   void _onFileTransferError(String filename, String reason, bool duringSend) {
-    debugPrint(
-      '[WebRTCChatScreen] Transfer error: $filename - $reason (during ${duringSend ? 'send' : 'receive'})',
+    final direction = duringSend ? 'sending' : 'receiving';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to $direction $filename: $reason'),
+        backgroundColor: Colors.red,
+      ),
     );
+    setState(() {
+      if (duringSend) {
+        _outgoingProgress.remove('outgoing_$filename');
+      } else {
+        _incomingProgress.remove('incoming_$filename');
+      }
+    });
+  }
+
+  Future<int> _getFileSize(String path) async {
+    try {
+      final file = io.File(path);
+      return await file.length();
+    } catch (e) {
+      print('WebRTCChatScreen: Error getting file size for $path: $e');
+      return 0;
+    }
+  }
+
+  Future<void> _handleDroppedFiles(List<XFile> droppedFiles) async {
+    final sharedMediaFiles = <SharedMediaFile>[];
+
+    for (final xFile in droppedFiles) {
+      try {
+        final fileName = xFile.name;
+        final filePath = xFile.path;
+
+        // On web, we need to read the file bytes since file paths don't work
+        List<int>? fileBytes;
+        int? fileSize;
+
+        if (kIsWeb) {
+          fileBytes = await xFile.readAsBytes();
+          fileSize = fileBytes.length;
+        } else {
+          // On mobile/desktop, check if file exists and get size
+          final file = io.File(xFile.path);
+          if (await file.exists()) {
+            fileSize = await file.length();
+          }
+        }
+
+        // Determine MIME type
+        String? mimeType;
+        final extension = fileName.split('.').last.toLowerCase();
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'gif':
+            mimeType = 'image/gif';
+            break;
+          case 'mp4':
+            mimeType = 'video/mp4';
+            break;
+          case 'pdf':
+            mimeType = 'application/pdf';
+            break;
+          case 'txt':
+            mimeType = 'text/plain';
+            break;
+          case 'zip':
+            mimeType = 'application/zip';
+            break;
+          default:
+            mimeType = 'application/octet-stream';
+        }
+
+        sharedMediaFiles.add(SharedMediaFile(
+          path: filePath,
+          type: mimeType.contains('image') ? SharedMediaType.image :
+                mimeType.contains('video') ? SharedMediaType.video :
+                SharedMediaType.file,
+          mimeType: mimeType,
+          duration: null, // Not needed for dropped files
+          thumbnail: null, // Not needed for dropped files
+        ));
+
+        // Store file bytes for web
+        if (kIsWeb && fileBytes != null) {
+          // Store the bytes for later use when sending
+          _webFileBytes[filePath] = fileBytes;
+          _webFileSizes[filePath] = fileSize ?? 0;
+        }
+      } catch (e) {
+        debugPrint('Error processing dropped file ${xFile.name}: $e');
+      }
+    }
+
+    if (sharedMediaFiles.isNotEmpty) {
+      setState(() {
+        for (final file in sharedMediaFiles) {
+          // Check if file already exists (by path)
+          if (!_sharedFiles.any((existing) => existing.path == file.path)) {
+            _sharedFiles.add(file);
+          }
+        }
+      });
+      if (mounted) {
+        AppSnackbar.showSuccess(context, 'Files ready to send. Tap send button.');
+      }
+    }
+  }
+
+  void _sendSharedFiles() async {
+    if (_sharedFiles.isEmpty || !_isConnected) return;
+
+    int successCount = 0;
+    List<String> failedFiles = [];
+
+    try {
+      for (final sharedFile in _sharedFiles) {
+        print('WebRTCChatScreen: Sending shared file: ${sharedFile.path}');
+
+        // Add file message to chat immediately
+        final fileName = sharedFile.path.split('/').last;
+        int fileSize;
+
+        if (kIsWeb && _webFileSizes.containsKey(sharedFile.path)) {
+          // Use stored size for web files
+          fileSize = _webFileSizes[sharedFile.path]!;
+        } else {
+          // Get size from file system for mobile/desktop
+          fileSize = await _getFileSize(sharedFile.path);
+        }
+
+        _addFileMessage(fileName, fileSize, true);
+
+        try {
+          if (kIsWeb && _webFileBytes.containsKey(sharedFile.path)) {
+            // On web, use sendFileBytes with stored file data
+            final fileBytes = _webFileBytes[sharedFile.path]!;
+            await widget.webrtcService.sendFileBytes(fileName, fileBytes);
+          } else {
+            // On mobile/desktop, use sendFile with file path
+            await widget.webrtcService.sendFile(sharedFile.path);
+          }
+          successCount++;
+          print('WebRTCChatScreen: Successfully sent file: ${sharedFile.path}');
+        } catch (fileError) {
+          print('WebRTCChatScreen: Failed to send file ${sharedFile.path}: $fileError');
+          failedFiles.add(sharedFile.path.split('/').last); // Add filename only
+        }
+      }
+
+      // Clear the shared files after attempting to send all
+      _shareIntentService.clearSharedFiles();
+      setState(() => _sharedFiles.clear());
+
+      // Clear web file storage
+      _webFileBytes.clear();
+      _webFileSizes.clear();
+
+      // Show appropriate message based on results
+      if (mounted) {
+        if (failedFiles.isEmpty) {
+          AppSnackbar.showSuccess(context, '$successCount file${successCount > 1 ? 's' : ''} sent successfully');
+        } else if (successCount > 0) {
+          AppSnackbar.showInfo(context, '$successCount sent, ${failedFiles.length} failed: ${failedFiles.join(', ')}');
+        } else {
+          AppSnackbar.showError(context, 'Failed to send files: ${failedFiles.join(', ')}');
+        }
+      }
+    } catch (e) {
+      print('WebRTCChatScreen: Error in send operation: $e');
+      if (mounted) {
+        AppSnackbar.showError(context, 'Failed to send files: $e');
+      }
+    }
   }
 
   void _addTransferProgressMessage(String filename, int sent, int total) {
@@ -664,7 +883,18 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                 }
               }
             } catch (sendError) {
-              if (mounted) {}
+              print('WebRTCChatScreen: Error sending file ${file.name}: $sendError');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Failed to send ${file.name}: $sendError',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             }
           }
         }
@@ -982,7 +1212,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
               const SizedBox(height: AppSizes.lg),
               // Single action button
               AppActionButton(
-                text: 'Close & Go Back',
+                text: AppStrings.closeAndGoBackText,
                 onPressed: () {
                   if (mounted) {
                     Navigator.of(context).pop(true);
@@ -1003,18 +1233,40 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
 
   @override
   Widget build(BuildContext context) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    const logoHeight = 28.0;
+    final logoCacheHeight = (logoHeight * dpr).round();
+
     if (!_didStartShowcase) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final prefs = await SharedPreferences.getInstance();
         final hasSeenShowcase = prefs.getBool('chat_showcase_seen') ?? false;
         if (!hasSeenShowcase && mounted) {
-          Future.delayed(const Duration(milliseconds: 800), () {
-            if (mounted) {
+          // Skip showcase on web to prevent layout crashes
+          if (kIsWeb) {
+            prefs.setBool('chat_showcase_seen', true);
+            return;
+          }
+
+          // Add multiple delays and checks for mobile compatibility
+          await Future.delayed(const Duration(milliseconds: 1000));
+          if (!mounted) return;
+
+          // Additional frame to ensure layout is complete
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (!mounted) return;
+
               try {
                 ShowcaseHelper.startForWebRTCChat(context);
                 prefs.setBool('chat_showcase_seen', true);
-              } catch (_) {}
-            }
+              } catch (e) {
+                // Silently ignore showcase errors
+                debugPrint('Showcase initialization failed: $e');
+              }
+            });
           });
         }
       });
@@ -1043,6 +1295,16 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                 }
               },
             ),
+            logo: kIsWeb
+                ? Image.asset(
+                    'assets/images/web-app-logo.webp',
+                    height: logoHeight,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    isAntiAlias: true,
+                    cacheHeight: logoCacheHeight,
+                  )
+                : null,
             titleWidget: Padding(
               padding: const EdgeInsets.only(left: AppSizes.sm),
               child: Column(
@@ -1059,7 +1321,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                                     : '${w[0].toUpperCase()}${w.substring(1)}',
                               )
                               .join(' ')
-                        : 'Direct Share'),
+                        : AppStrings.directShare),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -1120,26 +1382,49 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
             ],
             backgroundColor: Colors.transparent,
           ),
-          body: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                stops: [0.0, 1.0],
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  const TemporaryFilesWarningBanner(),
-                  Expanded(
-                    child: (() {
-                      final totalItems =
-                          _messages.length +
-                          _incomingProgress.length +
-                          _outgoingProgress.length;
-                      if (totalItems == 0) {
+          body: DropTarget(
+            onDragDone: (detail) async {
+              setState(() {
+                _dragging = false;
+              });
+
+              // Handle dropped files
+              if (detail.files.isNotEmpty) {
+                await _handleDroppedFiles(detail.files);
+              }
+            },
+            onDragEntered: (detail) {
+              setState(() {
+                _dragging = true;
+              });
+            },
+            onDragExited: (detail) {
+              setState(() {
+                _dragging = false;
+              });
+            },
+            child: Stack(
+              children: [
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                      stops: [0.0, 1.0],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        const TemporaryFilesWarningBanner(),
+                        Expanded(
+                          child: (() {
+                            final totalItems =
+                                _messages.length +
+                                _incomingProgress.length +
+                                _outgoingProgress.length;
+                            if (totalItems == 0) {
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -1244,6 +1529,12 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                         slideFromLeft: _slideFromLeft,
                       ),
                     ),
+                  if (_sharedFiles.isNotEmpty)
+                    SharedFilesBanner(
+                      files: _sharedFiles,
+                      onSend: _sendSharedFiles,
+                      enabled: _isConnected,
+                    ),
                   MessageInputBar(
                     controller: _messageController,
                     focusNode: _inputFocus,
@@ -1252,6 +1543,16 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                   ),
                 ],
               ),
+            ),
+          ),
+                // Drag overlay
+                ...(_dragging ? [
+                  DragOverlay(
+                    title: 'Drop files to send',
+                    subtitle: 'Release to send files to the connected device',
+                  ),
+                ] : []),
+              ],
             ),
           ),
         ),

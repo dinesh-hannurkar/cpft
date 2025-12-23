@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
 
 /// A reusable drag overlay widget that shows visual feedback during file drag operations.
 /// This widget is designed to not interfere with scrolling or other interactions.

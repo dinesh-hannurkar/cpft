@@ -1,4 +1,4 @@
-import 'package:cpft/features/chat/presentation/widgets/tiles/device_connection_tile.dart';
+import 'package:fylooo/features/chat/presentation/widgets/tiles/device_connection_tile.dart';
 import 'package:flutter/material.dart';
 import '../../../models/connection_state.dart';
 

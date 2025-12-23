@@ -1,20 +1,18 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/webshare/presentation/widgets/connection_instructions.dart';
-import 'package:cpft/features/webshare/presentation/widgets/network_indicator.dart';
-import 'package:cpft/features/webshare/presentation/widgets/status_indicator.dart';
-import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
-import 'package:cpft/utils/network_utils.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/features/webshare/presentation/widgets/connection_instructions.dart';
+import 'package:fylooo/features/webshare/presentation/widgets/status_indicator.dart';
+import 'package:fylooo/features/webshare/services/webrtc_file_transfer_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:cpft/features/webshare/services/html_stub.dart'
+import 'package:fylooo/features/webshare/services/html_stub.dart'
     if (dart.library.html) 'dart:html'
     as html;
-import 'package:cpft/features/webshare/services/webshare_service.dart';
-import 'package:cpft/features/webshare/presentation/webrtc_chat_screen.dart';
+import 'package:fylooo/features/webshare/services/webshare_service.dart';
+import 'package:fylooo/features/webshare/presentation/webrtc_chat_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cpft/utils/web_url_utils.dart';
+import 'package:fylooo/utils/web_url_utils.dart';
 
 class WebRTCConnectionBottomSheet extends StatefulWidget {
   final WebRTCFileTransferService webrtcService;
@@ -51,14 +49,12 @@ class _WebRTCConnectionBottomSheetState
   bool _didAutoRetry = false;
   bool _codeExpired = false;
   String? _currentRoomId;
-  String? _networkName;
   String? _detectedHostIp;
   String? _urlRoomId;
 
   @override
   void initState() {
     super.initState();
-    _checkNetworkStatus();
     _extractRoomIdFromUrl();
     // After connection is established, send our device name to the peer.
     widget.webrtcService.connectionEstablished.addListener(
@@ -90,23 +86,6 @@ class _WebRTCConnectionBottomSheetState
         _sendNameIfConnected,
       );
     } catch (_) {}
-  }
-
-  Future<void> _checkNetworkStatus() async {
-    try {
-      final networkName = await NetworkUtils.getWifiName();
-      if (mounted) {
-        setState(() {
-          _networkName = networkName;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _networkName = 'Not Connected';
-        });
-      }
-    }
   }
 
   void _extractRoomIdFromUrl() {

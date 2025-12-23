@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/shared/widgets/back_button_chip.dart';
-import 'package:cpft/shared/widgets/primary_app_bar.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/shared/widgets/back_button_chip.dart';
+import 'package:fylooo/shared/widgets/primary_app_bar.dart';
 
 class TermsOfUseScreen extends StatelessWidget {
   const TermsOfUseScreen({super.key});

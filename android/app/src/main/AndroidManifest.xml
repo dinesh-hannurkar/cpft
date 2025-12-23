@@ -30,7 +30,7 @@
         android:minSdkVersion="33" />
     
     <application
-        android:label="cpft"
+        android:label="Fylooo"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

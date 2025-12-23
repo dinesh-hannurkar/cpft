@@ -1,7 +1,7 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/features/webshare/presentation/widgets/status_indicator.dart';
-import 'package:cpft/features/webshare/services/webrtc_file_transfer_service.dart';
-import 'package:cpft/utils/network_utils.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/features/webshare/presentation/widgets/status_indicator.dart';
+import 'package:fylooo/features/webshare/services/webrtc_file_transfer_service.dart';
+import 'package:fylooo/utils/network_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 

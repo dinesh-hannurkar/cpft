@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:in_app_update/in_app_update.dart';
@@ -35,7 +35,7 @@ class UpdateService {
       final currentVersion = packageInfo.version;
 
       // ===== CONFIGURATION - CHANGE THIS TO YOUR iOS BUNDLE ID =====
-      const String iosBundleId = 'com.example.cpft'; // Your iOS bundle ID
+      const String iosBundleId = 'com.omnity.fylooo'; // Your iOS bundle ID
       // ===== END CONFIGURATION =====
 
       final response = await http.get(

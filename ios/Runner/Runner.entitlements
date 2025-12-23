@@ -10,7 +10,7 @@
 	<!-- App Group for sharing data with Share Extension -->
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.example.cpft.share</string>
+		<string>group.com.omnity.fylooo.share</string>
 	</array>
 	<!-- <key>com.apple.developer.networking.multicast</key>
 	<true/> -->

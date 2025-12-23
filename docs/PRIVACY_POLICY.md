@@ -4,7 +4,7 @@
 
 ## 1. Introduction
 
-CPFT ("we," "us," or "our") respects your privacy and is committed to protecting your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Cross-Platform File Transfer application ("Application").
+fylooo ("we," "us," or "our") respects your privacy and is committed to protecting your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Cross-Platform File Transfer application ("Application").
 
 ## 2. Information We Collect
 
@@ -112,11 +112,11 @@ You can delete your account and associated data by:
 
 ## 8. Children's Privacy
 
-CPFT is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If we become aware that we have collected personal information from a child under 13, we will take steps to delete such information.
+fylooo is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If we become aware that we have collected personal information from a child under 13, we will take steps to delete such information.
 
 ## 9. International Data Transfers
 
-Since CPFT operates locally on your device and network, your data typically does not leave your device or local network. However, if you use web-based features or contact support, some information may be processed in different jurisdictions.
+Since fylooo operates locally on your device and network, your data typically does not leave your device or local network. However, if you use web-based features or contact support, some information may be processed in different jurisdictions.
 
 ## 10. Third-Party Services
 
@@ -142,20 +142,20 @@ Your continued use of the Application after changes constitutes acceptance of th
 
 If you have any questions about this Privacy Policy or our practices, please contact us:
 
-- **Email**: privacy@cpft.app
-- **Support**: support@cpft.app
-- **Data Protection Officer**: dpo@cpft.app
-- **Website**: https://cpft.app/privacy
+- **Email**: privacy@fylooo.app
+- **Support**: support@fylooo.app
+- **Data Protection Officer**: dpo@fylooo.app
+- **Website**: https://fylooo.app/privacy
 
 ### Data Request Process
 To exercise your rights or make a data request:
-1. Email privacy@cpft.app with "Data Request" in the subject
+1. Email privacy@fylooo.app with "Data Request" in the subject
 2. Include your device information and specific request
 3. We will respond within 30 days
 
 ## 13. Compliance and Certifications
 
-CPFT is committed to privacy compliance and may pursue relevant certifications as the service grows. We regularly review and update our privacy practices to ensure compliance with applicable laws.
+fylooo is committed to privacy compliance and may pursue relevant certifications as the service grows. We regularly review and update our privacy practices to ensure compliance with applicable laws.
 
 ## 14. Governing Law
 
@@ -163,4 +163,4 @@ This Privacy Policy is governed by the laws of [Jurisdiction], and any disputes 
 
 ---
 
-**By using CPFT, you acknowledge that you have read and understood this Privacy Policy.**
+**By using fylooo, you acknowledge that you have read and understood this Privacy Policy.**

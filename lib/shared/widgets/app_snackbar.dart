@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
 
 /// Enum for different snackbar types
 enum SnackbarType {
@@ -159,7 +159,6 @@ class AppSnackbar {
           textColor: AppColors.white,
         );
       case SnackbarType.info:
-      default:
         return _SnackbarColors(
           backgroundColor: AppColors.primary,
           textColor: AppColors.white,
@@ -177,7 +176,6 @@ class AppSnackbar {
       case SnackbarType.warning:
         return Icons.warning_amber_outlined;
       case SnackbarType.info:
-      default:
         return Icons.info_outline;
     }
   }

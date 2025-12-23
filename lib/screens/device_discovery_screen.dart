@@ -1,13 +1,13 @@
 import 'dart:async';
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 import 'dart:io';
-import 'package:cpft/features/webshare/presentation/web_file_manager_screen.dart';
-import 'package:cpft/widgets/device_count.dart';
+import 'package:fylooo/features/webshare/presentation/web_file_manager_screen.dart';
+import 'package:fylooo/widgets/device_count.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:cpft/shared/widgets/app_snackbar.dart';
+import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import '../shared/widgets/dialog_helpers.dart' as app_dialog;
 import '../shared/widgets/app_confirm_dialog.dart';
 import '../services/discovery_service.dart';

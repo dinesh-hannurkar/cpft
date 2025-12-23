@@ -1,6 +1,6 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/chat/models/connection_state.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/features/chat/models/connection_state.dart';
 import 'package:flutter/material.dart';
 
 /// Individual device list tile

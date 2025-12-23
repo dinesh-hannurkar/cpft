@@ -17,7 +17,7 @@ Edit `lib/services/update_service_simple.dart`:
 ```dart
 // ===== CONFIGURATION =====
 // CHANGE THESE TO YOUR ACTUAL APP STORE IDs
-static const String androidPackageName = 'com.example.cpft'; // Your Android package name
+static const String androidPackageName = 'com.omnity.fylooo'; // Your Android package name
 static const String iosAppId = '1234567890'; // Your iOS App Store ID (numbers only)
 // ===== END CONFIGURATION =====
 ```

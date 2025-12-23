@@ -7,11 +7,13 @@ class PrimaryTextField extends StatelessWidget {
   final IconData? prefixIcon;
   final bool enabled;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
   final int? maxLength;
   final int? maxLines;
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
   final void Function()? onTap;
+  final void Function(String)? onSubmitted;
   final FocusNode? focusNode;
   final bool autofocus;
   final TextCapitalization textCapitalization;
@@ -24,11 +26,13 @@ class PrimaryTextField extends StatelessWidget {
     this.prefixIcon,
     this.enabled = true,
     this.keyboardType,
+    this.textInputAction,
     this.maxLength,
     this.maxLines,
     this.validator,
     this.onChanged,
     this.onTap,
+    this.onSubmitted,
     this.focusNode,
     this.autofocus = false,
     this.textCapitalization = TextCapitalization.none,
@@ -52,11 +56,13 @@ class PrimaryTextField extends StatelessWidget {
         controller: controller,
         enabled: enabled,
         keyboardType: keyboardType,
+        textInputAction: textInputAction,
         maxLength: maxLength,
         maxLines: maxLines,
         validator: validator,
         onChanged: onChanged,
         onTap: onTap,
+        onFieldSubmitted: onSubmitted,
         focusNode: focusNode,
         autofocus: autofocus,
         textCapitalization: textCapitalization,

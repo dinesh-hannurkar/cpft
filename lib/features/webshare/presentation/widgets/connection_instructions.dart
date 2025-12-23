@@ -1,5 +1,5 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
 import 'package:flutter/material.dart';
 
 class ConnectionInstructions extends StatelessWidget {

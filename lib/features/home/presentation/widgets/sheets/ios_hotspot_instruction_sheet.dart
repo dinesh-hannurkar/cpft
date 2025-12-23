@@ -1,7 +1,7 @@
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
-import 'package:cpft/features/home/presentation/widgets/ios_step_card.dart';
-import 'package:cpft/services/wifi_service.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/features/home/presentation/widgets/ios_step_card.dart';
+import 'package:fylooo/services/wifi_service.dart';
 import 'package:flutter/material.dart';
 
 class IosHotspotInstructionsSheet extends StatelessWidget {

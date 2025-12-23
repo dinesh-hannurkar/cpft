@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
 
 class SharedFilesBanner extends StatelessWidget {
   final List<SharedMediaFile> files;

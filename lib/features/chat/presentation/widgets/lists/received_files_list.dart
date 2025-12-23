@@ -1,4 +1,4 @@
-import 'package:cpft/features/chat/presentation/widgets/tiles/received_file_tile.dart';
+import 'package:fylooo/features/chat/presentation/widgets/tiles/received_file_tile.dart';
 import 'package:flutter/material.dart';
 
 class ReceivedFilesList extends StatelessWidget {

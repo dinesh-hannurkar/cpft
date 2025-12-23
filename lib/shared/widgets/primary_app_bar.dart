@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cpft/core/constants/app_colors.dart';
-import 'package:cpft/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_sizes.dart';
 
 class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? leading;
@@ -10,6 +10,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget>? trailing;
   final bool centerTitle;
   final Color? backgroundColor;
+  final Widget? logo;
 
   const PrimaryAppBar({
     super.key,
@@ -20,6 +21,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.trailing,
     this.centerTitle = true,
     this.backgroundColor,
+    this.logo,
   }) : assert(
          title == null || titleWidget == null,
          'Cannot provide both title and titleWidget',

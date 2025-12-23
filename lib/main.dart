@@ -18,7 +18,7 @@ import 'features/setup/presentation/device_name_setup_screen.dart';
 import 'features/webshare/presentation/web_room_entry_screen.dart';
 import 'features/settings/presentation/privacy_policy_screen.dart';
 import 'features/settings/presentation/terms_of_use_screen.dart';
-import 'package:cpft/core/logging/app_logger.dart';
+import 'package:fylooo/core/logging/app_logger.dart';
 import 'services/firebase_initializer.dart';
 import 'services/share_intent_service.dart';
 import 'services/update_service_simple.dart';
@@ -64,13 +64,14 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShowCaseWidget(
-      builder: (context) => MaterialApp(
-        title: 'CPFT',
+    // On web, skip ShowCaseWidget entirely to avoid layout issues
+    if (kIsWeb) {
+      return MaterialApp(
+        title: 'Fylooo',
         theme: AppTheme.lightTheme,
         navigatorKey: navigatorKey,
         // On web, only show the WebShare (WebRTC) screen
-        initialRoute: kIsWeb ? '/webshare' : '/',
+        initialRoute: '/webshare',
         onGenerateRoute: (settings) {
           // On web, redirect mobile-only routes to webshare
           if (kIsWeb) {
@@ -85,21 +86,6 @@ class MainApp extends StatelessWidget {
 
           // Use default routes
           switch (settings.name) {
-            case '/':
-              return MaterialPageRoute(
-                builder: (context) => const PermissionWrapper(),
-                settings: settings,
-              );
-            case '/setup':
-              return MaterialPageRoute(
-                builder: (context) => const DeviceNameSetupScreen(),
-                settings: settings,
-              );
-            case '/home':
-              return MaterialPageRoute(
-                builder: (context) => const HomeWrapper(),
-                settings: settings,
-              );
             case '/webshare':
               return MaterialPageRoute(
                 builder: (context) => const WebRoomEntryScreen(),
@@ -117,13 +103,82 @@ class MainApp extends StatelessWidget {
               );
             default:
               return MaterialPageRoute(
-                builder: (context) => kIsWeb
-                    ? const WebRoomEntryScreen()
-                    : const PermissionWrapper(),
+                builder: (context) => const WebRoomEntryScreen(),
                 settings: settings,
               );
           }
         },
+        builder: (context, child) {
+          final content = Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                stops: [0.0, 1.0],
+              ),
+            ),
+            child: child,
+          );
+          return Stack(
+            children: [
+              content,
+              // FirebaseStatusBanner(),
+            ],
+          );
+        },
+      );
+    }
+
+    Route<dynamic> _onGenerateRoute(RouteSettings settings) {
+      // Use default routes
+      switch (settings.name) {
+        case '/':
+          return MaterialPageRoute(
+            builder: (context) => const PermissionWrapper(),
+            settings: settings,
+          );
+        case '/setup':
+          return MaterialPageRoute(
+            builder: (context) => const DeviceNameSetupScreen(),
+            settings: settings,
+          );
+        case '/home':
+          return MaterialPageRoute(
+            builder: (context) => const HomeWrapper(),
+            settings: settings,
+          );
+        case '/webshare':
+          return MaterialPageRoute(
+            builder: (context) => const WebRoomEntryScreen(),
+            settings: settings,
+          );
+        case '/privacy':
+          return MaterialPageRoute(
+            builder: (context) => const PrivacyPolicyScreen(),
+            settings: settings,
+          );
+        case '/termsofuse':
+          return MaterialPageRoute(
+            builder: (context) => const TermsOfUseScreen(),
+            settings: settings,
+          );
+        default:
+          return MaterialPageRoute(
+            builder: (context) => const PermissionWrapper(),
+            settings: settings,
+          );
+      }
+    }
+
+    // On mobile/desktop, use ShowCaseWidget
+    return ShowCaseWidget(
+      builder: (context) => MaterialApp(
+        title: 'Fylooo',
+        theme: AppTheme.lightTheme,
+        navigatorKey: navigatorKey,
+        initialRoute: '/',
+        onGenerateRoute: _onGenerateRoute,
         builder: (context, child) {
           final content = Container(
             decoration: const BoxDecoration(

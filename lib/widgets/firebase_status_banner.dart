@@ -1,7 +1,7 @@
-import 'package:cpft/core/constants/app_colors.dart';
+import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cpft/services/firebase_initializer.dart';
+import 'package:fylooo/services/firebase_initializer.dart';
 
 class FirebaseStatusBanner extends StatefulWidget {
   const FirebaseStatusBanner({super.key});
