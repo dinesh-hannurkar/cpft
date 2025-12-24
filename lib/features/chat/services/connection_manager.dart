@@ -4,6 +4,7 @@ import 'dart:io';
 import 'connection_service.dart';
 import 'package:fylooo/services/background_service.dart';
 import 'package:fylooo/services/notification_service.dart';
+import 'package:fylooo/services/connection_state_manager.dart';
 import 'package:fylooo/utils/connection_logger.dart';
 import '../models/connection_state.dart';
 
@@ -152,6 +153,13 @@ class ConnectionManager {
     Socket socket,
     String remoteName,
   ) async {
+    // Validate remoteName
+    if (remoteName.isEmpty) {
+      AppLogger.w('Cannot handle incoming connection with empty remote name', tag: 'ConnMgr');
+      socket.close();
+      return;
+    }
+
     try {
       final ip = socket.remoteAddress.address;
       AppLogger.d(
@@ -424,24 +432,16 @@ class ConnectionManager {
     final connectedCount = _activeConnections.values
         .where((s) => s.isConnected)
         .length;
+
+    // Update centralized connection state manager
+    ConnectionStateManager().updateAppToAppConnections(connectedCount > 0);
+
     if (connectedCount == 1 && !BackgroundService.isRunning) {
       AppLogger.d(
-        'Starting foreground service (first connected device)',
+        'Requesting background service start for first app-to-app connection',
         tag: 'ConnMgr',
       );
-      try {
-        final started = await BackgroundService.start();
-        if (started) {
-          AppLogger.i('Foreground service started', tag: 'ConnMgr');
-          _updateForegroundServiceNotification();
-        }
-      } catch (e) {
-        AppLogger.w(
-          'Failed to start foreground service: $e',
-          tag: 'ConnMgr',
-          error: e,
-        );
-      }
+      // The ConnectionStateManager will handle starting the service
     } else if (connectedCount > 0) {
       _updateForegroundServiceNotification();
     }
@@ -453,21 +453,16 @@ class ConnectionManager {
     final connectedCount = _activeConnections.values
         .where((s) => s.isConnected)
         .length;
+
+    // Update centralized connection state manager
+    ConnectionStateManager().updateAppToAppConnections(connectedCount > 0);
+
     if (connectedCount == 0 && BackgroundService.isRunning) {
       AppLogger.d(
-        'Stopping foreground service (no connected devices)',
+        'Requesting background service stop - no app-to-app connections',
         tag: 'ConnMgr',
       );
-      try {
-        await BackgroundService.stop();
-        AppLogger.i('Foreground service stopped', tag: 'ConnMgr');
-      } catch (e) {
-        AppLogger.w(
-          'Failed to stop foreground service: $e',
-          tag: 'ConnMgr',
-          error: e,
-        );
-      }
+      // The ConnectionStateManager will handle stopping the service
     }
   }
 
@@ -479,19 +474,40 @@ class ConnectionManager {
         .where((e) => e.value.isConnected)
         .toList();
     final count = connectedEntries.length;
-    final deviceNames = connectedEntries.map((e) => e.key).take(3).join(', ');
+    final validDeviceNames = connectedEntries
+        .map((e) => e.key.trim())
+        .where((name) => name.isNotEmpty)
+        .take(3)
+        .toList();
+    final deviceNames = validDeviceNames.join(', ');
+    
+    AppLogger.d(
+      'Updating foreground notification: count=$count, validDeviceNames=$validDeviceNames, deviceNames="$deviceNames", entries=${connectedEntries.map((e) => '${e.key}:${e.value.isConnected}').join(', ')}',
+      tag: 'ConnMgr',
+    );
+
+    final validCount = validDeviceNames.length;
 
     String notificationText;
-    if (count == 1) {
+    String notificationTitle;
+    
+    if (validCount == 0) {
+      // No valid device names - show generic message
+      notificationTitle = 'CPFT Connected';
+      notificationText = 'Connected to $count device${count == 1 ? '' : 's'}';
+    } else if (validCount == 1) {
+      notificationTitle = 'CPFT Connected';
       notificationText = 'Connected to $deviceNames';
-    } else if (count <= 3) {
+    } else if (validCount <= 3) {
+      notificationTitle = 'CPFT Connected';
       notificationText = 'Connected to $deviceNames';
     } else {
-      notificationText = 'Connected to $count devices';
+      notificationTitle = 'CPFT Connected';
+      notificationText = 'Connected to $validCount devices';
     }
 
     BackgroundService.updateNotification(
-      title: 'CPFT Active',
+      title: notificationTitle,
       text: notificationText,
     );
   }

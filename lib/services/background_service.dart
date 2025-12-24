@@ -132,9 +132,28 @@ class BackgroundService {
       return true;
     }
 
+    debugPrint('[BackgroundService] Stopping foreground service...');
+    
+    // First, try to update the notification to empty/hidden
+    try {
+      await FlutterForegroundTask.updateService(
+        notificationTitle: '',
+        notificationText: '',
+      );
+      debugPrint('[BackgroundService] Updated notification to empty');
+    } catch (e) {
+      debugPrint('[BackgroundService] Error updating notification: $e');
+    }
+    
     final result = await FlutterForegroundTask.stopService();
     _isRunning = false;
     debugPrint('[BackgroundService] Stopped (result: $result)');
+    
+    // Double-check that the service is actually stopped
+    final isStillRunning = await FlutterForegroundTask.isRunningService;
+    debugPrint('[BackgroundService] Service still running after stop? $isStillRunning');
+    
+    // Return true if the stop operation was attempted (regardless of result)
     return true;
   }
 

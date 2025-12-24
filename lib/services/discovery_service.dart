@@ -601,13 +601,9 @@ class DiscoveryService {
     _incomingConnectionService = null;
     _bonjourService = null;
 
-    // Stop foreground service on Android
+    // Note: Background service is now managed by ConnectionStateManager
+    // based on actual connection states, not discovery state
     if (Platform.isAndroid) {
-      BackgroundService.stop().then((stopped) {
-        if (stopped) {
-          print('[DiscoveryService] ✅ Foreground service stopped');
-        }
-      });
       // Release multicast lock on Android
       MulticastPlatformHelper.releaseMulticastLock();
     }

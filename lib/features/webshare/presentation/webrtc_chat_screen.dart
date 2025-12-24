@@ -19,6 +19,7 @@ import 'package:fylooo/features/webshare/services/webrtc_file_transfer_service.d
 import 'package:fylooo/features/webshare/services/webshare_service.dart';
 import 'package:fylooo/features/webshare/services/web_download.dart';
 import 'package:fylooo/features/webshare/services/web_received_cache.dart';
+import 'package:fylooo/services/connection_state_manager.dart';
 import 'package:fylooo/shared/widgets/primary_app_bar.dart';
 import 'package:fylooo/shared/widgets/back_button_chip.dart';
 import 'package:fylooo/features/home/presentation/widgets/buttons/settings_button.dart';
@@ -379,18 +380,12 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       _isConnected = isConnected;
     });
 
+    // Update centralized connection state manager
+    ConnectionStateManager().updateWebRTCConnections(isConnected);
+
     if (isConnected) {
-      BackgroundService.start().then((started) {
-        if (started) {
-          BackgroundService.updateNotification(
-            title: 'WebRTC Connected',
-            text: 'Maintaining WebRTC connection to ${widget.roomId}',
-          );
-        }
-      });
       WakelockPlus.enable();
     } else {
-      BackgroundService.stop();
       WakelockPlus.disable();
     }
   }
@@ -1153,8 +1148,8 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       widget.webrtcService.dispose();
     }
 
-    // Stop background service
-    BackgroundService.stop();
+    // Update connection state - background service will be managed by ConnectionStateManager
+    ConnectionStateManager().updateWebRTCConnections(false);
 
     // Disable wakelock
     WakelockPlus.disable();
