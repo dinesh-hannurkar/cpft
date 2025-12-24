@@ -34,7 +34,7 @@ class WebRTCFileTransferService {
       AppLogger.w('Cannot send text: data channel is null', tag: 'WebRTC');
       return;
     }
-    
+
     // Check if data channel is open
     if (_dataChannel!.state != RTCDataChannelState.RTCDataChannelOpen) {
       AppLogger.w(
@@ -43,7 +43,7 @@ class WebRTCFileTransferService {
       );
       return;
     }
-    
+
     final payload = {
       'type': 'text-message',
       'message': message,
@@ -787,7 +787,7 @@ class WebRTCFileTransferService {
     } else {
       // Answerer path: Check for existing offer first, then listen for new ones
       final existingOffer = existing2['offer'] as Map<String, dynamic>?;
-      
+
       // If offer already exists when we join, handle it immediately
       if (existingOffer != null && !_fsOfferHandled) {
         final sid = existingOffer['sessionId'];
@@ -799,7 +799,7 @@ class WebRTCFileTransferService {
           await _handleFirestoreOffer(existingOffer, session);
         }
       }
-      
+
       // ONLY set up listener if we haven't already handled an offer
       // This prevents duplicate processing when offer exists at join time
       if (!_fsOfferHandled) {
@@ -832,13 +832,12 @@ class WebRTCFileTransferService {
     FirestoreSession session,
   ) async {
     if (_fsOfferHandled) return;
-    
+
     var state = _peerConnection?.signalingState;
 
     // If not stable, handle glare by resetting the connection to accept remote offer
     // This includes null state which can happen during initialization
-    if (state == null ||
-        state != RTCSignalingState.RTCSignalingStateStable) {
+    if (state == null || state != RTCSignalingState.RTCSignalingStateStable) {
       final stateDesc = state == null
           ? 'null (uninitialized)'
           : state.toString();
@@ -882,7 +881,7 @@ class WebRTCFileTransferService {
               }
               // Ignore our own ICE (answerer ignores answerer ICE)
               if (role == 'answerer') continue;
-              
+
               final remoteCand = RTCIceCandidate(
                 cand['candidate'] as String?,
                 cand['sdpMid'] as String?,
@@ -935,9 +934,7 @@ class WebRTCFileTransferService {
     await session.writeAnswer(ansMap);
 
     // Drain any buffered remote ICE now that remote SDP is set
-    for (final cand in List<RTCIceCandidate>.from(
-      _fsPendingRemoteCandidates,
-    )) {
+    for (final cand in List<RTCIceCandidate>.from(_fsPendingRemoteCandidates)) {
       // Check if peer connection is still valid before adding candidate
       if (_peerConnection != null &&
           _peerConnection!.connectionState !=
@@ -1973,6 +1970,9 @@ class WebRTCFileTransferService {
       final fileSize = await file.length();
       final fileData = await file.readAsBytes();
 
+      // Reset receiver-confirmed byte counter for this transfer (used by ack-based flow control).
+      _receiverReceivedBytes = 0;
+
       // Store current send file info for callback
       _currentSendFilePath = filePath;
       _currentSendFileSize = fileSize;
@@ -2129,22 +2129,40 @@ class WebRTCFileTransferService {
         tag: 'WebRTC',
       );
 
-      // Add additional delay to ensure all chunks have time to propagate through the network
-      // Adaptive delay based on file size: small files need less time, large files need more
-      final completionDelay = (fileSize < 10 * 1024 * 1024)
-          ? 15 // 15 seconds for files < 10MB
-          : (fileSize < 100 * 1024 * 1024)
-          ? 45 // 45 seconds for files < 100MB
-          : 90; // 90 seconds for larger files (increased from 60s to reduce missing chunks)
-      AppLogger.i(
-        'Waiting $completionDelay seconds for all chunks to reach receiver...',
-        tag: 'WebRTC',
-      );
-      await Future.delayed(Duration(seconds: completionDelay));
-      AppLogger.i(
-        'Completion delay finished, sending file-complete message',
-        tag: 'WebRTC',
-      );
+      // Prefer receiver confirmation (ACKs include receivedBytes) instead of an arbitrary delay.
+      // This keeps the sender UI responsive while still allowing slow receivers to finish.
+      final confirmStartTime = DateTime.now();
+      const maxConfirmWait = Duration(seconds: 20);
+      int lastReportedBytes = _receiverReceivedBytes;
+      DateTime lastProgressTime = DateTime.now();
+      while (_receiverReceivedBytes < fileSize) {
+        final elapsed = DateTime.now().difference(confirmStartTime);
+
+        if (_receiverReceivedBytes > lastReportedBytes) {
+          lastReportedBytes = _receiverReceivedBytes;
+          lastProgressTime = DateTime.now();
+        }
+
+        final noProgressDuration = DateTime.now().difference(lastProgressTime);
+        if (elapsed > maxConfirmWait || noProgressDuration.inSeconds >= 5) {
+          final missing = fileSize - _receiverReceivedBytes;
+          AppLogger.i(
+            'Proceeding without full receiver confirmation. '
+            'Receiver has $_receiverReceivedBytes/$fileSize bytes ($missing missing).',
+            tag: 'WebRTC',
+          );
+          break;
+        }
+
+        await Future.delayed(const Duration(milliseconds: 120));
+      }
+
+      if (_receiverReceivedBytes >= fileSize) {
+        AppLogger.i(
+          '✅ Receiver confirmed all $fileSize bytes received',
+          tag: 'WebRTC',
+        );
+      }
 
       // Send completion message
       final completion = {'type': 'file-complete', 'fileName': fileName};

@@ -46,8 +46,8 @@ class ShowcaseHelper {
     ShowCaseWidget.of(context).startShowCase([
       connectedDevicesKey,
       qrScannerKey,
-      linkShareKey,
       settingsKey,
+      linkShareKey,
     ]);
   }
 }

@@ -45,6 +45,7 @@ import 'package:fylooo/shared/showcase/showcase_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class HomeScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
@@ -821,6 +822,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // On Android, starting a local-only hotspot requires Nearby Devices permission.
+    // Do not force Location permission for this specific action.
+    final permissionsGranted =
+        await AppPermissions.requestTemporaryHotspotPermissions();
+    if (!permissionsGranted) {
+      if (!mounted) return;
+
+      // `requestTemporaryHotspotPermissions()` already triggers the system permission dialog.
+      // Only guide the user to Settings when the permission is permanently denied/restricted
+      // (when system dialog won’t show anymore).
+      PermissionStatus? nearbyStatus;
+      try {
+        nearbyStatus = await Permission.nearbyWifiDevices.status;
+      } catch (_) {
+        nearbyStatus = null;
+      }
+      final permanentlyDenied =
+          (nearbyStatus?.isPermanentlyDenied ?? false) ||
+          (nearbyStatus?.isRestricted ?? false);
+
+      if (permanentlyDenied) {
+        final openSettings = await app_dialog.showAppDialog<bool>(
+          context: context,
+          builder: (context) => AppConfirmDialog(
+            title: 'Permission Required',
+            content: Text(
+              'To create a temporary hotspot, please allow the required permissions (Location and Nearby devices) in Settings.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.darkPrimary,
+              ),
+            ),
+            confirmLabel: 'Open Settings',
+            cancelLabel: 'Cancel',
+            destructive: false,
+          ),
+        );
+
+        if (openSettings == true) {
+          await AppPermissions.openSystemLocationSettings();
+        }
+      } else {
+        AppSnackbar.showError(
+          context,
+          'Nearby devices permission denied.',
+        );
+      }
+      return;
+    }
+
     _autoHotspotEnabled = true;
     if (_networkName != 'Not Connected') {
       // Disconnect from Wi‑Fi first, then start hotspot
@@ -1327,6 +1377,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _handleQrScan() async {
     if (!mounted) return;
+
+    // QR scanning should not run while hotspot is active.
+    if (_hotspotInfo != null) {
+      await _maybeStopHotspot();
+      if (mounted) setState(() {});
+
+      if (_hotspotInfo != null) {
+        AppSnackbar.showError(
+          context,
+          'Please turn off hotspot before scanning QR code.',
+        );
+        return;
+      }
+    }
+
+    if (_iosManualHotspotMode) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Turn off Hotspot'),
+          content: const Text(
+            'Please turn off Personal Hotspot before scanning a QR code.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await WifiService.openWifiSettings();
+              },
+              child: const Text('Open Settings'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     await Navigator.of(
       context,

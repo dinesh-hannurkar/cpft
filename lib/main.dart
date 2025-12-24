@@ -67,6 +67,7 @@ class MainApp extends StatelessWidget {
     // On web, skip ShowCaseWidget entirely to avoid layout issues
     if (kIsWeb) {
       return MaterialApp(
+        debugShowCheckedModeBanner: true,
         title: 'Fylooo',
         theme: AppTheme.lightTheme,
         navigatorKey: navigatorKey,
@@ -323,6 +324,7 @@ class _PermissionWrapperState extends State<PermissionWrapper>
   bool _isCheckingPermissions = true;
   bool _locationServiceDisabled = false;
   String? _deviceName;
+  bool _postPermissionInitDone = false;
 
   @override
   void initState() {
@@ -355,18 +357,19 @@ class _PermissionWrapperState extends State<PermissionWrapper>
       ShareIntentService().initialize();
     }
 
-    // Skip location permission checks - set as granted
-    if (mounted) {
-      setState(() {
-        _permissionsGranted = true;
-        _isCheckingPermissions = false;
-      });
-    }
+    // Ask required permissions at startup (system dialog), but do NOT block app entry.
+    // Some users may deny Location/Nearby permissions; the app should still open.
+    // Feature screens can handle missing permissions contextually.
+    // Fire-and-forget so we don't block startup on the dialog.
+    // ignore: unawaited_futures
+    _checkPermissions();
 
-    // For iOS, show Local Network permission instructions (optional)
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      await LocalNetworkPermissionHelper.requestPermission();
-    }
+    await _postPermissionInitialize();
+  }
+
+  Future<void> _postPermissionInitialize() async {
+    if (_postPermissionInitDone) return;
+    _postPermissionInitDone = true;
 
     _deviceName = await _getDeviceName();
     AppLogger.d('Device name loaded: $_deviceName', tag: 'PermWrap');
@@ -456,80 +459,6 @@ class _PermissionWrapperState extends State<PermissionWrapper>
               SizedBox(height: 16),
               Text('Checking permissions...'),
             ],
-          ),
-        ),
-      );
-    }
-
-    if (!_permissionsGranted) {
-      final isServiceDisabled = _locationServiceDisabled;
-      return Scaffold(
-        resizeToAvoidBottomInset: false,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isServiceDisabled ? Icons.location_off : Icons.location_on,
-                  size: 64,
-                  color: Colors.orange,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isServiceDisabled
-                      ? 'Location Services Disabled'
-                      : 'Location Permission Required',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isServiceDisabled
-                      ? 'Please enable Location Services in your device settings to use this app. WiFi network detection requires location services to be turned on.'
-                      : (!kIsWeb &&
-                            defaultTargetPlatform == TargetPlatform.android)
-                      ? 'On Android 10+, location permission is required to detect your WiFi network name. This helps you confirm you\'re connected to the right network for file transfers.'
-                      : 'Location permission is needed to detect your WiFi network name and discover nearby devices on your local network.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 16, color: Colors.black87),
-                ),
-                if (!isServiceDisabled) ...[
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Note: Your location data is never collected or shared. This permission only allows the app to read your WiFi name.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.black54,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: isServiceDisabled
-                      ? AppPermissions.openSystemLocationSettings
-                      : _checkPermissions,
-                  child: Text(
-                    isServiceDisabled
-                        ? 'Open Location Settings'
-                        : 'Grant Permission',
-                  ),
-                ),
-                if (!isServiceDisabled) ...[
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: AppPermissions.openLocationSettings,
-                    child: const Text('Open Settings'),
-                  ),
-                ],
-              ],
-            ),
           ),
         ),
       );

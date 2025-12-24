@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:fylooo/utils/permissions.dart';
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
 import 'package:fylooo/services/wifi_service.dart';
@@ -77,7 +78,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         _isCheckingPermission = false;
       });
     } else if (status.isDenied || status.isPermanentlyDenied) {
-      final result = await Permission.camera.request();
+      final result = await AppPermissions.runGuarded(
+        () => Permission.camera.request(),
+      );
       setState(() {
         _hasPermission = result.isGranted;
         _isCheckingPermission = false;

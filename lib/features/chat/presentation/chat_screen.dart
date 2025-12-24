@@ -39,6 +39,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:fylooo/shared/widgets/drag_overlay.dart';
+import 'package:fylooo/utils/permissions.dart';
 
 class ChatScreen extends StatefulWidget {
   final String deviceName;
@@ -93,6 +94,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _didShowFileReceivedShowcase = false;
 
   bool _dragging = false; // For drag and drop visual feedback
+  bool _wasKeyboardOpen = false; // Track previous keyboard state
+  bool _isProgrammaticScroll = false; // Track programmatic scrolling
 
   // Peer‑to‑peer port constant
   static const int p2pPort = 53318;
@@ -134,6 +137,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _slideFromLeft = !_slideFromLeft;
         _fileIconIndex = (_fileIconIndex + 1) % fileIcons.length;
       });
+    });
+
+    _scrollController.addListener(() {
+      // Close keyboard when scrolling (but not during programmatic scrolls)
+      if (_inputFocus.hasFocus && !_isProgrammaticScroll) {
+        _inputFocus.unfocus();
+      }
     });
 
     // Check pending offers after frame
@@ -349,6 +359,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         });
         _scrollToBottom();
 
+        // Keep keyboard open when receiving file completion messages
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _inputFocus.hasFocus) {
+            _inputFocus.requestFocus();
+          }
+        });
+
         // Trigger showcase when first file is received
         if (wasFirstReceivedFile &&
             path != null &&
@@ -380,6 +397,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           }
         });
         _scrollToBottom();
+        // Keep keyboard open when receiving messages
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _inputFocus.hasFocus) {
+            _inputFocus.requestFocus();
+          }
+        });
     }
   }
 
@@ -537,11 +560,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
+        _isProgrammaticScroll = true;
+        _scrollController.jumpTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
         );
+        // Reset the flag after a short delay to allow the scroll to complete
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _isProgrammaticScroll = false;
+        });
       }
     });
   }
@@ -562,6 +588,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _messageController.clear();
       });
       _scrollToBottom();
+      // Keep keyboard open after sending
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _inputFocus.requestFocus();
+        }
+      });
     } else if (mounted) {
       AppSnackbar.showError(context, 'Failed to send message');
     }
@@ -594,7 +626,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     try {
       if (path.toLowerCase().endsWith('.apk')) {
         if (Theme.of(context).platform == TargetPlatform.android) {
-          final status = await Permission.requestInstallPackages.request();
+          final status = await AppPermissions.runGuarded(
+            () => Permission.requestInstallPackages.request(),
+          );
           if (!status.isGranted) {
             if (mounted) {
               AppSnackbar.showWarning(context, 'Install permission denied');
@@ -1006,6 +1040,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _didStartShowcase = true;
     }
 
+    // Check if keyboard just opened and scroll to bottom
+    final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    if (isKeyboardOpen && !_wasKeyboardOpen && _messages.isNotEmpty) {
+      // Delay scrolling to ensure keyboard is fully open
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted && _inputFocus.hasFocus) {
+            _scrollToBottom();
+          }
+        });
+      });
+    }
+    _wasKeyboardOpen = isKeyboardOpen;
+
     final isConnected = _connectionInfo?.status == ConnectionStatus.connected;
     // print(
     //   'ChatScreen: isConnected = $isConnected, sharedFiles = ${_sharedFiles.length}',
@@ -1074,21 +1122,28 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   ),
                 const TemporaryFilesWarningBanner(),
                 Expanded(
-                  child: (() {
-                    final totalItems =
-                        _messages.length +
-                        _incomingProgress.length +
-                        _outgoingProgress.length;
-                    if (totalItems == 0) {
-                      return EmptyDataWidget();
-                    }
-                    return ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      itemCount: totalItems,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () {
+                      // Close keyboard when tapping outside input field
+                      FocusScope.of(context).unfocus();
+                    },
+                    child: (() {
+                      final totalItems =
+                          _messages.length +
+                          _incomingProgress.length +
+                          _outgoingProgress.length;
+                      if (totalItems == 0) {
+                        return EmptyDataWidget();
+                      }
+                      return ListView.builder(
+                        controller: _scrollController,
+                        physics: const ClampingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        itemCount: totalItems,
                       itemBuilder: (context, index) {
                         if (index < _messages.length) {
                           final msg = _messages[index];
@@ -1180,37 +1235,54 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       },
                     );
                   })(),
+                  ),
                 ),
-                if (isConnected)
-                  Showcase(
-                    key: ShowcaseHelper.sendFileButtonKey,
-                    disableBarrierInteraction: false,
-                    targetPadding: const EdgeInsets.all(8),
-                    title: 'Send Files',
-                    description:
-                        'Tap here to select and send files to the connected device.',
-                    tooltipBackgroundColor: Colors.white,
-                    textColor: Colors.black,
-                    descTextStyle: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black87,
-                    ),
-                    titleTextStyle: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      fontSize: 16,
-                    ),
-                    tooltipBorderRadius: BorderRadius.circular(12),
-                    targetBorderRadius: BorderRadius.circular(12),
-                    child: FileTaglineBar(
-                      onTapMain: () => _connectionService.pickAndSendFile(),
-                      onTapFab: () => _connectionService.pickAndSendFile(),
-                      pulseController: _fileIconPulse!,
-                      fileIcons: fileIcons,
-                      fileIconIndex: _fileIconIndex,
-                      slideFromLeft: _slideFromLeft,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 1),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: child,
                     ),
                   ),
+                  child: (isConnected && MediaQuery.of(context).viewInsets.bottom == 0)
+                      ? Showcase(
+                          key: ShowcaseHelper.sendFileButtonKey,
+                          disableBarrierInteraction: false,
+                          targetPadding: const EdgeInsets.all(8),
+                          title: 'Send Files',
+                          description:
+                              'Tap here to select and send files to the connected device.',
+                          tooltipBackgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          descTextStyle: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black87,
+                          ),
+                          titleTextStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            fontSize: 16,
+                          ),
+                          tooltipBorderRadius: BorderRadius.circular(12),
+                          targetBorderRadius: BorderRadius.circular(12),
+                          child: FileTaglineBar(
+                            onTapMain: () => _connectionService.pickAndSendFile(),
+                            onTapFab: () => _connectionService.pickAndSendFile(),
+                            pulseController: _fileIconPulse!,
+                            fileIcons: fileIcons,
+                            fileIconIndex: _fileIconIndex,
+                            slideFromLeft: _slideFromLeft,
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('hidden')),
+                ),
                 if (_sharedFiles.isNotEmpty && isConnected) // Auto-send enabled, banner disabled
                   // print('ChatScreen: Showing shared files banner, files: ${_sharedFiles.length}, connected: $isConnected');
                   SharedFilesBanner(

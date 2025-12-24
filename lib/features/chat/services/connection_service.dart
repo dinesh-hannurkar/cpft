@@ -453,6 +453,7 @@ class ConnectionService {
               final ack = FileAck.fromJson(jsonDecode(message.content));
               final outgoing = _outgoingTransfers[ack.transferId];
               if (outgoing != null) {
+                outgoing.initialAckReceived = true;
                 // Advance pointer
                 final oldIndex = outgoing.lastAckIndex;
                 final newIndex = ack.nextExpectedIndex - 1;
@@ -1024,20 +1025,71 @@ class ConnectionService {
       // Wait for initial ACK (nextExpectedIndex = 0) which is sent after receiver accepts
       final starter = _outgoingTransfers[transferId];
       if (starter != null) {
-        starter.chunkPermit = Completer<void>();
+        const maxInitialAckWait = Duration(minutes: 2);
+        const stepTimeout = Duration(seconds: 10);
+        final startedAt = DateTime.now();
+        int attempts = 0;
+
         debugPrint(
           '[ConnectionService] ⏳ Waiting for initial ACK for transfer $transferId',
         );
+
         try {
-          await starter.chunkPermit!.future.timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              debugPrint(
-                '[ConnectionService] ⚠️ Initial ACK timeout for $transferId',
-              );
+          while (true) {
+            final current = _outgoingTransfers[transferId];
+            if (current == null) {
+              throw StateError('Transfer cancelled');
+            }
+            if (current.initialAckReceived) break;
+
+            final elapsed = DateTime.now().difference(startedAt);
+            if (elapsed >= maxInitialAckWait) {
               throw TimeoutException('No initial ACK received');
-            },
-          );
+            }
+            final remaining = maxInitialAckWait - elapsed;
+            final waitFor = remaining < stepTimeout ? remaining : stepTimeout;
+
+            final permit = current.chunkPermit ??= Completer<void>();
+            try {
+              await permit.future.timeout(waitFor);
+            } on TimeoutException {
+              attempts++;
+              debugPrint(
+                '[ConnectionService] ⚠️ Initial ACK still not received for $transferId (attempt $attempts), requesting ACK resend',
+              );
+              // Ask receiver to resend its current ACK if it already accepted.
+              try {
+                await sendMessage(
+                  DeviceMessage(
+                    type: 'file_resume_request',
+                    content: transferId,
+                    senderName: deviceName,
+                  ),
+                );
+              } catch (_) {}
+
+              // If the offer was lost, periodically resend it to re-trigger UI.
+              if (attempts % 3 == 0) {
+                try {
+                  await sendMessage(
+                    DeviceMessage(
+                      type: 'file_offer',
+                      content: name,
+                      senderName: deviceName,
+                      metadata: {
+                        'payload': offer.toJson(),
+                        'name': name,
+                      },
+                    ),
+                  );
+                  debugPrint(
+                    '[ConnectionService] 🔄 Resent file_offer for $transferId (no initial ACK yet)',
+                  );
+                } catch (_) {}
+              }
+            }
+          }
+
           debugPrint(
             '[ConnectionService] ✅ Initial ACK received, starting chunk stream for $transferId',
           );
@@ -1207,20 +1259,69 @@ class ConnectionService {
       // Wait for initial ACK
       final starter = _outgoingTransfers[transferId];
       if (starter != null) {
-        starter.chunkPermit = Completer<void>();
+        const maxInitialAckWait = Duration(minutes: 2);
+        const stepTimeout = Duration(seconds: 10);
+        final startedAt = DateTime.now();
+        int attempts = 0;
+
         debugPrint(
           '[ConnectionService] ⏳ Waiting for initial ACK for shared transfer $transferId',
         );
+
         try {
-          await starter.chunkPermit!.future.timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              debugPrint(
-                '[ConnectionService] ⚠️ Initial ACK timeout for shared $transferId',
-              );
+          while (true) {
+            final current = _outgoingTransfers[transferId];
+            if (current == null) {
+              throw StateError('Transfer cancelled');
+            }
+            if (current.initialAckReceived) break;
+
+            final elapsed = DateTime.now().difference(startedAt);
+            if (elapsed >= maxInitialAckWait) {
               throw TimeoutException('No initial ACK received');
-            },
-          );
+            }
+            final remaining = maxInitialAckWait - elapsed;
+            final waitFor = remaining < stepTimeout ? remaining : stepTimeout;
+
+            final permit = current.chunkPermit ??= Completer<void>();
+            try {
+              await permit.future.timeout(waitFor);
+            } on TimeoutException {
+              attempts++;
+              debugPrint(
+                '[ConnectionService] ⚠️ Initial ACK still not received for shared $transferId (attempt $attempts), requesting ACK resend',
+              );
+              try {
+                await sendMessage(
+                  DeviceMessage(
+                    type: 'file_resume_request',
+                    content: transferId,
+                    senderName: deviceName,
+                  ),
+                );
+              } catch (_) {}
+
+              if (attempts % 3 == 0) {
+                try {
+                  await sendMessage(
+                    DeviceMessage(
+                      type: 'file_offer',
+                      content: name,
+                      senderName: deviceName,
+                      metadata: {
+                        'payload': offer.toJson(),
+                        'name': name,
+                      },
+                    ),
+                  );
+                  debugPrint(
+                    '[ConnectionService] 🔄 Resent file_offer for shared $transferId (no initial ACK yet)',
+                  );
+                } catch (_) {}
+              }
+            }
+          }
+
           debugPrint(
             '[ConnectionService] ✅ Initial ACK received, starting chunk stream for shared $transferId',
           );
@@ -1900,6 +2001,7 @@ class _OutgoingTransfer {
   final int totalSize; // total bytes
   final Map<int, int> chunkSizes = {}; // index -> bytes
   int sentBytes = 0; // bytes confirmed by ACKs
+  bool initialAckReceived = false;
   Completer<void>? chunkPermit; // completed when next chunk may be sent
   Completer<void>? completer; // completed when transfer fully done
   Timer? watchdogTimer;

@@ -1,18 +1,64 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:fylooo/core/logging/app_logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class AppPermissions {
-  static bool _isRequestingPermissions = false;
-  static Future<bool> requestNetworkPermissions() async {
-    if (_isRequestingPermissions) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      return await checkLocationPermission();
+  /// `permission_handler` throws if multiple permission dialogs/requests are
+  /// started concurrently. This guard serializes permission requests app-wide.
+  static Completer<void>? _permissionRequestInFlight;
+
+  static Future<T> runGuarded<T>(Future<T> Function() action) async {
+    // Wait for any in-flight permission request.
+    while (_permissionRequestInFlight != null) {
+      await _permissionRequestInFlight!.future;
+    }
+    final completer = Completer<void>();
+    _permissionRequestInFlight = completer;
+    try {
+      return await action();
+    } finally {
+      _permissionRequestInFlight = null;
+      completer.complete();
+    }
+  }
+
+  /// Permissions required specifically for starting a temporary/local-only hotspot.
+  ///
+  /// On Android 13+ this is generally `NEARBY_WIFI_DEVICES`. We intentionally do
+  /// not request Location here so app entry and hotspot use don't force it.
+  ///
+  /// Note: Other features (like reading Wi‑Fi SSID) may still require Location;
+  /// use [requestNetworkPermissions] for those flows.
+  static Future<bool> requestTemporaryHotspotPermissions() async {
+    if (kIsWeb) return true;
+
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return true;
     }
 
-    _isRequestingPermissions = true;
-    try {
+    return runGuarded(() async {
+      try {
+        final status = await Permission.nearbyWifiDevices.status;
+        if (status.isGranted) return true;
+
+        final result = await Permission.nearbyWifiDevices.request();
+        return result.isGranted;
+      } catch (e) {
+        // Permission not available on this Android version/device.
+        AppLogger.d(
+          'Nearby WiFi Devices permission not available: $e',
+          tag: 'Permissions',
+        );
+        return true;
+      }
+    });
+  }
+
+  static Future<bool> requestNetworkPermissions() async {
+    return runGuarded(() async {
       if (kIsWeb) {
         return true;
       }
@@ -23,44 +69,26 @@ class AppPermissions {
         return await _requestIOSPermissions();
       }
       return true;
-    } finally {
-      _isRequestingPermissions = false;
-    }
+    });
   }
 
   static Future<bool> _requestAndroidPermissions() async {
-    final serviceEnabled = await isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      AppLogger.w(
-        'Location services disabled on device. User must enable in Settings.',
-        tag: 'Permissions',
-      );
-      AppLogger.w(
-        'Prompt user: Enable Location in device Settings.',
-        tag: 'Permissions',
-      );
-      return false;
-    }
+    // Request required permissions together to avoid overlapping requests.
+    try {
+      final statuses = await <Permission>[
+        Permission.location,
+        Permission.nearbyWifiDevices,
+      ].request();
 
-    final locationStatus = await Permission.location.status;
-
-    if (!locationStatus.isGranted) {
-      final requestResult = await Permission.location.request();
-
-      if (!requestResult.isGranted) {
+      final locationStatus = statuses[Permission.location];
+      if (locationStatus == null || !locationStatus.isGranted) {
         return false;
       }
-    }
 
-    try {
-      final nearbyDevicesStatus = await Permission.nearbyWifiDevices.status;
-
-      if (!nearbyDevicesStatus.isGranted) {
-        final nearbyRequestResult = await Permission.nearbyWifiDevices
-            .request();
-        if (!nearbyRequestResult.isGranted) {
-          // If permanently denied, guide user to settings
-          if (nearbyRequestResult.isPermanentlyDenied) {
+      final nearbyStatus = statuses[Permission.nearbyWifiDevices];
+      if (nearbyStatus != null) {
+        if (!nearbyStatus.isGranted) {
+          if (nearbyStatus.isPermanentlyDenied) {
             AppLogger.w(
               'Nearby devices permission permanently denied. User can enable in settings if needed.',
               tag: 'Permissions',
@@ -69,29 +97,28 @@ class AppPermissions {
         } else {
           AppLogger.i('Nearby devices permission granted', tag: 'Permissions');
         }
-      } else {
-        AppLogger.i(
-          'Nearby devices permission already granted',
-          tag: 'Permissions',
-        );
       }
     } catch (e) {
+      // Fall back for devices/Android versions where nearbyWifiDevices isn't available.
       AppLogger.d(
-        'Nearby devices permission not available on this device/Android version: $e',
+        'Batch permission request failed, falling back to location-only: $e',
         tag: 'Permissions',
       );
+      final locationStatus = await Permission.location.status;
+      if (!locationStatus.isGranted) {
+        final requestResult = await Permission.location.request();
+        if (!requestResult.isGranted) return false;
+      }
     }
 
-    return true;
+    // Permissions may be granted but Location Services can still be disabled.
+    // Return whether the app can reliably read Wi‑Fi SSID / do discovery.
+    final serviceEnabled = await isLocationServiceEnabled();
+    return serviceEnabled;
   }
 
   static Future<bool> _requestIOSPermissions() async {
     try {
-      final serviceEnabled = await isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        return false;
-      }
-
       final locationStatus = await Permission.locationWhenInUse.status;
 
       if (locationStatus.isGranted) {
@@ -103,11 +130,11 @@ class AppPermissions {
       }
 
       final requestResult = await Permission.locationWhenInUse.request();
-      if (requestResult.isGranted) {
-        return true;
-      } else {
-        return false;
-      }
+      if (!requestResult.isGranted) return false;
+
+      // If granted, also reflect whether Location Services are enabled.
+      final serviceEnabled = await isLocationServiceEnabled();
+      return serviceEnabled;
     } on PlatformException catch (e) {
       if (e.code == 'ERROR_ALREADY_REQUESTING_PERMISSIONS') {
         final currentStatus = await Permission.locationWhenInUse.status;

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 class WebUrlUtils {
-  static const String webBaseUrl = 'https://cpft-bf8a0.web.app';
+  static const String webBaseUrl = 'https://fylooo.com';
 
   static String shareUrlForRoom(String roomId) {
     // return '$webBaseUrl/share?room=$roomId';

@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:fylooo/utils/permissions.dart';
 import 'dart:io';
 
 /// Types of notifications the app can send
@@ -350,7 +351,9 @@ class NotificationService {
 
     // Android 13+ (API 33+): Request POST_NOTIFICATIONS permission
     if (Platform.isAndroid) {
-      final status = await Permission.notification.request();
+        final status = await AppPermissions.runGuarded(
+          () => Permission.notification.request(),
+        );
       return status.isGranted;
     }
 

@@ -134,7 +134,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             SizedBox(
-                              height: isSmallScreen ? AppSizes.lg : AppSizes.xl,
+                              height: isSmallScreen ? AppSizes.xl : AppSizes.xl * 2,
                             ),
 
                             // Animated Logo Container
@@ -216,7 +216,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen>
                             ),
 
                             SizedBox(
-                              height: isSmallScreen ? AppSizes.sm : AppSizes.md,
+                              height: isSmallScreen ? AppSizes.md : AppSizes.lg,
                             ),
 
                             // Enhanced Subtitle
@@ -235,7 +235,7 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen>
                               textAlign: TextAlign.center,
                             ),
 
-                            SizedBox(height: AppSizes.xl),
+                            SizedBox(height: AppSizes.xl * 2),
 
                             // Enhanced Input Field with subtle animation
                             AnimatedContainer(

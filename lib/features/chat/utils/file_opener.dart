@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:fylooo/utils/permissions.dart';
 import '../../../../core/constants/app_colors.dart';
 
 class FileOpener {
@@ -36,7 +37,9 @@ class FileOpener {
 
     // Check and request install packages permission
     if (await Permission.requestInstallPackages.isDenied) {
-      final status = await Permission.requestInstallPackages.request();
+      final status = await AppPermissions.runGuarded(
+        () => Permission.requestInstallPackages.request(),
+      );
       if (status.isDenied || status.isPermanentlyDenied) {
         if (context.mounted) {
           _showPermissionRequiredSnackBar(context);

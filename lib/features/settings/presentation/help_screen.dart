@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_strings.dart';
 import 'package:fylooo/shared/widgets/back_button_chip.dart';
 import 'package:fylooo/shared/widgets/primary_app_bar.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -78,7 +79,7 @@ class HelpScreen extends StatelessWidget {
                   _HelpItem(
                     icon: Icons.web,
                     title: 'Web Platform Support',
-                    subtitle: 'Using CPFT in web browsers',
+                    subtitle: 'Using ${AppStrings.appName} in web browsers',
                     onTap: () => _showWebPlatformGuide(context),
                   ),
                   _HelpItem(
@@ -135,6 +136,7 @@ class HelpScreen extends StatelessWidget {
   }
 
   void _showQuickStart(BuildContext context) {
+    final appName = AppStrings.appName;
     _showMarkdownContent(
       context,
       'Quick Start Guide',
@@ -145,7 +147,7 @@ class HelpScreen extends StatelessWidget {
 
 Follow these simple steps to connect your devices:
 
-• Open CPFT on both devices you want to connect
+• Open $appName on both devices you want to connect
 • Ensure both devices are connected to the same WiFi network
 • Grant permissions when prompted (location, storage, camera, etc.)
 • Wait for device discovery - devices will appear on the radar screen
@@ -182,6 +184,7 @@ If devices don't appear:
   }
 
   void _showConnectionGuide(BuildContext context) {
+    final appName = AppStrings.appName;
     _showMarkdownContent(
       context,
       'Connection Troubleshooting',
@@ -212,7 +215,7 @@ Possible causes and solutions:
 When connection fails after device discovery:
 
 • Restart Both Apps
-  - Close CPFT completely on both devices
+  - Close $appName completely on both devices
   - Wait 10 seconds, then reopen
 
 • Network Stability
@@ -248,7 +251,7 @@ File transfer starts but fails:
 • Check router settings and firewall
 
 **Debug Information**
-• Device Info: Model, OS version, CPFT version
+• Device Info: Model, OS version, $appName version
 • Network Type: Home WiFi, office, public hotspot
 • Error Messages: Exact error text shown
 • Steps to Reproduce: Detailed sequence
@@ -270,6 +273,7 @@ Contact Support with this information:
   }
 
   void _showConnectionRefusedGuide(BuildContext context) {
+    final appName = AppStrings.appName;
     _showMarkdownContent(
       context,
       'Connection Refused Fix',
@@ -281,20 +285,20 @@ Contact Support with this information:
 Try this first - it works 90% of the time:
 
 • Restart both devices completely
-• Reopen CPFT app on both devices
+• Reopen $appName app on both devices
 • Try connecting again immediately
 
 **If That Doesn't Work**
 
 **Android-Specific Fixes**
-• Disable Battery Optimization for CPFT in Settings
+• Disable Battery Optimization for $appName in Settings
 • Check Do Not Disturb mode isn't blocking notifications
 • Enable Multicast in Developer Options
 • Grant Precise Location permission
 
 **iOS-Specific Fixes**
 • Disable Low Power Mode in Settings
-• Enable Background App Refresh for CPFT
+• Enable Background App Refresh for $appName
 • Keep app in foreground during connection attempts
 • Check Local Network permissions in Privacy settings
 
@@ -333,6 +337,7 @@ Contact: support@cpft.app
   }
 
   void _showDebugGuide(BuildContext context) {
+    final appName = AppStrings.appName;
     _showMarkdownContent(
       context,
       'Debug Guide',
@@ -362,7 +367,7 @@ Contact: support@cpft.app
 **iOS:**
 • Open Xcode → Devices and Simulators
 • Select your device → View Device Logs
-• Filter by "CPFT" or process name
+• Filter by "$appName" or process name
 
 **Web Browser:**
 • Press F12 to open Developer Tools
@@ -409,7 +414,7 @@ Using Wireshark or similar tools:
 • Packet retransmission settings
 
 **Device Settings**
-• Disable battery optimization for CPFT
+• Disable battery optimization for $appName
 • Prevent device sleep during transfers
 • Enable high-performance mode if available
 • Clear app cache periodically
@@ -428,6 +433,7 @@ Gather this information before contacting:
   }
 
   void _showPlatformIssues(BuildContext context) {
+    final appName = AppStrings.appName;
     _showMarkdownContent(
       context,
       'Platform-Specific Issues',
@@ -445,7 +451,7 @@ Device discovery not working on Android:
   - Enable the setting
 
 • Disable Battery Optimization
-  - Settings → Apps → CPFT → Battery
+  - Settings → Apps → $appName → Battery
   - Set to "Don't optimize" or "Unrestricted"
 
 • Check WiFi Settings
@@ -487,7 +493,7 @@ Issues with file selection/storage:
 • Grant Permission
   - When prompted, tap "Allow" for local network access
   - Check Settings → Privacy & Security → Local Network
-  - Ensure CPFT has local network permission enabled
+  - Ensure $appName has local network permission enabled
 
 • Re-grant Permission
   - Delete and reinstall app to reset permissions
@@ -498,15 +504,15 @@ App being suspended in background:
 
 • Enable Background App Refresh
   - Settings → General → Background App Refresh
-  - Ensure CPFT is enabled
+  - Ensure $appName is enabled
 
 • Disable Low Power Mode
   - Settings → Battery → Low Power Mode
-  - Turn off when using CPFT
+  - Turn off when using $appName
 
 • Keep App Active
   - Avoid switching apps during transfers
-  - Keep CPFT in foreground for best performance
+  - Keep $appName in foreground for best performance
 
 **Hotspot Limitations**
 iOS hotspot discovery restrictions:
@@ -581,6 +587,7 @@ Web platform limitations:
   }
 
   void _showWebPlatformGuide(BuildContext context) {
+    final appName = AppStrings.appName;
     _showMarkdownContent(
       context,
       'Web Platform Support',
@@ -647,19 +654,19 @@ Web platform limitations:
 **Getting Started with Web Version**
 
 **Initial Setup**
-1. Open CPFT in supported web browser
+1. Open $appName in supported web browser
 2. Grant camera permission when prompted for QR scanning
 3. Allow file access permissions for uploads
 4. Use WebRTC mode for browser connections
 
 **Connection Methods**
 1. Mobile App Method:
-   - Open CPFT on mobile device
+  - Open $appName on mobile device
    - Generate WebRTC room link
    - Share link with browser or scan QR code
 
 2. Browser-to-Browser:
-   - Open CPFT in two browser tabs/windows
+  - Open $appName in two browser tabs/windows
    - Use same room ID in both instances
    - Automatic peer discovery
 
@@ -846,17 +853,18 @@ Web platform limitations:
   }
 
   void _launchEmail() async {
+    final appName = AppStrings.appName;
     final Uri emailUri = Uri(
       scheme: 'mailto',
       path: 'support@cpft.app',
       queryParameters: {
-        'subject': 'CPFT Support Request',
+        'subject': '$appName Support Request',
         'body': '''
 Please describe your issue:
 
 Device: [Android/iOS/Web]
 OS Version: [e.g., Android 13, iOS 17]
-CPFT Version: [check in Settings → Version]
+$appName Version: [check in Settings → Version]
 Network Type: [WiFi/Home/Office/Public]
 
 Steps to reproduce:
@@ -878,6 +886,7 @@ Additional details:
   }
 
   void _showFAQs(BuildContext context) {
+    final appName = AppStrings.appName;
     _showMarkdownContent(
       context,
       'Frequently Asked Questions',
@@ -886,17 +895,17 @@ Additional details:
 
 **General Questions**
 
-**What is CPFT?**
-CPFT (Cross-Platform File Transfer) is a modern, peer-to-peer file sharing application that works seamlessly across Android, iOS, and Web platforms. Unlike cloud-based services, CPFT transfers files directly between devices using your local WiFi network for maximum speed and privacy.
+**What is $appName?**
+$appName (Cross-Platform File Transfer) is a modern, peer-to-peer file sharing application that works seamlessly across Android, iOS, and Web platforms. Unlike cloud-based services, $appName transfers files directly between devices using your local WiFi network for maximum speed and privacy.
 
-**Is CPFT free?**
-Yes, completely free! CPFT is open-source and will always remain free to use. No hidden costs, subscriptions, or premium features. All functionality is available to everyone.
+**Is $appName free?**
+Yes, completely free! $appName is open-source and will always remain free to use. No hidden costs, subscriptions, or premium features. All functionality is available to everyone.
 
 **Is my data secure?**
 Absolutely secure. Files are transferred directly between devices using local network connections. No data passes through external servers, cloud storage, or third-party services. Your files remain private and secure.
 
-**How does CPFT work?**
-CPFT uses advanced networking technologies:
+**How does $appName work?**
+$appName uses advanced networking technologies:
 • Device Discovery: Multicast DNS (mDNS) for automatic device detection
 • Direct Connections: Peer-to-peer TCP connections for file transfer
 • WebRTC: Browser-to-device connections for web platform
@@ -913,24 +922,24 @@ Common causes:
 
 **Why does connection get refused?**
 Quick fixes:
-• Restart Apps: Close and reopen CPFT on both devices
+• Restart Apps: Close and reopen $appName on both devices
 • Check Network: Ensure stable WiFi connection
 • Device Names: Use unique, simple device names
-• Battery Settings: Disable battery optimization for CPFT
+• Battery Settings: Disable battery optimization for $appName
 
 **Can I use mobile data?**
-No, WiFi only. CPFT requires local network connectivity for device discovery and file transfer. Mobile data networks don't support the required multicast and peer-to-peer features.
+No, WiFi only. $appName requires local network connectivity for device discovery and file transfer. Mobile data networks don't support the required multicast and peer-to-peer features.
 
 **File Transfer Questions**
 
 **How large files can I transfer?**
-No strict limits! CPFT supports files of any size, limited only by your device storage and network speed. Successfully tested with multi-gigabyte files.
+No strict limits! $appName supports files of any size, limited only by your device storage and network speed. Successfully tested with multi-gigabyte files.
 
 **Can I transfer multiple files?**
-Yes! Select multiple files at once or use the "Save All" feature for batch operations. CPFT handles multiple simultaneous transfers efficiently.
+Yes! Select multiple files at once or use the "Save All" feature for batch operations. $appName handles multiple simultaneous transfers efficiently.
 
 **What file types are supported?**
-All file types! CPFT doesn't restrict file formats. Transfer documents, photos, videos, apps, archives, system files - anything your device can access.
+All file types! $appName doesn't restrict file formats. Transfer documents, photos, videos, apps, archives, system files - anything your device can access.
 
 **How fast are transfers?**
 Transfer speed depends on:

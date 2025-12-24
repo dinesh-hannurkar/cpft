@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_strings.dart';
 import 'package:fylooo/shared/widgets/back_button_chip.dart';
 import 'package:fylooo/shared/widgets/primary_app_bar.dart';
 
@@ -35,229 +36,32 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSection(
-                      'Last Updated: December 15, 2025',
-                      '',
-                      isDate: true,
-                    ),
-                    const SizedBox(height: AppSizes.lg),
-                    _buildSection(
-                      'Introduction',
-                      'CPFT (Cross-Platform File Transfer) is committed to protecting your privacy. This Privacy Policy explains how we handle your information when you use our application.',
+                      'Privacy Policy',
+                      'This Privacy Policy describes how ${AppStrings.appName} collects, uses, and discloses information. Our policy is simple: We prioritize your privacy by collecting virtually nothing.',
                     ),
                     _buildSection(
-                      '1. Information We Collect',
-                      '''CPFT is designed with privacy in mind. We collect minimal information:
-
-**Device Information**
-• Device name (set by you)
-• Operating system type and version
-• App version number
-• Network interface information (for local discovery)
-
-**Technical Data**
-• IP address (local network only, not stored)
-• Connection logs (stored locally only)
-• Error logs (stored locally for debugging)
-• Performance metrics (local only)
-
-**We DO NOT collect:**
-• Personal identification information
-• File contents or metadata
-• Location data beyond network discovery
-• Usage analytics or tracking data
-• Any information from transferred files''',
+                      '1. Information We DO NOT Collect',
+                      '''Due to the nature of our Service: direct, cross-platform file transfer, we operate with a strict policy of Non-Collection.
+No Personal Information: We do not ask for, collect, or store personal identifiable information (PII) such as your name, email address, phone number, or location data. You are not required to create an account to use the Service.
+No File or Content Storage: We do not store, view, or retain any files, content, or data that you transfer using our App. The file transfer occurs directly between your devices (peer-to-peer) and is not saved on our servers.
+No Usage Tracking (Optional): We do not use third-party analytics or tracking tools that monitor your activity within the App. ''',
                     ),
                     _buildSection(
-                      '2. How We Use Information',
-                      '''The limited information we collect is used solely for:
-
-• Enabling device discovery on local networks
-• Establishing peer-to-peer connections
-• Displaying device names in the app interface
-• Debugging connection issues (local logs only)
-• Improving app stability and performance
-
-We do not:
-• Share your information with third parties
-• Use your data for advertising
-• Track your activities
-• Store your data on external servers
-• Analyze your file transfers''',
+                      '2. How We Handle Data',
+                      '''The App requires minimal technical data solely for establishing a connection between two devices to enable the file transfer.
+Connection Data: When initiating a transfer, the App may generate a temporary, anonymous connection ID/code (e.g., a six-digit code) and utilize the network IP addresses of the two devices only for the duration of the transfer session. This temporary session data is not linked to any personal identity and is immediately discarded once the transfer is complete or the session times out.''',
                     ),
                     _buildSection(
-                      '3. File Transfers',
-                      '''CPFT operates on these privacy principles:
-
-**Direct Transfer**
-• All files are transferred directly between devices
-• No intermediate servers or cloud storage
-• No file content inspection or analysis
-• Transfers occur only on local network
-
-**No Storage**
-• We do not store transferred files
-• No backup copies are made on our servers
-• Files exist only on sender and receiver devices
-• Transfer history is local only
-
-**Encryption**
-• Connections use secure protocols
-• Data in transit is protected
-• No man-in-the-middle access possible''',
+                      '3. Data Security',
+                      'While we do not store your content, we are committed to ensuring that the connection mechanism is secure. All transfers are facilitated using industry-standard encryption protocols (like TLS/SSL) to protect the data while it is in transit between your devices.',
                     ),
                     _buildSection(
-                      '4. Permissions',
-                      '''CPFT requires certain permissions to function:
-
-**Android**
-• Storage: Access files for transfer
-• Location: Required for WiFi network discovery
-• Local Network: Device discovery on local network
-• Camera: QR code scanning (optional)
-
-**iOS**
-• Photos: Access media for transfer
-• Local Network: Device discovery
-• Camera: QR code scanning (optional)
-
-**Web**
-• Camera: QR code scanning (optional)
-• File System: Select and download files
-
-All permissions are used solely for stated purposes and never for data collection.''',
-                    ),
-                    _buildSection('5. Data Storage', '''**Local Storage Only**
-• All app data is stored on your device
-• Connection history stored locally
-• Settings saved in device storage
-• No cloud synchronization
-
-**You Control:**
-• All data remains on your device
-• Clear app data to remove all information
-• Uninstall removes all local data
-• No remote data to delete'''),
-                    _buildSection(
-                      '6. Third-Party Services',
-                      '''CPFT uses minimal third-party services:
-
-• No analytics services
-• No advertising networks
-• No social media integration
-• No tracking services
-
-External links (app stores, support) have their own privacy policies.''',
+                      '4. Children\'s Privacy',
+                      'Our Service is not directed to anyone under the age of 13. We do not knowingly collect personal information from children under 13.',
                     ),
                     _buildSection(
-                      '7. Children\'s Privacy',
-                      'CPFT does not knowingly collect information from children under 13. The app does not require age verification as no personal data is collected.',
-                    ),
-                    _buildSection(
-                      '8. Security',
-                      '''We implement security measures:
-
-• Secure connection protocols
-• Local network isolation
-• No external data transmission
-• Regular security updates
-• Open-source code (auditable)
-
-However, no method is 100% secure. Use CPFT on trusted networks.''',
-                    ),
-                    _buildSection(
-                      '9. International Users',
-                      'CPFT operates entirely on local networks. No data crosses international borders through our services. All transfers remain within your local network.',
-                    ),
-                    _buildSection('10. Your Rights', '''You have the right to:
-
-• Access your local data (stored on device)
-• Delete your data (clear app data)
-• Stop using the service at any time
-• Request information about data handling
-• Report privacy concerns
-
-Since all data is local, you have complete control.'''),
-                    _buildSection(
-                      '11. Data Retention',
-                      '''CPFT retains minimal data:
-
-• Connection logs: Until manually cleared
-• Settings: Until app uninstall
-• Device name: Until changed by user
-• Transfer history: Local only, user-controlled
-
-No server-side data retention as we have no servers storing user data.''',
-                    ),
-                    _buildSection(
-                      '12. Open Source',
-                      'CPFT is open-source software. You can review our code to verify privacy claims. The source code is available for inspection and audit.',
-                    ),
-                    _buildSection(
-                      '13. Changes to Privacy Policy',
-                      'We may update this Privacy Policy occasionally. Changes will be posted in the app with the updated date. Continued use after changes constitutes acceptance.',
-                    ),
-                    _buildSection(
-                      '14. California Privacy Rights',
-                      'California residents: We do not sell personal information. We collect minimal data as described above, all stored locally on your device.',
-                    ),
-                    _buildSection(
-                      '15. GDPR Compliance',
-                      'For EU users: We comply with GDPR by design. No personal data is collected or processed on external servers. All data remains under your control on your device.',
-                    ),
-                    _buildSection(
-                      '16. Contact Us',
-                      'For privacy questions or concerns, contact us at:\n\nEmail: support@cpft.app\n\nWe will respond to privacy inquiries within 30 days.',
-                    ),
-                    const SizedBox(height: AppSizes.lg),
-                    Container(
-                      padding: const EdgeInsets.all(AppSizes.md),
-                      decoration: BoxDecoration(
-                        color: AppColors.secondary.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(
-                          AppSizes.cardRadiusSm,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.shield_outlined,
-                                color: AppColors.primary,
-                                size: 24,
-                              ),
-                              const SizedBox(width: AppSizes.sm),
-                              const Expanded(
-                                child: Text(
-                                  'Privacy-First Design',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.darkPrimary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSizes.sm),
-                          const Text(
-                            'CPFT is built with privacy as a core principle. No clouds, no tracking, no external servers. Your files stay between your devices, always.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              height: 1.6,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.lg),
-                    Center(
-                      child: Text(
-                        '© 2025 CPFT. All rights reserved.',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                      ),
+                      '5. Changes to This Privacy Policy',
+                      'We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.',
                     ),
                     const SizedBox(height: AppSizes.lg),
                   ],

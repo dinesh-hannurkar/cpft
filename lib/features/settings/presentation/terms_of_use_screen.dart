@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
+import 'package:fylooo/core/constants/app_strings.dart';
 import 'package:fylooo/shared/widgets/back_button_chip.dart';
 import 'package:fylooo/shared/widgets/primary_app_bar.dart';
 
@@ -35,101 +36,49 @@ class TermsOfUseScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSection(
-                      'Last Updated: December 15, 2025',
-                      '',
-                      isDate: true,
+                      'Terms of Use',
+                      'These Terms of Use ("Terms") govern your use of the ${AppStrings.appName} mobile and desktop applications and related services (collectively, the "Service").',
                     ),
-                    const SizedBox(height: AppSizes.lg),
                     _buildSection(
                       '1. Acceptance of Terms',
-                      'By downloading, installing, or using CPFT (Cross-Platform File Transfer), you agree to be bound by these Terms of Use. If you do not agree to these terms, please do not use the application.',
+                      'By accessing or using the Service, you agree to be bound by these Terms. If you disagree with any part of the terms, you may not access the Service.',
                     ),
                     _buildSection(
-                      '2. Description of Service',
-                      'CPFT is a peer-to-peer file transfer application that allows users to share files directly between devices on the same local network. The service operates without cloud storage or external servers.',
+                      '2. The Service',
+                      'The Service provides a tool for the direct transfer of files between different devices and operating systems. The Service acts only as an intermediary to facilitate this direct connection.',
                     ),
-                    _buildSection('3. User Responsibilities', '''You agree to:
-• Use CPFT only for lawful purposes
-• Not transmit any harmful, illegal, or offensive content
-• Respect intellectual property rights of others
-• Not attempt to breach security or authentication measures
-• Not use the service to distribute malware or viruses
-• Ensure you have proper permissions for all shared files'''),
                     _buildSection(
-                      '4. Privacy and Data',
-                      '''CPFT operates on these principles:
-• All file transfers occur directly between devices
-• No files are stored on external servers
-• No user data is collected or transmitted to third parties
-• Network discovery uses local multicast protocols
-• Connection logs are stored locally only''',
+                      '3. User Responsibilities and Acceptable Use',
+                      'You agree to use the Service only for lawful purposes and in accordance with these Terms. You agree not to:\n'
+                          'Transmit any illegal, harmful, threatening, defamatory, obscene, or otherwise objectionable material.\n'
+                          'Transfer files that you do not have the legal right to share.\n'
+                          'Attempt to interfere with or disrupt the integrity or performance of the Service.\n'
+                          'Use the Service to transmit viruses, malware, or any other destructive or disabling code.',
                     ),
-                    _buildSection('5. Network Usage', '''When using CPFT:
-• You must have permission to use the network
-• File transfers may consume bandwidth
-• Corporate or public networks may have restrictions
-• You are responsible for compliance with network policies
-• Some features may not work on restricted networks'''),
                     _buildSection(
-                      '6. Disclaimer of Warranties',
-                      'CPFT is provided "as is" without warranties of any kind, either express or implied. We do not guarantee that the service will be uninterrupted, secure, or error-free.',
+                      '4. Disclaimer of Stored Data',
+                      'We do not store, retain, or back up any files, content, or data transferred through the Service. All transfers are peer-to-peer and are deleted from our systems (if any temporary intermediary connection data is used) immediately upon successful transfer or connection timeout.\n'
+                          'You are solely responsible for backing up your own data. We shall not be liable for any loss of files, content, or data.',
+                    ),
+                    _buildSection(
+                      '5. Intellectual Property',
+                      'The Service itself (excluding the files you transfer) is and will remain the exclusive property of Omnity Digital Private Limited and its licensors.',
+                    ),
+                    _buildSection(
+                      '6. Termination',
+                      'We may terminate or suspend your access immediately, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.',
                     ),
                     _buildSection(
                       '7. Limitation of Liability',
-                      'To the maximum extent permitted by law, we shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use or inability to use CPFT.',
+                      'In no event shall Omnity Digital Private Limited, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from: (i) your access to or use of or inability to access or use the Service; (ii) any content obtained from the Service; and (iii) unauthorized access, use or alteration of your transmissions or content, especially related to the files you choose to transfer.',
                     ),
                     _buildSection(
-                      '8. File Transfer Responsibility',
-                      '''You acknowledge that:
-• You are responsible for the content of files you transfer
-• We do not monitor or control file transfers
-• We are not liable for any data loss or corruption
-• You should maintain backups of important files
-• File integrity is dependent on network conditions''',
+                      '8. Governing Law',
+                      'These Terms shall be governed and construed in accordance with the laws of INDIA, without regard to its conflict of law provisions.',
                     ),
                     _buildSection(
-                      '9. Third-Party Content',
-                      'CPFT may contain links to third-party websites or services. We are not responsible for the content, privacy policies, or practices of any third-party sites or services.',
-                    ),
-                    _buildSection(
-                      '10. Intellectual Property',
-                      'CPFT and its original content, features, and functionality are owned by the developers and are protected by international copyright, trademark, and other intellectual property laws.',
-                    ),
-                    _buildSection(
-                      '11. Termination',
-                      'We reserve the right to terminate or suspend your access to CPFT at any time, without prior notice, for conduct that we believe violates these Terms of Use or is harmful to other users.',
-                    ),
-                    _buildSection(
-                      '12. Changes to Terms',
-                      'We reserve the right to modify or replace these Terms of Use at any time. Changes will be effective immediately upon posting. Continued use of CPFT after changes constitutes acceptance of the modified terms.',
-                    ),
-                    _buildSection(
-                      '13. Open Source',
-                      'CPFT is open-source software. The source code is available under the specified license terms. Contributors must comply with the license terms and these Terms of Use.',
-                    ),
-                    _buildSection(
-                      '14. Platform-Specific Terms',
-                      '''Additional platform requirements:
-• Android: Minimum Android 8.0 required
-• iOS: Minimum iOS 12.0 required
-• Web: Modern browser with WebRTC support required
-• Permissions must be granted for full functionality
-• Platform limitations may affect certain features''',
-                    ),
-                    _buildSection(
-                      '15. Governing Law',
-                      'These Terms of Use shall be governed by and construed in accordance with applicable laws, without regard to conflict of law provisions.',
-                    ),
-                    _buildSection(
-                      '16. Contact Information',
-                      'For questions about these Terms of Use, please contact us at:\n\nEmail: support@cpft.app',
-                    ),
-                    const SizedBox(height: AppSizes.lg),
-                    Center(
-                      child: Text(
-                        '© 2025 CPFT. All rights reserved.',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                      ),
+                      '9. Changes to Terms',
+                      'We reserve the right, at our sole discretion, to modify or replace these Terms at any time. We will try to provide at least 30 days\' notice before any new terms take effect.',
                     ),
                     const SizedBox(height: AppSizes.lg),
                   ],
@@ -142,7 +91,7 @@ class TermsOfUseScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSection(String title, String content, {bool isDate = false}) {
+  Widget _buildSection(String title, String content) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSizes.md),
       child: Column(
@@ -150,10 +99,10 @@ class TermsOfUseScreen extends StatelessWidget {
         children: [
           Text(
             title,
-            style: TextStyle(
-              fontSize: isDate ? 12 : 16,
-              fontWeight: isDate ? FontWeight.normal : FontWeight.bold,
-              color: isDate ? Colors.grey[600] : AppColors.darkPrimary,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkPrimary,
             ),
           ),
           if (content.isNotEmpty) ...[
