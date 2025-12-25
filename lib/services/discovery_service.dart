@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fylooo/core/logging/app_logger.dart';
 import 'package:fylooo/features/webshare/services/web_server.dart';
@@ -396,7 +397,15 @@ class DiscoveryService {
           'metadata': null,
         };
         try {
-          socket.add(utf8.encode('${jsonEncode(rejectPayload)}\n'));
+          // Send as framed JSON (type=0) to match ConnectionService framing.
+          final jsonBytes = utf8.encode(jsonEncode(rejectPayload));
+          final payloadLen = 1 + jsonBytes.length; // type + json
+          final header = ByteData(4)..setInt32(0, payloadLen, Endian.big);
+          final frame = BytesBuilder(copy: false)
+            ..add(header.buffer.asUint8List())
+            ..add([0])
+            ..add(jsonBytes);
+          socket.add(frame.takeBytes());
           await socket.flush();
         } catch (_) {}
         // Close socket afterwards

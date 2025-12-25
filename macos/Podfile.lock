@@ -1467,7 +1467,7 @@ SPEC CHECKSUMS:
   FirebaseFirestoreInternal: df9ab608a59a4e8eefd0796ed7652f3c1a88473a
   FirebaseSharedSwift: e17c654ef1f1a616b0b33054e663ad1035c8fd40
   flutter_local_notifications: 4ccab5b7a22835214a6672e3f9c5e8ae207dab36
-  flutter_soloud: 401bea07fc43636ab5c6777f7adf691403d0ea48
+  flutter_soloud: 1b9bde781de22ebd2ae8b2c213ec84ab3b531f16
   flutter_webrtc: f3000fcd54abc3fa966c77ecf7e43ab701793c64
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1

@@ -1575,7 +1575,7 @@ SPEC CHECKSUMS:
   flutter_file_dialog: 4c014a45b105709a27391e266c277d7e588e9299
   flutter_foreground_task: 21ef182ab0a29a3005cc72cd70e5f45cb7f7f817
   flutter_local_notifications: ff50f8405aaa0ccdc7dcfb9022ca192e8ad9688f
-  flutter_soloud: 12a37f5fb426c94671d762cbb059bbeb1b46ad97
+  flutter_soloud: 78b2184802f2183a6799c6c6fcbc8e99edf4cf9a
   flutter_webrtc: 2f8c283dc8d16b988cdf8b0a7248b0717829bd78
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleMLKit: eff9e23ec1d90ea4157a1ee2e32a4f610c5b3318
