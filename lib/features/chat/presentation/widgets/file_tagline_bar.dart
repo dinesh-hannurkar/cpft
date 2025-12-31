@@ -8,6 +8,8 @@ class FileTaglineBar extends StatelessWidget {
   final List<IconData> fileIcons;
   final int fileIconIndex;
   final bool slideFromLeft;
+  final bool isLoading;
+
   const FileTaglineBar({
     super.key,
     required this.onTapMain,
@@ -16,6 +18,7 @@ class FileTaglineBar extends StatelessWidget {
     required this.fileIcons,
     required this.fileIconIndex,
     required this.slideFromLeft,
+    this.isLoading = false,
   });
 
   @override
@@ -24,7 +27,7 @@ class FileTaglineBar extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         InkWell(
-          onTap: onTapMain,
+          onTap: isLoading ? null : onTapMain,
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 62, vertical: 14),
@@ -45,7 +48,9 @@ class FileTaglineBar extends StatelessWidget {
                 ).createShader(Rect.fromLTWH(0, 0, constraints.maxWidth, 20)),
                 blendMode: BlendMode.srcIn,
                 child: Text(
-                  'Any file, any format—share it instantly.',
+                  isLoading
+                      ? 'Preparing file for transfer...'
+                      : 'Any file, any format—share it instantly.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
@@ -60,7 +65,7 @@ class FileTaglineBar extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               customBorder: const CircleBorder(),
-              onTap: onTapFab,
+              onTap: isLoading ? null : onTapFab,
               child: Container(
                 width: 64,
                 height: 64,
@@ -86,8 +91,17 @@ class FileTaglineBar extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Center(
-                    child: AnimatedBuilder(
-                      animation: pulseController,
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                            ),
+                          )
+                        : AnimatedBuilder(
+                            animation: pulseController,
                       builder: (context, child) {
                         final scale = Tween<double>(begin: 0.96, end: 1.06)
                             .animate(CurvedAnimation(parent: pulseController, curve: Curves.easeInOut))

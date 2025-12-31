@@ -37,6 +37,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
   );
   bool _completed = false;
   Timer? _timeoutTimer;
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -49,14 +50,18 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     
     // Auto-close after 1 minute if no response
     _timeoutTimer = Timer(const Duration(minutes: 1), () {
-      if (mounted && !_completed && _status == ConnectionStatus.connecting) {
+      if (!_disposed && mounted && !_completed && _status == ConnectionStatus.connecting) {
         debugPrint('[ConnectionFlowDialog] Connection timeout after 1 minute');
-        setState(() {
-          _status = ConnectionStatus.failed;
-          _error = 'Connection timeout - no response';
-        });
+        if (!_disposed && mounted) {
+          setState(() {
+            _status = ConnectionStatus.failed;
+            _error = 'Connection timeout - no response';
+          });
+        }
         _service.disconnect();
-        Navigator.of(context).pop();
+        if (!_disposed && mounted) {
+          Navigator.of(context).pop();
+        }
       }
     });
   }
@@ -69,12 +74,14 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
       debugPrint(
         '[ConnectionFlowDialog] Already $currentStatus, skipping connect()',
       );
-      setState(() {
-        _status = currentStatus!; // safe: we checked it's not null above
-      });
+      if (!_disposed) {
+        setState(() {
+          _status = currentStatus!; // safe: we checked it's not null above
+        });
+      }
       if (currentStatus == ConnectionStatus.connected) {
         // Already connected, close dialog immediately
-        if (mounted && !_completed) {
+        if (!_disposed && mounted && !_completed) {
           _completed = true;
           Navigator.of(context).pop('connected');
         }
@@ -89,23 +96,28 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
         widget.p2pPort,
       );
       // After TCP connect, we wait for handshake to flip to connected.
-      setState(() {
-        _status =
-            ConnectionStatus.connecting; // remains connecting until handshake
-      });
+      if (!_disposed) {
+        setState(() {
+          _status =
+              ConnectionStatus.connecting; // remains connecting until handshake
+        });
+      }
     } catch (e) {
-      setState(() {
-        _status = ConnectionStatus.failed;
-        _error = e.toString();
-      });
+      if (!_disposed) {
+        setState(() {
+          _status = ConnectionStatus.failed;
+          _error = e.toString();
+        });
+      }
     }
   }
 
   void _onStatus(ConnectionInfo info) {
-    if (!mounted) return;
+    if (_disposed || !mounted) return;
     debugPrint(
       '[ConnectionFlowDialog] Status update for ${widget.peerDeviceName}: ${info.status}',
     );
+    if (_disposed || !mounted) return; // Double check
     setState(() {
       _status = info.status;
       _error = info.error;
@@ -118,47 +130,53 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
         '[ConnectionFlowDialog] Connection established to ${widget.peerDeviceName}, closing dialog',
       );
       // Pop with a result the caller can use to navigate
-      Navigator.of(context).pop('connected');
+      if (!_disposed && mounted) {
+        Navigator.of(context).pop('connected');
+      }
     } else if ((info.status == ConnectionStatus.failed ||
             info.status == ConnectionStatus.disconnected) &&
         !_completed) {
+      _completed = true;
       SoundService().playConnectionFailed();
       // Provide quick feedback to the initiator if rejected/disconnected
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      final isRejected = (info.error ?? '').toLowerCase().contains('rejected');
-      messenger?.showSnackBar(
-        SnackBar(
-          content: Text(
-            isRejected
-                ? 'Request rejected by ${widget.peerDeviceName}'
-                : (info.status == ConnectionStatus.failed
-                      ? 'Failed to connect to ${widget.peerDeviceName}'
-                      : 'Disconnected from ${widget.peerDeviceName}'),
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.white),
+      if (!_disposed && mounted) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        final isRejected = (info.error ?? '').toLowerCase().contains('rejected');
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text(
+              isRejected
+                  ? 'Request rejected by ${widget.peerDeviceName}'
+                  : (info.status == ConnectionStatus.failed
+                        ? 'Failed to connect to ${widget.peerDeviceName}'
+                        : 'Disconnected from ${widget.peerDeviceName}'),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.white),
+            ),
+            duration: const Duration(seconds: 2),
           ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      // If explicitly rejected, avoid full discovery restart (too noisy); just send a fresh announcement
-      if (isRejected) {
-        widget.discoveryService.announce();
-      } else {
-        // For genuine failures/disconnects, perform a lighter refresh first
-        widget.discoveryService.announce();
-        // Fallback: schedule full restart if device list stays stale
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) {
-            widget.discoveryService.checkDiscoveryHealth();
-          }
-        });
+        );
+        // If explicitly rejected, avoid full discovery restart (too noisy); just send a fresh announcement
+        if (isRejected) {
+          widget.discoveryService.announce();
+        } else {
+          // For genuine failures/disconnects, perform a lighter refresh first
+          widget.discoveryService.announce();
+          // Fallback: schedule full restart if device list stays stale
+          Future.delayed(const Duration(seconds: 3), () {
+            if (!_disposed) {
+              widget.discoveryService.checkDiscoveryHealth();
+            }
+          });
+        }
       }
     }
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _timeoutTimer?.cancel();
     _service.removeStatusListener(_onStatus);
     // If not connected yet, cancel the attempt

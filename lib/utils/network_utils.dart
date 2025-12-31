@@ -4,8 +4,29 @@ import 'package:fylooo/core/logging/app_logger.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 class NetworkUtils {
+  static const _wifiChannel = MethodChannel('com.omnity.fylooo/wifi');
+  
+  static Future<Map<String, dynamic>?> getWifiFrequency() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return null;
+    }
+    try {
+      final result = await _wifiChannel.invokeMethod('getWifiFrequency');
+      if (result is Map) {
+        final freq = result['frequency'] as int?;
+        final band = result['band'] as String?;
+        AppLogger.d('WiFi Frequency: $freq MHz ($band)', tag: 'Network');
+        return {'frequency': freq, 'band': band};
+      }
+    } catch (e) {
+      AppLogger.w('Error getting WiFi frequency: $e', tag: 'Network', error: e);
+    }
+    return null;
+  }
+  
   static bool _isIosHotspotIp(String ip) {
     try {
       final parts = ip.split('.');

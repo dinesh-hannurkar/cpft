@@ -24,11 +24,13 @@ import 'package:fylooo/features/chat/presentation/widgets/received_files_sheet.d
 import 'package:fylooo/features/chat/presentation/widgets/chat_top_bar.dart';
 import 'package:fylooo/features/chat/presentation/widgets/connecting_banner.dart';
 import 'package:fylooo/features/chat/presentation/widgets/error_banner.dart';
+import 'package:fylooo/features/chat/presentation/widgets/wifi_direct_banner.dart';
 import 'package:fylooo/features/chat/presentation/widgets/file_tagline_bar.dart';
 import 'package:fylooo/features/chat/presentation/widgets/message_input_bar.dart';
 import 'package:fylooo/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
 import 'package:fylooo/shared/widgets/app_bottom_sheet.dart';
 import 'package:fylooo/shared/widgets/temporary_files_warning_banner.dart';
+import 'package:fylooo/shared/widgets/transfer_stats_banner.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:fylooo/shared/showcase/showcase_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -92,10 +94,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isConnecting = false;
   bool _didStartShowcase = false;
   bool _didShowFileReceivedShowcase = false;
+  bool _isPickingFile = false;
 
   bool _dragging = false; // For drag and drop visual feedback
   bool _wasKeyboardOpen = false; // Track previous keyboard state
   bool _isProgrammaticScroll = false; // Track programmatic scrolling
+
+  // Transfer statistics tracking
+  final Map<String, DateTime> _transferStartTimes = {};
+  DateTime? _lastTransferEndTime;
+  int? _lastTransferBytes;
+  Duration? _lastTransferDuration;
 
   // Peer‑to‑peer port constant
   static const int p2pPort = 53318;
@@ -110,7 +119,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
 
     // Preload existing messages (history)
-    _messages.addAll(_connectionService.messageHistory);
+    _messages.addAll(_connectionService.getMessageHistory());
 
     _connectionService.addStatusListener(_onStatusChanged);
     _connectionService.addMessageListener(_onMessageReceived);
@@ -302,6 +311,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             );
             map[tId]!.updateProgress(bytes.toDouble());
             map[tId]!.isPending = false; // Clear pending state on progress
+            
+            // Track transfer start time
+            if (isNewTransfer) {
+              _transferStartTimes[tId] = DateTime.now();
+            }
           });
 
           // Play sound when transfer starts (first progress update)
@@ -330,6 +344,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final isOutgoing = message.metadata?['outgoing'] as bool? ?? false;
         final wasFirstReceivedFile = _receivedFiles.isEmpty && !isOutgoing;
         final wasSecondReceivedFile = _receivedFiles.length == 1 && !isOutgoing;
+
+        // Calculate transfer statistics
+        if (tId != null && _transferStartTimes.containsKey(tId)) {
+          final endTime = DateTime.now();
+          final startTime = _transferStartTimes[tId]!;
+          _lastTransferDuration = endTime.difference(startTime);
+          _lastTransferEndTime = endTime;
+          final size = message.metadata?['size'] as int?;
+          if (size != null) {
+            _lastTransferBytes = size;
+          }
+          _transferStartTimes.remove(tId);
+        }
 
         // Play transfer complete sound
         SoundService().playTransferComplete();
@@ -570,6 +597,32 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         });
       }
     });
+  }
+
+  Future<void> _pickAndSendFile() async {
+    if (_isPickingFile) return;
+    setState(() => _isPickingFile = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        withReadStream: true,
+        allowMultiple: true,
+      );
+
+      // Hide loader immediately after picking is done
+      if (mounted) {
+        setState(() => _isPickingFile = false);
+      }
+
+      if (result != null && result.files.isNotEmpty) {
+        // Fire and forget (don't await transfer completion)
+        _connectionService.sendFiles(result.files);
+      }
+    } catch (e) {
+      debugPrint('Error picking files: $e');
+      if (mounted) {
+        setState(() => _isPickingFile = false);
+      }
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -1120,7 +1173,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     error: _connectionInfo?.error,
                     onRetry: _connectToDevice,
                   ),
+                WiFiDirectBanner(
+                  statusNotifier: _connectionService.wifiDirectStatusNotifier,
+                  canConnect: _connectionService.canConnectWifiDirect,
+                  onConnect: () async {
+                    await _connectionService.connectWifiDirect();
+                    if (mounted) {
+                      setState(() {});
+                    }
+                  },
+                ),
                 const TemporaryFilesWarningBanner(),
+                if (_lastTransferBytes != null && 
+                    _lastTransferDuration != null)
+                  TransferStatsBanner(
+                    totalBytes: _lastTransferBytes!,
+                    duration: _lastTransferDuration!,
+                  ),
                 Expanded(
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
@@ -1273,12 +1342,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                           tooltipBorderRadius: BorderRadius.circular(12),
                           targetBorderRadius: BorderRadius.circular(12),
                           child: FileTaglineBar(
-                            onTapMain: () => _connectionService.pickAndSendFile(),
-                            onTapFab: () => _connectionService.pickAndSendFile(),
+                            onTapMain: _pickAndSendFile,
+                            onTapFab: _pickAndSendFile,
                             pulseController: _fileIconPulse!,
                             fileIcons: fileIcons,
                             fileIconIndex: _fileIconIndex,
                             slideFromLeft: _slideFromLeft,
+                            isLoading: _isPickingFile,
                           ),
                         )
                       : const SizedBox.shrink(key: ValueKey('hidden')),

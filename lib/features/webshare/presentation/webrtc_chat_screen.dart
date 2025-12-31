@@ -76,6 +76,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   final FocusNode _inputFocus = FocusNode();
   final List<ChatMessage> _messages = [];
   bool _isConnected = true;
+  bool _isPickingFile = false;
   int _lastKnownFileCount = 0;
   late VoidCallback _connectionListener;
 
@@ -821,79 +822,15 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
   }
 
   Future<void> _pickAndSendFile() async {
+    if (_isPickingFile) return;
+    setState(() => _isPickingFile = true);
+
+    FilePickerResult? result;
     try {
-      final result = await FilePicker.platform.pickFiles(
+      result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         withData: kIsWeb,
       );
-
-      if (result != null && result.files.isNotEmpty) {
-        for (final file in result.files) {
-          final hasData = kIsWeb
-              ? file.bytes != null
-              : (file.path != null || file.bytes != null);
-
-          if (hasData) {
-            _addFileMessage(file.name, file.size, true);
-            setState(() {
-              final transferId = 'outgoing_${file.name}';
-              _outgoingProgress.putIfAbsent(
-                transferId,
-                () => TransferProgress(
-                  name: file.name,
-                  total: 0,
-                  mime: MimeUtils.guessMime(file.name.split('.').last),
-                ),
-              );
-              _outgoingProgress[transferId]!.updateProgress(0);
-            });
-
-            try {
-              if (kIsWeb) {
-                final bytes = file.bytes;
-                if (bytes == null) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Could not read file bytes in browser',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    );
-                  }
-                  continue;
-                }
-                await widget.webrtcService.sendFileBytes(file.name, bytes);
-              } else {
-                if (file.path != null) {
-                  await widget.webrtcService.sendFile(file.path!);
-                } else if (file.bytes != null) {
-                  await widget.webrtcService.sendFileBytes(
-                    file.name,
-                    file.bytes!,
-                  );
-                } else {
-                  throw Exception('No file path or bytes available');
-                }
-              }
-            } catch (sendError) {
-              print('WebRTCChatScreen: Error sending file ${file.name}: $sendError');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Failed to send ${file.name}: $sendError',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            }
-          }
-        }
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -904,6 +841,78 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
             ),
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingFile = false);
+      }
+    }
+
+    if (result != null && result.files.isNotEmpty) {
+      for (final file in result.files) {
+        final hasData = kIsWeb
+            ? file.bytes != null
+            : (file.path != null || file.bytes != null);
+
+        if (hasData) {
+          _addFileMessage(file.name, file.size, true);
+          setState(() {
+            final transferId = 'outgoing_${file.name}';
+            _outgoingProgress.putIfAbsent(
+              transferId,
+              () => TransferProgress(
+                name: file.name,
+                total: 0,
+                mime: MimeUtils.guessMime(file.name.split('.').last),
+              ),
+            );
+            _outgoingProgress[transferId]!.updateProgress(0);
+          });
+
+          try {
+            if (kIsWeb) {
+              final bytes = file.bytes;
+              if (bytes == null) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Could not read file bytes in browser',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  );
+                }
+                continue;
+              }
+              await widget.webrtcService.sendFileBytes(file.name, bytes);
+            } else {
+              if (file.path != null) {
+                await widget.webrtcService.sendFile(file.path!);
+              } else if (file.bytes != null) {
+                await widget.webrtcService.sendFileBytes(
+                  file.name,
+                  file.bytes!,
+                );
+              } else {
+                throw Exception('No file path or bytes available');
+              }
+            }
+          } catch (sendError) {
+            print('WebRTCChatScreen: Error sending file ${file.name}: $sendError');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Failed to send ${file.name}: $sendError',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        }
       }
     }
   }
@@ -1522,6 +1531,7 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
                         fileIcons: _fileIcons,
                         fileIconIndex: _fileIconIndex,
                         slideFromLeft: _slideFromLeft,
+                        isLoading: _isPickingFile,
                       ),
                     ),
                   if (_sharedFiles.isNotEmpty)

@@ -30,8 +30,24 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 DiscoveryService? globalDiscoveryService;
 String? globalDeviceName;
 
+// Build-time toggle (no UI):
+// `flutter run --dart-define=CPFT_USE_NATIVE_RECEIVER=false`
+// Defaults to true.
+const bool _kUseNativeReceiver = bool.fromEnvironment(
+  'CPFT_USE_NATIVE_RECEIVER',
+  defaultValue: false,
+);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Programmatic test switch for receiver I/O path.
+  ConnectionService.useNativeReceiver = _kUseNativeReceiver;
+  if (kDebugMode) {
+    debugPrint(
+      '[Main] CPFT_USE_NATIVE_RECEIVER=${ConnectionService.useNativeReceiver}',
+    );
+  }
 
   // Enable path-based routing on web (instead of hash-based) //uncomment when deploying on web
   // if (kIsWeb) {
@@ -55,6 +71,11 @@ void main() async {
     debugPrint('[Main] Startup cleanup error: $e');
   });
 
+  // Clean temp directory at startup to remove transient files from previous runs
+  ConnectionService.cleanupTempFiles().catchError((e) {
+    debugPrint('[Main] Temp cleanup error: $e');
+  });
+
   runApp(const MainApp());
 }
 
@@ -67,7 +88,7 @@ class MainApp extends StatelessWidget {
     // On web, skip ShowCaseWidget entirely to avoid layout issues
     if (kIsWeb) {
       return MaterialApp(
-        debugShowCheckedModeBanner: true,
+        debugShowCheckedModeBanner: false,
         title: 'Fylooo',
         theme: AppTheme.lightTheme,
         navigatorKey: navigatorKey,
@@ -175,6 +196,7 @@ class MainApp extends StatelessWidget {
     // On mobile/desktop, use ShowCaseWidget
     return ShowCaseWidget(
       builder: (context) => MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'Fylooo',
         theme: AppTheme.lightTheme,
         navigatorKey: navigatorKey,
@@ -342,7 +364,14 @@ class _PermissionWrapperState extends State<PermissionWrapper>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // Skip permission re-checking since location permissions are no longer required
+    // When app is resumed (re-opened), clear temp files to remove leftover
+    // transient files from previous runs.
+    if (state == AppLifecycleState.resumed) {
+      // Use a small threshold to avoid removing very recent files still in use.
+      ConnectionService.cleanupTempFiles(olderThanSeconds: 5).catchError((e) {
+        debugPrint('[Main] Temp cleanup (on resume) failed: $e');
+      });
+    }
   }
 
   Future<void> _initialize() async {

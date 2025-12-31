@@ -37,10 +37,22 @@ class LocalHotspotService {
     }
     try {
       final result = await platform.invokeMethod('stopLocalOnlyHotspot');
-      return result['success'] ?? false;
+      final success = (result is Map) ? (result['success'] ?? false) : false;
+      if (success == true) return true;
+
+      // If native reports failure but hotspot is already off, treat as success.
+      final stillRunning = await isHotspotRunning();
+      return !stillRunning;
     } on PlatformException catch (e) {
       print("Error: ${e.message}");
-      return false;
+
+      // If the call failed but hotspot is already off, treat as success.
+      try {
+        final stillRunning = await isHotspotRunning();
+        return !stillRunning;
+      } catch (_) {
+        return false;
+      }
     }
   }
 

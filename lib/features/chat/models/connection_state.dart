@@ -6,11 +6,20 @@ enum ConnectionStatus {
   failed,
 }
 
+/// WiFi Direct connection status
+enum WifiDirectStatus {
+  disconnected,
+  connecting,
+  connected,
+  failed,
+}
+
 /// Connection information model
 class ConnectionInfo {
   final String deviceName;
   final String ipAddress;
   final int port;
+  final int? dataPort;
   final ConnectionStatus status;
   final DateTime? connectedAt;
   final String? error;
@@ -19,6 +28,7 @@ class ConnectionInfo {
     required this.deviceName,
     required this.ipAddress,
     required this.port,
+    this.dataPort,
     required this.status,
     this.connectedAt,
     this.error,
@@ -28,6 +38,7 @@ class ConnectionInfo {
     String? deviceName,
     String? ipAddress,
     int? port,
+    int? dataPort,
     ConnectionStatus? status,
     DateTime? connectedAt,
     String? error,
@@ -36,6 +47,7 @@ class ConnectionInfo {
       deviceName: deviceName ?? this.deviceName,
       ipAddress: ipAddress ?? this.ipAddress,
       port: port ?? this.port,
+      dataPort: dataPort ?? this.dataPort,
       status: status ?? this.status,
       connectedAt: connectedAt ?? this.connectedAt,
       error: error ?? this.error,

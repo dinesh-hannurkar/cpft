@@ -13,6 +13,7 @@ import androidx.annotation.RequiresApi
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
 
@@ -22,151 +23,191 @@ class MainActivity : FlutterActivity() {
     private val MDNS_CHANNEL = "com.omnity.fylooo/mdns"
     private val HOSTNAME_CHANNEL = "com.omnity.fylooo/hostname"
     private val WIFI_CHANNEL = "com.omnity.fylooo/wifi"
+    private val WIFI_DIRECT_CHANNEL = "com.omnity.fylooo/wifi_direct"
     private val HOTSPOT_CHANNEL = "com.omnity.fylooo/hotspot"
+    private val NATIVE_SENDER_CHANNEL = "com.omnity.fylooo/native_sender"
+    private val NATIVE_RECEIVER_CHANNEL = "com.omnity.fylooo/native_receiver"
+    private val NATIVE_RECEIVER_PROGRESS_CHANNEL = "com.omnity.fylooo/native_receiver_progress"
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var nsdManager: NsdManager? = null
     private lateinit var wifiManager: WifiManager
     private var hotspotReservation: WifiManager.LocalOnlyHotspotReservation? = null
+    private var nativeDataReceiver: NativeDataReceiver? = null
+    private var nativeReceiverProgressChannel: MethodChannel? = null
+    internal val mainHandler = Handler(Looper.getMainLooper())
+    private var nativeReceiverMethodChannel: MethodChannel? = null
+    private var wifiDirectManager: WiFiDirectManager? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        android.util.Log.d("MainActivity", "configureFlutterEngine called")
         super.configureFlutterEngine(flutterEngine)
         
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         
-        // Multicast lock channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        // Native receiver method channel for file registration
+        nativeReceiverMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NATIVE_RECEIVER_CHANNEL + "_method")
+        nativeReceiverMethodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
-                "acquireMulticastLock" -> {
+                "startReceiver" -> {
                     try {
-                        acquireMulticastLock()
+                        if (nativeDataReceiver == null) {
+                            nativeDataReceiver = NativeDataReceiver(applicationContext, this, nativeReceiverMethodChannel!!)
+                        }
+                        nativeDataReceiver?.start()
+                        android.util.Log.d("MainActivity", "Native receiver started on demand")
                         result.success(true)
                     } catch (e: Exception) {
-                        result.error("MULTICAST_LOCK_ERROR", e.message, null)
+                        android.util.Log.e("MainActivity", "Failed to start native receiver: ${e.message}")
+                        result.error("START_RECEIVER_ERROR", e.message, null)
                     }
                 }
-                "releaseMulticastLock" -> {
-                    try {
-                        releaseMulticastLock()
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("MULTICAST_LOCK_ERROR", e.message, null)
-                    }
-                }
-                else -> result.notImplemented()
-            }
-        }
+                "registerIncoming" -> {
+                    val transferId = call.argument<String>("transferId")
+                    val path = call.argument<String>("path")
 
-        // Settings channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SETTINGS_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "openLocationSettings" -> {
-                    try {
-                        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        startActivity(intent)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("SETTINGS_ERROR", e.message, null)
-                    }
-                }
-                else -> result.notImplemented()
-            }
-        }
-
-        // mDNS hostname resolution channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MDNS_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "resolveHostname" -> {
-                    val serviceName = call.argument<String>("serviceName")
-                    val serviceType = call.argument<String>("serviceType") ?: "_http._tcp"
-                    
-                    if (serviceName == null) {
-                        result.error("INVALID_ARGS", "serviceName is required", null)
+                    if (transferId == null || path == null) {
+                        result.error("INVALID_ARGS", "transferId and path are required", null)
                         return@setMethodCallHandler
                     }
-                    
+
                     try {
-                        resolveServiceHostname(serviceName, serviceType, result)
+                        android.util.Log.d("MainActivity", "registerIncoming called: $transferId -> $path")
+                        // Receiver must already be started - don't create new instance
+                        if (nativeDataReceiver == null) {
+                            android.util.Log.e("MainActivity", "Native receiver not started yet")
+                            result.error("RECEIVER_NOT_STARTED", "Call startReceiver first", null)
+                            return@setMethodCallHandler
+                        }
+                        nativeDataReceiver?.registerIncomingFile(transferId, path)
+                        result.success(true)
                     } catch (e: Exception) {
-                        result.error("RESOLVE_ERROR", e.message, null)
+                        result.error("REGISTER_ERROR", e.message, null)
                     }
                 }
                 else -> result.notImplemented()
             }
         }
 
-        // Hostname channel - get actual Android .local hostname
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HOSTNAME_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "getActualHostname" -> {
-                    try {
-                        val hostname = getAndroidHostname()
-                        result.success(hostname)
-                    } catch (e: Exception) {
-                        result.error("HOSTNAME_ERROR", e.message, null)
-                    }
-                }
-                else -> result.notImplemented()
-            }
-        }
-
-        // WiFi management channel
+        // Native receiver progress channel
+        nativeReceiverProgressChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NATIVE_RECEIVER_PROGRESS_CHANNEL)
+        
+        // WiFi info channel for frequency detection
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIFI_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                "getWifiFrequency" -> {
+                    try {
+                        val wifiInfo = wifiManager.connectionInfo
+                        if (wifiInfo != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            val frequency = wifiInfo.frequency // in MHz
+                            val band = when {
+                                frequency in 2400..2500 -> "2.4GHz"
+                                frequency in 5000..5900 -> "5GHz"
+                                frequency in 5925..7125 -> "6GHz" // WiFi 6E
+                                else -> "Unknown"
+                            }
+                            result.success(mapOf(
+                                "frequency" to frequency,
+                                "band" to band
+                            ))
+                        } else {
+                            result.success(mapOf(
+                                "frequency" to 0,
+                                "band" to "Unknown"
+                            ))
+                        }
+                    } catch (e: Exception) {
+                        result.error("WIFI_ERROR", e.message, null)
+                    }
+                }
                 "connectToWifi" -> {
                     val ssid = call.argument<String>("ssid")
                     val password = call.argument<String>("password")
                     val security = call.argument<String>("security") ?: "WPA"
-
+                    
                     if (ssid == null) {
-                        result.error("INVALID_ARGS", "ssid is required", null)
+                        result.error("INVALID_ARGS", "SSID is required", null)
                         return@setMethodCallHandler
                     }
-
-                    try {
-                        connectToWifi(ssid, password, security, result)
-                    } catch (e: Exception) {
-                        result.error("WIFI_CONNECT_ERROR", e.message, null)
-                    }
+                    
+                    connectToWifi(ssid, password, security, result)
                 }
                 "disconnectWifi" -> {
-                    try {
-                        disconnectWifi(result)
-                    } catch (e: Exception) {
-                        result.error("WIFI_DISCONNECT_ERROR", e.message, null)
-                    }
-                }
-                "getCurrentWifi" -> {
-                    try {
-                        val currentSsid = getCurrentWifiSsid()
-                        result.success(currentSsid)
-                    } catch (e: Exception) {
-                        result.error("WIFI_INFO_ERROR", e.message, null)
-                    }
+                    disconnectWifi(result)
                 }
                 "openWifiSettings" -> {
                     try {
                         val intent = Intent(Settings.ACTION_WIFI_SETTINGS)
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         result.success(true)
                     } catch (e: Exception) {
-                        result.error("WIFI_SETTINGS_ERROR", e.message, null)
+                        result.error("OPEN_SETTINGS_ERROR", "Failed to open WiFi settings: ${e.message}", null)
                     }
                 }
                 else -> result.notImplemented()
             }
         }
-
-        // Hotspot management channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HOTSPOT_CHANNEL).setMethodCallHandler { call, result ->
+        
+        // WiFi Direct channel for P2P high-speed transfers
+        val wifiDirectChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIFI_DIRECT_CHANNEL)
+        wifiDirectManager = WiFiDirectManager(applicationContext, wifiDirectChannel)
+        
+        wifiDirectChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isWifiDirectSupported" -> {
+                    result.success(wifiDirectManager?.initialize() ?: false)
+                }
+                "getThisDevice" -> {
+                    try {
+                        result.success(wifiDirectManager?.getThisDeviceInfo())
+                    } catch (e: Exception) {
+                        result.error("WIFI_DIRECT_ERROR", e.message, null)
+                    }
+                }
+                "startDiscovery" -> {
+                    val success = wifiDirectManager?.startDiscovery() ?: false
+                    result.success(success)
+                }
+                "stopDiscovery" -> {
+                    wifiDirectManager?.stopDiscovery()
+                    result.success(true)
+                }
+                "connect" -> {
+                    val peerId = call.argument<String>("peerId")
+                    if (peerId == null) {
+                        result.error("INVALID_ARGS", "peerId required", null)
+                        return@setMethodCallHandler
+                    }
+                    wifiDirectManager?.connect(peerId) { success, ip, port ->
+                        if (success && ip != null && port != null) {
+                            result.success(mapOf(
+                                "peerId" to peerId,
+                                "ipAddress" to ip,
+                                "port" to port
+                            ))
+                        } else {
+                            result.error("CONNECT_FAILED", "Connection failed", null)
+                        }
+                    }
+                }
+                "disconnect" -> {
+                    wifiDirectManager?.disconnect()
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        
+        // Hotspot channel for local-only hotspot functionality
+        val hotspotChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HOTSPOT_CHANNEL)
+        hotspotChannel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "startLocalOnlyHotspot" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startLocalOnlyHotspot(result)
                     } else {
-                        result.error("UNSUPPORTED", "Local-only hotspot requires Android O+", null)
+                        result.error("UNSUPPORTED", "Local-only hotspot requires Android 8.0+", null)
                     }
                 }
                 "stopLocalOnlyHotspot" -> {
@@ -176,8 +217,7 @@ class MainActivity : FlutterActivity() {
                     getHotspotDetails(result)
                 }
                 "isHotspotRunning" -> {
-                    val isRunning = hotspotReservation != null
-                    result.success(isRunning)
+                    result.success(hotspotReservation != null)
                 }
                 else -> result.notImplemented()
             }
@@ -666,8 +706,451 @@ class MainActivity : FlutterActivity() {
         return "WPA2"
     }
 
-    override fun onDestroy() {
-        releaseMulticastLock()
-        super.onDestroy()
+    // ════════════════════════════════════════════════════════════════
+    // Native File Sender
+    // ════════════════════════════════════════════════════════════════
+    private fun sendFile(ip: String, port: Int, filePath: String, transferId: String, chunkSize: Int, result: MethodChannel.Result) {
+        Thread {
+            try {
+                val socket = java.net.Socket(ip, port)
+                val output = java.io.DataOutputStream(java.io.BufferedOutputStream(socket.getOutputStream()))
+                val file = java.io.File(filePath)
+                val fileChannel = java.io.FileInputStream(file).channel
+                val fileSize = file.length()
+                var bytesSent = 0L
+                var index = 0
+
+                // Prepare transferId bytes
+                val tidBytes = transferId.toByteArray(Charsets.UTF_8)
+                val tidLen = tidBytes.size.toByte()
+
+                while (bytesSent < fileSize) {
+                    val remaining = fileSize - bytesSent
+                    val thisChunkSize = if (remaining > chunkSize) chunkSize else remaining.toInt()
+                    val buffer = java.nio.ByteBuffer.allocate(thisChunkSize)
+                    val read = fileChannel.read(buffer)
+                    if (read == -1) break
+                    buffer.flip()
+                    val chunkData = ByteArray(read)
+                    buffer.get(chunkData)
+
+                    // Frame: [len:int32][payload]  (DATA SOCKET - NO TYPE BYTE)
+                    // payload: [tidLen:byte][tid][index:int32][isLast:byte][data]
+                    val isLast = (bytesSent + read) >= fileSize
+                    val payload = java.io.ByteArrayOutputStream()
+                    payload.write(tidLen.toInt())
+                    payload.write(tidBytes)
+                    val indexBytes = java.nio.ByteBuffer.allocate(4).putInt(index).array()
+                    payload.write(indexBytes)
+                    payload.write(if (isLast) 1 else 0)
+                    payload.write(chunkData)
+                    val payloadBytes = payload.toByteArray()
+
+                    val frameLen = payloadBytes.size  // ✅ Only payload length
+                    output.writeInt(frameLen)         // int32 payload length
+                    output.write(payloadBytes)        // payload only
+
+                    // Batch flush every 16 chunks for performance
+                    if (index % 16 == 0) {
+                        output.flush()
+                    }
+
+                    bytesSent += read
+                    index++
+                }
+
+                fileChannel.close()
+                output.flush() // Final flush
+                output.close()
+                socket.close()
+                result.success(true)
+            } catch (e: Exception) {
+                result.error("SEND_FILE_ERROR", e.message, null)
+            }
+        }.start()
+    }
+
+    // Handle progress updates from native receiver
+    fun onProgressUpdate(transferId: String, bytes: Int, isLast: Boolean, filePath: String?) {
+        // Send progress update via MethodChannel
+        try {
+            val data = mapOf(
+                "transferId" to transferId,
+                "bytes" to bytes,
+                "isLast" to isLast,
+                "filePath" to filePath
+            )
+            runOnUiThread {
+                nativeReceiverProgressChannel?.invokeMethod("onProgress", data)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Error sending progress update: ${e.message}")
+        }
+    }
+
+    fun onAckUpdate(transferId: String, nextExpectedIndex: Int, bytesReceived: Int, completed: Boolean) {
+        try {
+            val data = mapOf(
+                "transferId" to transferId,
+                "nextExpectedIndex" to nextExpectedIndex,
+                "bytesReceived" to bytesReceived,
+                "completed" to completed
+            )
+            runOnUiThread {
+                nativeReceiverProgressChannel?.invokeMethod("onAck", data)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Error sending ACK update: ${e.message}")
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+// Native Data Receiver
+// ════════════════════════════════════════════════════════════════
+
+// 🔴 CRITICAL: Chunk model for queue-based receive pipeline
+data class Chunk(
+    val transferId: String,
+    val index: Int,
+    val isLast: Boolean,
+    val data: ByteArray,
+    val offset: Int,
+    val length: Int
+)
+
+class NativeDataReceiver(
+    private val context: android.content.Context,
+    private val mainActivity: MainActivity,
+    private val methodChannel: MethodChannel
+) {
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var serverThread: Thread? = null
+    private var writerThread: Thread? = null
+    private var isRunning = false
+    private val incomingTransfers = mutableMapOf<String, NativeIncoming>()
+    private val registeredFiles = mutableMapOf<String, String>() // transferId -> filePath
+    
+    // 🔴 CRITICAL: BlockingQueue to decouple socket read from disk write
+    private val chunkQueue = java.util.concurrent.LinkedBlockingQueue<Chunk>(2048)
+    
+    // Background executor for ACK dispatch (NOT main thread)
+    private val ackExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable).apply { isDaemon = true }
+    }
+    
+    // Tune control/telemetry thresholds: VERY fast ACKs to maximize iOS sender throughput
+    private val ackBytesThreshold = 4 * 1024 * 1024                // ACK every 4MB (fast feedback for sender)
+    private val ackTimeThresholdMs = 100L                           // ACK at least every 100ms (2x faster)
+    private val progressBytesThreshold = 8 * 1024 * 1024            // UI progress every ~8MB
+    private val progressTimeThresholdMs = 300L                      // UI progress at least every 300ms
+
+    data class NativeIncoming(
+        val channel: java.nio.channels.FileChannel,
+        var receivedBytes: Long = 0,
+        var lastProgressTime: Long = 0,
+        var lastProgressBytes: Long = 0,
+        var lastAckTime: Long = 0,
+        var lastChunkIndex: Int = -1,
+        var lastAckBytes: Long = 0,
+        val filePath: String,
+        // 🔴 CRITICAL: Reuse direct ByteBuffer to avoid wrap() allocations (4MB for 4MB desktop chunks)
+        val writeBuffer: java.nio.ByteBuffer = java.nio.ByteBuffer.allocateDirect(4 * 1024 * 1024)
+    )
+
+    fun registerIncomingFile(transferId: String, filePath: String) {
+        registeredFiles[transferId] = filePath
+        android.util.Log.d("NativeDataReceiver", "Registered incoming file: $transferId -> $filePath")
+    }
+
+    fun start() {
+        android.util.Log.d("NativeDataReceiver", "start() called")
+        if (isRunning) {
+            android.util.Log.d("NativeDataReceiver", "Already running")
+            return
+        }
+        isRunning = true
+
+        // 🔴 CRITICAL: Start writer thread BEFORE socket thread
+        writerThread = Thread {
+            try {
+                while (isRunning) {
+                    val chunk = chunkQueue.take()  // Blocks until chunk available
+                    writeChunkInternal(chunk)
+                }
+            } catch (e: java.lang.InterruptedException) {
+                android.util.Log.d("NativeDataReceiver", "Writer thread interrupted")
+            } catch (e: Exception) {
+                android.util.Log.e("NativeDataReceiver", "Writer error: ${e.message}")
+            }
+        }.apply { start() }
+
+        serverThread = Thread {
+            try {
+                val server = java.net.ServerSocket(53319)
+                android.util.Log.d("NativeDataReceiver", "Data server started on port 53319")
+
+                while (isRunning) {
+                    val socket = server.accept()
+                    android.util.Log.d("NativeDataReceiver", "Accepted data connection from ${socket.inetAddress.hostAddress}")
+                    handleDataConnection(socket)
+                }
+
+                server.close()
+            } catch (e: Exception) {
+                android.util.Log.e("NativeDataReceiver", "Server error: ${e.message}")
+            }
+        }.apply { start() }
+    }
+
+    fun stop() {
+        isRunning = false
+        serverThread?.interrupt()
+        writerThread?.interrupt()
+        serverThread = null
+        writerThread = null
+
+        // Close all file channels
+        incomingTransfers.values.forEach { it.channel.close() }
+        incomingTransfers.clear()
+        registeredFiles.clear()
+        chunkQueue.clear()
+        
+        ackExecutor.shutdown()
+    }
+
+    private fun handleDataConnection(socket: java.net.Socket) {
+        android.util.Log.d("NativeDataReceiver", "Handling data connection from ${socket.inetAddress.hostAddress}")
+        Thread {
+            try {
+                // Set socket timeout to 60 seconds to allow time for large file transfers
+                socket.soTimeout = 60000
+                // Reduce latency for the local (127.0.0.1) hop into Dart
+                socket.tcpNoDelay = true
+                // 🔴 CRITICAL: Large socket buffers for high-throughput localhost transfers
+                socket.receiveBufferSize = 32 * 1024 * 1024   // 32MB receive buffer
+                socket.sendBufferSize = 32 * 1024 * 1024      // 32MB send buffer
+                // Use very large buffer to reduce read syscalls on big chunks
+                val input = java.io.DataInputStream(java.io.BufferedInputStream(socket.getInputStream(), 16 * 1024 * 1024))
+
+                while (isRunning) {
+                    try {
+                        val payloadLen = input.readInt()
+                        // Allow up to 16MB payloads to accommodate larger mobile chunk sizes
+                        if (payloadLen <= 0 || payloadLen > 16 * 1024 * 1024) {
+                            android.util.Log.w("NativeDataReceiver", "Invalid payloadLen: $payloadLen, closing connection")
+                            break
+                        }
+
+                        val payload = ByteArray(payloadLen)
+                        input.readFully(payload)
+
+                        parsePayload(payload)
+                    } catch (e: java.io.EOFException) {
+                        android.util.Log.d("NativeDataReceiver", "End of stream reached (socket closed by sender)")
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("NativeDataReceiver", "Connection error: ${e.message}")
+            } finally {
+                try {
+                    socket.close()
+                } catch (e: Exception) {
+                    android.util.Log.e("NativeDataReceiver", "Error closing socket: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    private fun parsePayload(buf: ByteArray) {
+        var o = 0
+
+        val tidLen = buf[o].toInt() and 0xFF
+        o += 1
+        val transferId = String(buf, o, tidLen, Charsets.UTF_8)
+        o += tidLen
+
+        val index = java.nio.ByteBuffer.wrap(buf, o, 4).int
+        o += 4
+
+        val isLast = buf[o].toInt() == 1
+        o += 1
+
+        // Avoid extra copies: work with the payload slice directly
+        val dataOffset = o
+        val dataLength = buf.size - o
+
+        // 🔴 CRITICAL: Queue chunk instead of writing directly (decouple socket from disk I/O)
+        try {
+            chunkQueue.put(Chunk(transferId, index, isLast, buf, dataOffset, dataLength))
+        } catch (e: java.lang.InterruptedException) {
+            android.util.Log.e("NativeDataReceiver", "Interrupted while queuing chunk: ${e.message}")
+        }
+    }
+
+    // 🔴 CRITICAL: Write chunks on dedicated writer thread with reusable ByteBuffer
+    private fun writeChunkInternal(chunk: Chunk) {
+        try {
+            val incoming = incomingTransfers.getOrPut(chunk.transferId) {
+                // Use the exact registered path
+                val filePath = registeredFiles[chunk.transferId]
+                if (filePath == null) {
+                    android.util.Log.e("NativeDataReceiver", "No registered path for transfer ${chunk.transferId}")
+                    return@getOrPut null!!
+                }
+                val file = java.io.File(filePath)
+                // Ensure parent directory exists
+                file.parentFile?.mkdirs()
+                val raf = java.io.RandomAccessFile(file, "rw")
+                val channel = raf.channel
+                android.util.Log.d("NativeDataReceiver", "Created file: ${file.absolutePath}, exists: ${file.exists()}, initial size: ${file.length()}")
+                NativeIncoming(channel, filePath = file.absolutePath)
+            }
+
+            // 🔴 CRITICAL: Reuse direct ByteBuffer to avoid wrap() allocations
+            val writeBuffer = incoming.writeBuffer
+            writeBuffer.clear()
+            writeBuffer.put(chunk.data, chunk.offset, chunk.length)
+            writeBuffer.flip()
+
+            while (writeBuffer.hasRemaining()) {
+                incoming.channel.write(writeBuffer)
+            }
+
+            // Track last seen chunk index
+            if (chunk.index > incoming.lastChunkIndex) {
+                incoming.lastChunkIndex = chunk.index
+            }
+
+            incoming.receivedBytes += chunk.length.toLong()
+
+            // Send ACK periodically (off main thread)
+            val now = System.currentTimeMillis()
+            val bytesSinceLastAck = incoming.receivedBytes - incoming.lastAckBytes
+            val ackTimeElapsed = now - incoming.lastAckTime
+            val shouldAck = bytesSinceLastAck >= ackBytesThreshold || chunk.isLast || ackTimeElapsed >= ackTimeThresholdMs
+            if (shouldAck) {
+                val nextExpectedIndex = incoming.lastChunkIndex + 1
+                // 🔴 CRITICAL: ACKs must NOT touch main thread
+                ackExecutor.execute {
+                    mainActivity.onAckUpdate(
+                        chunk.transferId,
+                        nextExpectedIndex,
+                        incoming.receivedBytes.toInt(),
+                        chunk.isLast
+                    )
+                }
+                incoming.lastAckBytes = incoming.receivedBytes
+                incoming.lastAckTime = now
+            }
+
+            // Report progress periodically
+            val bytesSinceLastProgress = incoming.receivedBytes - incoming.lastProgressBytes
+            val timeSinceLastProgress = now - incoming.lastProgressTime
+            if (bytesSinceLastProgress >= progressBytesThreshold || timeSinceLastProgress >= progressTimeThresholdMs || chunk.isLast) {
+                ackExecutor.execute {
+                    mainActivity.onProgressUpdate(chunk.transferId, incoming.receivedBytes.toInt(), chunk.isLast, null)
+                }
+                incoming.lastProgressBytes = incoming.receivedBytes
+                incoming.lastProgressTime = now
+            }
+
+            if (chunk.isLast) {
+                // Close file channel (let OS flush naturally)
+                incoming.channel.close()
+                incomingTransfers.remove(chunk.transferId)
+                android.util.Log.d("NativeDataReceiver", "✅ Transfer ${chunk.transferId} completed! File saved at: ${incoming.filePath}")
+                // Send completion event with file path
+                ackExecutor.execute {
+                    mainActivity.onProgressUpdate(chunk.transferId, incoming.receivedBytes.toInt(), true, incoming.filePath)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("NativeDataReceiver", "Write error: ${e.message}")
+        }
+    }
+
+    private fun writeChunk(transferId: String, index: Int, isLast: Boolean, data: ByteArray, offset: Int, length: Int) {
+        try {
+            val incoming = incomingTransfers.getOrPut(transferId) {
+                // Use the exact registered path
+                val filePath = registeredFiles[transferId]
+                if (filePath == null) {
+                    android.util.Log.e("NativeDataReceiver", "No registered path for transfer $transferId")
+                    return@getOrPut null!!
+                }
+                val file = java.io.File(filePath)
+                // Ensure parent directory exists
+                file.parentFile?.mkdirs()
+                val raf = java.io.RandomAccessFile(file, "rw")
+                val channel = raf.channel
+                android.util.Log.d("NativeDataReceiver", "Created file: ${file.absolutePath}, exists: ${file.exists()}, initial size: ${file.length()}")
+                NativeIncoming(channel, filePath = file.absolutePath)
+            }
+
+            // Write chunk directly to disk to avoid extra byte[] copies
+            var remaining = length
+            var writeOffset = offset
+            while (remaining > 0) {
+                val written = incoming.channel.write(java.nio.ByteBuffer.wrap(data, writeOffset, remaining))
+                if (written <= 0) break
+                remaining -= written
+                writeOffset += written
+            }
+            // Track last seen chunk index (assumes in-order delivery)
+            if (index > incoming.lastChunkIndex) {
+                incoming.lastChunkIndex = index
+            }
+
+            incoming.receivedBytes += length.toLong()
+
+            // Send ACK periodically based on bytes received to drive sender flow-control
+            val now = System.currentTimeMillis()
+            val bytesSinceLastAck = incoming.receivedBytes - incoming.lastAckBytes
+            val ackTimeElapsed = now - incoming.lastAckTime
+            // ACK roughly every 1MB or if a little time has passed to avoid stalls
+            val shouldAck = bytesSinceLastAck >= ackBytesThreshold || isLast || ackTimeElapsed >= 800
+            if (shouldAck) {
+                val nextExpectedIndex = incoming.lastChunkIndex + 1
+                mainHandler.post {
+                    mainActivity.onAckUpdate(
+                        transferId,
+                        nextExpectedIndex,
+                        incoming.receivedBytes.toInt(),
+                        isLast
+                    )
+                }
+                incoming.lastAckBytes = incoming.receivedBytes
+                incoming.lastAckTime = now
+            }
+
+            // Report progress every 4MB to prevent watchdog timeout without spamming UI
+            val bytesSinceLastProgress = incoming.receivedBytes - incoming.lastProgressBytes
+            val timeSinceLastProgress = now - incoming.lastProgressTime
+            if (bytesSinceLastProgress >= progressBytesThreshold || timeSinceLastProgress >= progressTimeThresholdMs || isLast) {
+                mainHandler.post {
+                    mainActivity.onProgressUpdate(transferId, incoming.receivedBytes.toInt(), isLast, null)
+                }
+                incoming.lastProgressBytes = incoming.receivedBytes
+                incoming.lastProgressTime = now
+            }
+
+            if (isLast) {
+                // Force to disk and close
+                incoming.channel.force(false)
+                val finalSize = java.io.File(incoming.filePath).length()
+                android.util.Log.d("NativeDataReceiver", "Closing file, final size: $finalSize bytes")
+                incoming.channel.close()
+                incomingTransfers.remove(transferId)
+                android.util.Log.d("NativeDataReceiver", "✅ Transfer $transferId completed! File saved at: ${incoming.filePath}")
+                // Send completion event with file path
+                mainHandler.post {
+                    mainActivity.onProgressUpdate(transferId, incoming.receivedBytes.toInt(), true, incoming.filePath)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("NativeDataReceiver", "Write error: ${e.message}")
+        }
     }
 }

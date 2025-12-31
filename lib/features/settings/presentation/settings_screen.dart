@@ -20,6 +20,7 @@ import 'package:fylooo/features/settings/presentation/privacy_policy_screen.dart
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:fylooo/features/settings/presentation/feedback_screen.dart';
+import 'package:fylooo/features/chat/services/connection_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
@@ -40,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _appVersion = '';
   bool _isApplying = false;
   bool _soundsEnabled = true;
+  bool _useNativeReceiver = true; // Debug toggle for direct Dart I/O test
 
   @override
   void initState() {
@@ -48,6 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadVersion();
     _loadDeviceNameFromPrefs();
     _loadSoundsEnabled();
+    _useNativeReceiver = ConnectionService.useNativeReceiver;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
       final hasSeenShowcase = prefs.getBool('settings_showcase_seen') ?? false;
@@ -94,6 +97,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleSounds(bool value) async {
     setState(() => _soundsEnabled = value);
     await SoundService().setSoundsEnabled(value);
+  }
+
+  Future<void> _toggleNativeReceiver(bool value) async {
+    setState(() => _useNativeReceiver = value);
+    ConnectionService.useNativeReceiver = value;
+    final msg = value ? 'Native receiver enabled' : 'Direct Dart I/O enabled (test mode)';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)), backgroundColor: AppColors.darkPrimary), 
+    );
   }
 
   Future<void> _launchUrl(String url) async {
@@ -423,6 +435,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               activeColor: AppColors.primary,
                             ),
                           ),
+                          // 🔬 Debug: Toggle between native receiver and direct Dart I/O
+                          if (!kIsWeb)
+                            SettingsTile(
+                              icon: Icons.science_rounded,
+                              title: 'Test Mode: Direct I/O',
+                              subtitle: _useNativeReceiver 
+                                  ? 'Using native receiver (4 Mbps)'
+                                  : 'Using direct Dart I/O (23 Mbps test)',
+                              trailing: Switch(
+                                value: _useNativeReceiver,
+                                onChanged: (value) => _toggleNativeReceiver(value),
+                                activeColor: AppColors.primary,
+                              ),
+                            ),
                           SettingsTile(
                             icon: Icons.info_outline_rounded,
                             title: 'Version',
