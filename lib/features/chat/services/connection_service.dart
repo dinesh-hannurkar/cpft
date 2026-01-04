@@ -61,12 +61,13 @@ class ConnectionService {
   static const int _binaryChunkLogEveryN = 256;
 
   final String deviceName;
-  Socket? _socket;
+  List<Socket> _sockets = [];
+  Socket? get _primarySocket => _sockets.isNotEmpty ? _sockets.first : null;
   ConnectionInfo? _currentConnection;
   final List<Function(DeviceMessage)> _messageListeners = [];
   final List<Function(ConnectionInfo)> _statusListeners = [];
   final List<DeviceMessage> _messageHistory = [];
-  StreamSubscription? _socketSubscription;
+  List<StreamSubscription> _socketSubscriptions = [];
   Timer? _keepAliveTimer;
   int _consecutiveErrors = 0;
   static const int _maxConsecutiveErrors = 3;
@@ -82,8 +83,11 @@ class ConnectionService {
   // Keep old chunk-count constant for safety/backwards-compat but not used.
   static const int _maxPendingChunks = 4000;
   Future<void> _sendChain = Future.value();
-  Future<void> _incomingChain = Future.value();
-  final _frameParser = _FrameParser();
+  List<Future<void>> _sendChains = [];
+  List<Future<void>> _incomingChains = [];
+  final List<_FrameParser> _frameParsers = [];
+  Completer<void>? _parallelAckCompleter;
+  int _expectedParallelStreams = 1;
   final _wifiDirectFrameParser = _FrameParser();
   
   // WiFi Direct state
@@ -117,13 +121,17 @@ class ConnectionService {
   
   // 🚀 Use native receiver with optimized forwarding (targeting 50+ Mbps)
   static bool useNativeReceiver = true;
+  // 🚀 Enable parallel TCP streams for non-Android platforms to boost speed
+  static const bool enableParallelTransfers = true;
+  static const int parallelSockets = 4; // Number of parallel sockets
+
 
   Future<void> _writeFrame(
     int type,
     Uint8List payload, {
     bool forceFlush = false,
   }) async {
-    if (_socket == null) return;
+    if (_primarySocket == null) return;
 
     // frame = [payloadLen:int32][type:1][payload]
     final payloadLen = 1 + payload.length;
@@ -132,9 +140,9 @@ class ConnectionService {
     buffer.add(_int32(payloadLen));
     buffer.add([type & 0xFF]);
     buffer.add(payload);
-    _socket!.add(buffer.takeBytes());
+    _primarySocket!.add(buffer.takeBytes());
     if (forceFlush) {
-      await _socket!.flush();
+      await _primarySocket!.flush();
     }
   }
 
@@ -207,7 +215,8 @@ class ConnectionService {
     required Uint8List bytes,
     bool flush = false,
   }) async {
-    final targetSocket = _getTransferSocket();
+    final socketIndex = _sockets.length > 1 ? index % _sockets.length : 0;
+    final targetSocket = _getTransferSocket(chunkIndex: index);
     if (targetSocket == null) return;
 
     final tid = utf8.encode(transferId);
@@ -216,51 +225,37 @@ class ConnectionService {
       throw StateError('transferId too long (${tid.length} bytes)');
     }
 
-    // 🚀 PERF: Direct socket write optimization
-    // Avoid allocating BytesBuilder and copying payload multiple times
     // Frame structure: [payloadLen:4][type:1][tidLen:1][tid:N][index:4][isLast:1][bytes:M]
-    // payloadLen = 1 + tidLen + tid + index + isLast + bytes
-    
     final payloadLen = 1 + 1 + tid.length + 4 + 1 + bytes.length;
     final tidLen = tid.length;
     
-    // Create a single header buffer to minimize socket.add calls and object creation
     final headerSize = 4 + 1 + 1 + tidLen + 4 + 1;
     final header = Uint8List(headerSize);
     final bd = ByteData.view(header.buffer);
     
     int offset = 0;
-    // payloadLen
     bd.setInt32(offset, payloadLen, Endian.big); offset += 4;
-    // type
     header[offset++] = 1;
-    // tidLen
     header[offset++] = tidLen;
-    // tid
     header.setRange(offset, offset + tidLen, tid); offset += tidLen;
-    // index
     bd.setInt32(offset, index, Endian.big); offset += 4;
-    // isLast
     header[offset++] = isLast ? 1 : 0;
 
     Future<void> write() async {
       targetSocket.add(header);
       targetSocket.add(bytes);
-      
       if (flush) {
         await targetSocket.flush();
       }
     }
 
-    // Serialize per-socket to avoid StreamSink conflicts.
-    if (identical(targetSocket, _socket)) {
-      _sendChain = _sendChain.then((_) => write());
-      if (flush) await _sendChain;
-      return;
+    if (identical(targetSocket, _wifiDirectDataSocket)) {
+      _wifiDirectSendChain = _wifiDirectSendChain.then((_) => write());
+      if (flush) await _wifiDirectSendChain;
+    } else {
+      _sendChains[socketIndex] = _sendChains[socketIndex].then((_) => write());
+      if (flush) await _sendChains[socketIndex];
     }
-
-    _wifiDirectSendChain = _wifiDirectSendChain.then((_) => write());
-    if (flush) await _wifiDirectSendChain;
   }
 
   /// Send ACK for file transfer
@@ -418,16 +413,10 @@ class ConnectionService {
       '[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port',
     );
 
-    // Prevent duplicate connection attempts
-    if (currentConnection?.status == ConnectionStatus.connecting) {
-      return false;
-    }
-    if (currentConnection?.status == ConnectionStatus.connected) {
-      return true;
-    }
+    if (currentConnection?.status == ConnectionStatus.connecting) return false;
+    if (currentConnection?.status == ConnectionStatus.connected) return true;
 
-    // If socket exists from previous connection, disconnect first
-    if (_socket != null) {
+    if (_sockets.isNotEmpty) {
       debugPrint('[ConnectionService] Disconnecting from previous connection');
       await disconnect();
     }
@@ -442,41 +431,69 @@ class ConnectionService {
     );
 
     try {
-      // Attempt to connect with timeout
-      _socket = await Socket.connect(
-        ipAddress,
-        port,
-        timeout: const Duration(seconds: 10),
+      // Step 1: Connect primary socket
+      final primarySocket = await Socket.connect(ipAddress, port, timeout: const Duration(seconds: 10));
+      _sockets.add(primarySocket);
+      _sendChains.add(Future.value());
+      _incomingChains.add(Future.value());
+      _frameParsers.add(_FrameParser());
+      primarySocket.setOption(SocketOption.tcpNoDelay, true);
+      final sub = primarySocket.listen(
+        (data) => _handleIncomingData(data, 0),
+        onError: (e) => _handleConnectionError(e.toString()),
+        onDone: () => disconnect(),
       );
+      _socketSubscriptions.add(sub);
+      debugPrint('[ConnectionService] ✅ Primary socket connected');
 
-      debugPrint('[ConnectionService] ✅ Socket connected successfully');
-      
-      // 🚀 CRITICAL: Optimize socket for high-throughput transfers
-      _socket!.setOption(SocketOption.tcpNoDelay, true);
-      
-      // Log WiFi frequency/band for debugging
-      NetworkUtils.getWifiFrequency().then((wifiInfo) {
-        if (wifiInfo != null) {
-          debugPrint('[ConnectionService] 📶 WiFi Band: ${wifiInfo['band']} (${wifiInfo['frequency']} MHz)');
+      // Step 2: Send handshake and parallel request
+      await _sendHandshake();
+      final int streams = enableParallelTransfers && !Platform.isAndroid ? parallelSockets : 1;
+      if (streams > 1) {
+        try {
+          _parallelAckCompleter = Completer<void>();
+          await sendMessage(DeviceMessage(
+            type: 'parallel_request',
+            content: streams.toString(),
+            senderName: deviceName,
+          ));
+          debugPrint('[ConnectionService] 📤 Sent parallel_request for $streams streams');
+
+          await _parallelAckCompleter!.future.timeout(const Duration(seconds: 5));
+          debugPrint('[ConnectionService] ✅ Received parallel_ack');
+
+          // Step 3: Connect parallel sockets
+          for (int i = 1; i < streams; i++) {
+          final socket = await Socket.connect(ipAddress, port, timeout: const Duration(seconds: 10));
+          _sockets.add(socket);
+          _sendChains.add(Future.value());
+          _incomingChains.add(Future.value());
+          _frameParsers.add(_FrameParser());
+          socket.setOption(SocketOption.tcpNoDelay, true);
+          final sub = socket.listen(
+            (data) => _handleIncomingData(data, i),
+            onError: (e) => _handleConnectionError(e.toString()),
+            onDone: () => disconnect(),
+          );
+          _socketSubscriptions.add(sub);
+          debugPrint('[ConnectionService] ✅ Socket ${i + 1}/$streams connected');
         }
-      });
 
-      // Set up socket listener
-      _socketSubscription = _socket!.listen(
-        _handleIncomingData,
-        onError: (error) {
-          debugPrint('[ConnectionService] ❌ Socket error: $error');
-          _handleConnectionError(error.toString());
-        },
-        onDone: () {
-          debugPrint('[ConnectionService] 🔌 Socket closed by remote');
-          disconnect();
-        },
-        cancelOnError: false,
-      );
+        // Step 4: Send ready message
+        await sendMessage(DeviceMessage(type: 'parallel_ready', senderName: deviceName));
+        debugPrint('[ConnectionService] 📤 Sent parallel_ready');
+        } on TimeoutException {
+          debugPrint('[ConnectionService] ⚠️ parallel_ack timeout, falling back to single stream');
+        }
+      }
 
-      return true; // TCP is up; logical connection will switch to connected on handshake
+      _updateStatus(_currentConnection!.copyWith(status: ConnectionStatus.connected, connectedAt: DateTime.now()));
+      _startKeepAlive();
+      _attemptWiFiDirectUpgrade();
+
+      return true;
     } on SocketException catch (e) {
+      await disconnect(); // Ensure cleanup on partial failure
       String userFriendlyError;
       if (e.osError?.errorCode == 61 ||
           e.message.contains('Connection refused')) {
@@ -511,6 +528,7 @@ class ConnectionService {
       );
       return false;
     } catch (e) {
+      await disconnect(); // Ensure cleanup on partial failure
       debugPrint('[ConnectionService] ❌ Connection failed: $e');
       _updateStatus(
         ConnectionInfo(
@@ -534,44 +552,49 @@ class ConnectionService {
       '[ConnectionService] 🔍 Socket info: ${socket.remoteAddress.address}:${socket.remotePort}',
     );
 
-    // If already connected, disconnect first and wait for stream to be released
-    if (_socket != null) {
-      debugPrint(
-        '[ConnectionService] ⚠️  Already have a socket, disconnecting...',
-      );
+    // MODIFIED: Handle parallel connections
+    final incomingIp = socket.remoteAddress.address;
+    if (_currentConnection != null &&
+        _currentConnection!.ipAddress == incomingIp &&
+        _currentConnection!.status == ConnectionStatus.connecting) {
+      debugPrint('[ConnectionService] 📞 Accepting parallel stream from $deviceName');
+    } else if (_sockets.isNotEmpty) {
+      debugPrint('[ConnectionService] ⚠️  Existing connection, disconnecting...');
       await disconnect();
-      // Wait a bit for the stream to be fully released
       await Future.delayed(const Duration(milliseconds: 100));
       debugPrint('[ConnectionService] ✅ Previous connection cleaned up');
     }
 
     try {
-      _socket = socket;
+      _sockets.add(socket);
+      _sendChains.add(Future.value());
+      _incomingChains.add(Future.value());
+      _frameParsers.add(_FrameParser());
       final ipAddress = socket.remoteAddress.address;
       final port = socket.remotePort;
 
-      _updateStatus(
-        ConnectionInfo(
-          deviceName: deviceName,
-          ipAddress: ipAddress,
-          port: port,
-          status: ConnectionStatus.connecting,
-        ),
-      );
+      if (_currentConnection == null || _currentConnection!.status != ConnectionStatus.connecting) {
+        _updateStatus(
+          ConnectionInfo(
+            deviceName: deviceName,
+            ipAddress: ipAddress,
+            port: port,
+            status: ConnectionStatus.connecting,
+          ),
+        );
+      }
 
-      // Configure socket options
       try {
-        _socket!.setOption(SocketOption.tcpNoDelay, true);
+        socket.setOption(SocketOption.tcpNoDelay, true);
         debugPrint('[ConnectionService] ✅ Socket options configured (tcpNoDelay)');
       } catch (e) {
         debugPrint('[ConnectionService] ⚠️  Failed to set socket options: $e');
       }
 
-      // Set up socket listener directly (no broadcast stream)
       debugPrint('[ConnectionService] 🎧 Setting up socket listener...');
       try {
-        _socketSubscription = _socket!.listen(
-          _handleIncomingData,
+        final sub = socket.listen(
+          (data) => _handleIncomingData(data, _sockets.length - 1),
           onError: (error) {
             debugPrint('[ConnectionService] ❌ Socket error: $error');
             _handleConnectionError(error.toString());
@@ -582,6 +605,7 @@ class ConnectionService {
           },
           cancelOnError: false,
         );
+        _socketSubscriptions.add(sub);
         debugPrint(
           '[ConnectionService] ✅ Socket listener attached successfully',
         );
@@ -592,12 +616,9 @@ class ConnectionService {
         throw Exception('Failed to listen to socket: $e');
       }
 
-      // Send handshake response
-      debugPrint('[ConnectionService] 📤 Sending handshake response...');
-      await _sendHandshake();
-
-      // Start keep-alive timer
-      _startKeepAlive();
+      // Handshake response is sent after 'handshake' message is received,
+      // to determine if parallel sockets are supported by sender.
+      // For now, connection is marked as 'connecting' until then.
 
       // Update connection status
       _updateStatus(
@@ -780,8 +801,11 @@ class ConnectionService {
   }
 
   /// Get socket for data transfer (P2P if available, otherwise regular socket)
-  Socket? _getTransferSocket() {
-    return _wifiDirectDataSocket ?? _socket;
+  Socket? _getTransferSocket({int? chunkIndex}) {
+    if (_wifiDirectDataSocket != null) return _wifiDirectDataSocket;
+    if (_sockets.isEmpty) return null;
+    if (chunkIndex == null || _sockets.length == 1) return _sockets.first;
+    return _sockets[chunkIndex % _sockets.length];
   }
 
   Future<void> _ensureWifiDirectDataSocket({
@@ -917,7 +941,7 @@ class ConnectionService {
 
   /// Send a message to connected device
   Future<bool> sendMessage(DeviceMessage message) async {
-    if (_socket == null) {
+    if (_primarySocket == null) {
       debugPrint('[ConnectionService] ❌ No active connection');
       return false;
     }
@@ -965,20 +989,17 @@ class ConnectionService {
   }
 
   /// Handle incoming data from socket
-  void _handleIncomingData(List<int> data) async {
-    // 🔬 PERF: Record socket arrival rate
+  void _handleIncomingData(List<int> data, int socketIndex) async {
     _perfMetrics.recordBytes(data.length);
     
-    // IMPORTANT: Socket.listen can invoke this callback again before an async
-    // invocation has finished. Serialize all inbound parsing/handling to avoid
-    // concurrent RandomAccessFile operations.
-    _incomingChain = _incomingChain
-        .then((_) async {
-          await _frameParser.process(Uint8List.fromList(data), this);
-        })
-        .catchError((e) {
-          debugPrint('[ConnectionService] ❌ Incoming processing error: $e');
-        });
+    // Serialize processing per-socket, but allow sockets to be processed in parallel.
+    final parser = _frameParsers[socketIndex];
+
+    _incomingChains[socketIndex] = _incomingChains[socketIndex].then((_) async {
+      await parser.process(Uint8List.fromList(data), this);
+    }).catchError((e) {
+      debugPrint('[ConnectionService] ❌ Incoming processing error on socket $socketIndex: $e');
+    });
 
     // Reset error count on successful data reception
     if (_consecutiveErrors > 0) {
@@ -1020,23 +1041,41 @@ class ConnectionService {
           _currentConnection != null &&
           _currentConnection!.status == ConnectionStatus.connecting) {
         debugPrint(
-          '[ConnectionService] 🤝 Acceptance received from ${message.senderName}. Marking as connected.',
+          '[ConnectionService] 🤝 Handshake received from ${message.senderName}.',
         );
-        _updateStatus(
-          _currentConnection!.copyWith(
-            status: ConnectionStatus.connected,
-            connectedAt: DateTime.now(),
-          ),
-        );
-        _startKeepAlive();
+
+        // Don't transition to connected state until parallel negotiation is complete
         await _sendHandshake();
-        
-        // 🚀 Try to upgrade to WiFi Direct for faster transfers
-        _attemptWiFiDirectUpgrade();
       } else {
         debugPrint(
           '[ConnectionService] 🤝 Received handshake (already connected), ignoring',
         );
+      }
+      return;
+    }
+
+    if (message.type == 'parallel_request') {
+      _expectedParallelStreams = int.tryParse(message.content) ?? 1;
+      debugPrint('[ConnectionService] 🤝 Received parallel_request for $_expectedParallelStreams streams');
+      await sendMessage(DeviceMessage(type: 'parallel_ack', senderName: deviceName));
+      return;
+    }
+
+    if (message.type == 'parallel_ack') {
+      _parallelAckCompleter?.complete();
+      return;
+    }
+
+    if (message.type == 'parallel_ready') {
+      debugPrint('[ConnectionService] 🤝 Received parallel_ready');
+      if (_sockets.length == _expectedParallelStreams) {
+        _updateStatus(_currentConnection!.copyWith(status: ConnectionStatus.connected, connectedAt: DateTime.now()));
+        _startKeepAlive();
+        _attemptWiFiDirectUpgrade();
+        debugPrint('[ConnectionService] ✅ All parallel sockets connected');
+      } else {
+        debugPrint('[ConnectionService] ❌ Parallel connection failed: expected $_expectedParallelStreams, got ${_sockets.length}');
+        disconnect();
       }
       return;
     }
@@ -1389,7 +1428,7 @@ class ConnectionService {
   /// Public API: Pick and send a file (basic MVP)
   /// Public API: Send a list of files (called after picking)
   Future<void> sendFiles(List<PlatformFile> files) async {
-    if (!isConnected || _socket == null) {
+    if (!isConnected || _primarySocket == null) {
       debugPrint('[ConnectionService] ⚠️ Not connected; cannot send files');
       return;
     }
@@ -1680,7 +1719,7 @@ class ConnectionService {
 
   /// Public API: Pick and send a file (basic MVP)
   Future<void> pickAndSendFile() async {
-    if (!isConnected || _socket == null) {
+    if (!isConnected || _primarySocket == null) {
       debugPrint('[ConnectionService] ⚠️ Not connected; cannot send file');
       return;
     }
@@ -1701,7 +1740,7 @@ class ConnectionService {
     debugPrint(
       '[ConnectionService] 📤 sendSharedFiles called with ${sharedFiles.length} files',
     );
-    if (!isConnected || _socket == null) {
+    if (!isConnected || _primarySocket == null) {
       debugPrint(
         '[ConnectionService] ⚠️ Not connected; cannot send shared files',
       );
@@ -2242,9 +2281,7 @@ class ConnectionService {
 
   /// Disconnect from current device
   Future<void> disconnect() async {
-    // Send goodbye message if connected
-    if (_socket != null &&
-        _currentConnection?.status == ConnectionStatus.connected) {
+    if (_primarySocket != null && _currentConnection?.status == ConnectionStatus.connected) {
       try {
         final goodbye = DeviceMessage(
           type: 'goodbye',
@@ -2253,17 +2290,15 @@ class ConnectionService {
         );
         await sendMessage(goodbye);
       } catch (e) {
-        debugPrint(
-          '[ConnectionService] ⚠️  Could not send goodbye message: $e',
-        );
+        debugPrint('[ConnectionService] ⚠️  Could not send goodbye message: $e');
       }
     }
 
-    // Cancel socket subscription
-    await _socketSubscription?.cancel();
-    _socketSubscription = null;
+    for (final sub in _socketSubscriptions) {
+      await sub.cancel();
+    }
+    _socketSubscriptions.clear();
 
-    // Tear down WiFi Direct resources
     _wifiDirectConnSub?.cancel();
     _wifiDirectConnSub = null;
     _wifiDirectPeersSub?.cancel();
@@ -2292,16 +2327,21 @@ class ConnectionService {
       transfer.watchdogTimer?.cancel();
     }
 
-    try {
-      await _socket?.close();
-    } catch (e) {
-      debugPrint('[ConnectionService] ⚠️  Error closing socket: $e');
+    for (final socket in _sockets) {
+      try {
+        await socket.close();
+      } catch (e) {
+        debugPrint('[ConnectionService] ⚠️  Error closing socket: $e');
+      }
     }
-    _socket = null;
+    _sockets.clear();
+    _sendChains.clear();
+    _incomingChains.clear();
 
-    // Reset parser state
-    _frameParser.reset();
-    _incomingChain = Future.value();
+    for (final p in _frameParsers) {
+      p.reset();
+    }
+    _frameParsers.clear();
 
     _remotePeerAddress = null;
     _remoteWifiDirectPeerId = null;
@@ -2324,7 +2364,7 @@ class ConnectionService {
   void _startKeepAlive() {
     _keepAliveTimer?.cancel();
     _keepAliveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (_socket != null && isConnected) {
+      if (_primarySocket != null && isConnected) {
         final ping = DeviceMessage(
           type: 'ping',
           content: 'keep-alive',
@@ -2341,7 +2381,7 @@ class ConnectionService {
         });
       } else {
         debugPrint(
-          '[ConnectionService] ⏸️  Keep-alive timer fired but NOT sending (socket=${_socket != null}, isConnected=$isConnected)',
+          '[ConnectionService] ⏸️  Keep-alive timer fired but NOT sending (socket=${_primarySocket != null}, isConnected=$isConnected)',
         );
       }
     });
