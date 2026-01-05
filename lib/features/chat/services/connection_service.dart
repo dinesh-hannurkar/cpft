@@ -480,7 +480,7 @@ class ConnectionService {
         }
 
         // Step 4: Send ready message
-        await sendMessage(DeviceMessage(type: 'parallel_ready', senderName: deviceName));
+        await sendMessage(DeviceMessage(type: 'parallel_ready', senderName: deviceName, content: ''));
         debugPrint('[ConnectionService] 📤 Sent parallel_ready');
         } on TimeoutException {
           debugPrint('[ConnectionService] ⚠️ parallel_ack timeout, falling back to single stream');
@@ -1057,7 +1057,7 @@ class ConnectionService {
     if (message.type == 'parallel_request') {
       _expectedParallelStreams = int.tryParse(message.content) ?? 1;
       debugPrint('[ConnectionService] 🤝 Received parallel_request for $_expectedParallelStreams streams');
-      await sendMessage(DeviceMessage(type: 'parallel_ack', senderName: deviceName));
+      await sendMessage(DeviceMessage(type: 'parallel_ack', senderName: deviceName, content: ''));
       return;
     }
 
