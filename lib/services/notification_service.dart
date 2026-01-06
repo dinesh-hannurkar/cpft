@@ -127,6 +127,12 @@ class NotificationService {
           android: initializationSettingsAndroid,
           iOS: initializationSettingsIOS,
           macOS: initializationSettingsMacOS,
+          linux: LinuxInitializationSettings(defaultActionName: 'Open notification'),
+          windows: WindowsInitializationSettings(
+            appName: 'Fylooo',
+            appUserModelId: 'com.omnity.fylooo',
+            guid: '0e8126c9-5da8-426b-ba5b-2d2d6961ea8e',
+          ),
         );
 
     await _flutterLocalNotificationsPlugin.initialize(
@@ -188,6 +194,7 @@ class NotificationService {
       android: androidDetails,
       iOS: iosDetails,
       macOS: macOSDetails,
+      linux: const LinuxNotificationDetails(),
     );
 
     await _flutterLocalNotificationsPlugin.show(
@@ -262,6 +269,7 @@ class NotificationService {
       android: androidDetails,
       iOS: iosDetails,
       macOS: macOSDetails,
+      linux: const LinuxNotificationDetails(),
     );
 
     await _flutterLocalNotificationsPlugin.show(
