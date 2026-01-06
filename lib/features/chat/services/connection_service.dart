@@ -115,6 +115,8 @@ class ConnectionService {
   String? _localWifiDirectPeerId;
   String? _remoteWifiDirectName; // P2P device name (more reliable than MAC)
   String? _localWifiDirectName;
+  String? _wifiDirectIpAddress; // Store the actual P2P IP address
+  String? _remotePlatform; // Store remote OS for transfer optimization
 
   bool _wifiDirectPreparing = false;
   StreamSubscription<WiFiDirectConnectionEvent>? _wifiDirectConnSub;
@@ -568,9 +570,14 @@ class ConnectionService {
   }
 
   /// Connect to a device
-  Future<bool> connect(String deviceName, String ipAddress, int port) async {
+  Future<bool> connect(
+    String deviceName,
+    String ipAddress,
+    int port, {
+    String? p2pPeerId,
+  }) async {
     debugPrint(
-      '[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port',
+      '[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port (P2P: $p2pPeerId)',
     );
 
     if (currentConnection?.status == ConnectionStatus.connecting) return false;
@@ -591,6 +598,48 @@ class ConnectionService {
     );
 
     try {
+      // Step 0: Check for P2P priority
+      if (p2pPeerId != null && Platform.isAndroid) {
+        debugPrint(
+          '[ConnectionService] 📡 Priority: Attempting WiFi Direct P2P connection first...',
+        );
+
+        try {
+          final p2pConn = await _wifiDirectService.connect(p2pPeerId);
+          if (p2pConn != null) {
+            debugPrint(
+              '[ConnectionService] 🚀 WiFi Direct connected! IP: ${p2pConn.ipAddress}, Port: ${p2pConn.port}',
+            );
+            ipAddress = p2pConn.ipAddress;
+            port = p2pConn.port;
+            _usingWifiDirect = true;
+          } else {
+            debugPrint(
+              '[ConnectionService] ⚠️ WiFi Direct connection failed, falling back to standard IP: $ipAddress',
+            );
+          }
+        } catch (e) {
+          debugPrint(
+            '[ConnectionService] ⚠️ WiFi Direct error: $e. Falling back.',
+          );
+        }
+      } else if (ipAddress == '0.0.0.0' && p2pPeerId != null) {
+        // P2P-only device but failed above? Retry strictly P2P or fail
+        debugPrint(
+          '[ConnectionService] 📡 P2P-only device, retrying P2P connect...',
+        );
+        final p2pConn = await _wifiDirectService.connect(p2pPeerId);
+        if (p2pConn != null) {
+          ipAddress = p2pConn.ipAddress;
+          port = p2pConn.port;
+          _usingWifiDirect = true;
+        } else {
+          throw SocketException(
+            'Failed to connect to P2P device and no fallback IP available',
+          );
+        }
+      }
+
       // Step 1: Connect primary socket
       final primarySocket = await Socket.connect(
         ipAddress,
@@ -609,6 +658,13 @@ class ConnectionService {
       );
       _socketSubscriptions.add(sub);
       debugPrint('[ConnectionService] ✅ Primary socket connected');
+
+      // If we connected via standard TCP but have a p2pPeerId, we might want to upgrade later
+      // The current _attemptWiFiDirectUpgrade logic handles this via "wifi_direct_offer"
+      if (p2pPeerId != null && Platform.isAndroid) {
+        _remoteWifiDirectPeerId = p2pPeerId;
+        _attemptWiFiDirectUpgrade();
+      }
 
       // Step 2: Send handshake and parallel request
       await _sendHandshake();
@@ -904,6 +960,9 @@ class ConnectionService {
       type: 'handshake',
       content: 'Hello from $deviceName',
       senderName: deviceName,
+      metadata: {
+        'platform': Platform.operatingSystem, // Send our platform
+      },
     );
     await sendMessage(handshake);
   }
@@ -1114,6 +1173,7 @@ class ConnectionService {
       await _wifiDirectService.stopDiscovery();
       debugPrint('[ConnectionService] ✅ WiFi Direct data socket ready');
       wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+      _wifiDirectIpAddress = ipAddress; // Store for DPFTP usage
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️  WiFi Direct data socket failed: $e');
       _teardownWifiDirectDataSocket();
@@ -1303,6 +1363,15 @@ class ConnectionService {
     }
 
     if (message.type == 'handshake') {
+      // Extract remote platform from handshake
+      if (message.metadata != null &&
+          message.metadata!.containsKey('platform')) {
+        _remotePlatform = message.metadata!['platform'] as String?;
+        debugPrint(
+          '[ConnectionService] 🖥️ Remote platform detected: $_remotePlatform',
+        );
+      }
+
       if (_currentConnection != null &&
           _currentConnection!.status == ConnectionStatus.connecting) {
         debugPrint(
@@ -1731,10 +1800,14 @@ class ConnectionService {
         final transferId = message.content;
         final ot = _outgoingTransfers[transferId];
         if (ot != null) {
-          final ip = _currentConnection?.ipAddress; // FIX: use ipAddress
+          // Use WiFi Direct IP if available/active, otherwise fallback to connection IP
+          final ip = (_usingWifiDirect && _wifiDirectIpAddress != null)
+              ? _wifiDirectIpAddress
+              : _currentConnection?.ipAddress;
+
           if (ip != null && ot.path != null) {
             debugPrint(
-              '[ConnectionService] 🚀 Starting DPFTP Transfer for $transferId to $ip',
+              '[ConnectionService] 🚀 Starting DPFTP Transfer for $transferId to $ip (WiFi Direct: $_usingWifiDirect)',
             );
 
             // Cancel legacy watchdog to prevent "Initial ACK not received"
@@ -1744,12 +1817,30 @@ class ConnectionService {
               ot.chunkPermit!.complete();
             }
 
+            // Optimize DPFTP parameters based on remote platform
+            // Windows systems have more resources, so use aggressive settings
+            final bool isRemoteWindows = _remotePlatform == 'windows';
+            final int parallelConns = isRemoteWindows ? 8 : 4;
+            final int chunkSizeMB = isRemoteWindows
+                ? (8 * 1024 * 1024)
+                : (3 * 1024 * 1024);
+            final int windowMB = isRemoteWindows
+                ? (64 * 1024 * 1024)
+                : (16 * 1024 * 1024);
+
+            debugPrint(
+              '[ConnectionService] 🚀 DPFTP Config: ${isRemoteWindows ? "Windows-optimized" : "Standard"} (conns=$parallelConns, chunk=${chunkSizeMB ~/ (1024 * 1024)}MB, window=${windowMB ~/ (1024 * 1024)}MB)',
+            );
+
             // Helper to run in background or just awaited
             unawaited(
               DpftpService().sendFile(
                 ip: ip,
                 file: File(ot.path!),
                 transferId: transferId,
+                parallelConnections: parallelConns,
+                chunkSize: chunkSizeMB,
+                maxInFlightBytes: windowMB,
               ),
             );
           } else {
@@ -1921,18 +2012,19 @@ class ConnectionService {
             }
           }
 
-          if (useDpftp) {
+          // Use DPFTP only when WiFi Direct is NOT active
+          // When WiFi Direct is connected, use legacy transfer which routes through WiFi Direct socket
+          if (useDpftp && !_usingWifiDirect) {
             debugPrint(
               '[ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.',
             );
             continue; // Skip to next file (or finish if last)
           }
 
-          if (useDpftp) {
+          if (_usingWifiDirect && _wifiDirectDataSocket != null) {
             debugPrint(
-              '[ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.',
+              '[ConnectionService] 🚀 WiFi Direct active - using direct socket transfer (bypassing DPFTP)',
             );
-            continue;
           }
 
           debugPrint(
@@ -2366,7 +2458,9 @@ class ConnectionService {
       return;
     }
 
-    if (useDpftp) {
+    // Use DPFTP only when WiFi Direct is NOT active
+    // When WiFi Direct is connected, use legacy receive which routes through WiFi Direct socket
+    if (useDpftp && !_usingWifiDirect) {
       debugPrint('[ConnectionService] 🚀 Accepting with DPFTP for $transferId');
       await sendMessage(
         DeviceMessage(
@@ -2376,6 +2470,12 @@ class ConnectionService {
         ),
       );
       return;
+    }
+
+    if (_usingWifiDirect && _wifiDirectDataSocket != null) {
+      debugPrint(
+        '[ConnectionService] 🚀 WiFi Direct active - using direct socket receive (bypassing DPFTP)',
+      );
     }
 
     // Choose directory: Downloads on desktop, Documents on mobile

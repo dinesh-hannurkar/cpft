@@ -6,7 +6,7 @@ class Dpftp {
   static const int magicByte = 0xACDC1234;
 
   // Standard chunk size (1 MB) - reduced for better granularity and mobile memory safety
-  static const int defaultChunkSize = 2 * 1024 * 1024;
+  static const int defaultChunkSize = 3 * 1024 * 1024;
 
   // Max control payload (1 MB) prevents memory exhaustion
   static const int maxControlPayloadInfo = 1024 * 1024;

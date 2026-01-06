@@ -36,25 +36,37 @@ class DpftpService {
   }
 
   // Queue for handling multiple files sequentially
-  final List<_PendingTransfer> _transferQueue = [];
-  bool _isProcessingQueue = false;
+  final List<_TransferRequest> _transferQueue = [];
+  bool _isProcessing = false;
 
   /// Send a file to a remote device
   Future<void> sendFile({
     required String ip,
     required File file,
     required String transferId,
+    int? parallelConnections,
+    int? chunkSize,
+    int? maxInFlightBytes,
   }) async {
     // Add to queue
-    _transferQueue.add(_PendingTransfer(ip, file, transferId));
+    _transferQueue.add(
+      _TransferRequest(
+        ip: ip,
+        file: file,
+        transferId: transferId,
+        parallelConnections: parallelConnections,
+        chunkSize: chunkSize,
+        maxInFlightBytes: maxInFlightBytes,
+      ),
+    );
 
     // Process queue if not running
     _processQueue();
   }
 
   Future<void> _processQueue() async {
-    if (_isProcessingQueue) return;
-    _isProcessingQueue = true;
+    if (_isProcessing) return;
+    _isProcessing = true;
 
     while (_transferQueue.isNotEmpty) {
       final req = _transferQueue.removeAt(0);
@@ -71,7 +83,9 @@ class DpftpService {
           port: dataPort,
           file: req.file,
           transferId: req.transferId,
-          parallelConnections: 4,
+          parallelConnections: req.parallelConnections ?? 4,
+          chunkSize: req.chunkSize,
+          maxInFlightBytes: req.maxInFlightBytes,
           onProgress: (p) {
             _progressController.add(p);
 
@@ -123,7 +137,7 @@ class DpftpService {
       }
     }
 
-    _isProcessingQueue = false;
+    _isProcessing = false;
   }
 
   void stop() {
@@ -132,13 +146,24 @@ class DpftpService {
     _sender?.stop();
     _sender = null;
     _transferQueue.clear();
-    _isProcessingQueue = false;
+    _isProcessing = false;
   }
 }
 
-class _PendingTransfer {
+class _TransferRequest {
   final String ip;
   final File file;
   final String transferId;
-  _PendingTransfer(this.ip, this.file, this.transferId);
+  final int? parallelConnections;
+  final int? chunkSize;
+  final int? maxInFlightBytes;
+
+  _TransferRequest({
+    required this.ip,
+    required this.file,
+    required this.transferId,
+    this.parallelConnections,
+    this.chunkSize,
+    this.maxInFlightBytes,
+  });
 }
