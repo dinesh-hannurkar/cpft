@@ -28,10 +28,9 @@ class DpftpSender {
   DateTime? _startTime;
 
   // Flow Control & Queue
-  static const int _maxInFlightBytes =
-      16 * 1024 * 1024; // 16MB Window (Lower memory pressure)
-  static const int _requestChunkCount =
-      16; // Request 16 chunks (1MB * 16 = 16MB)
+  final int maxInFlightBytes; // Dynamic window size
+  final int requestChunkCount; // Dynamic chunk request count
+  final int chunkSize; // Dynamic chunk size
 
   int _ackedBytes = 0; // Verified progress (for UI)
   int _pushedBytes = 0; // Bytes sent to socket (for Flow Control)
@@ -49,8 +48,14 @@ class DpftpSender {
     required this.file,
     required this.transferId,
     this.parallelConnections = 1,
+    int? chunkSize,
+    int? maxInFlightBytes,
     this.onProgress,
-  });
+  }) : chunkSize = chunkSize ?? Dpftp.defaultChunkSize,
+       maxInFlightBytes = maxInFlightBytes ?? (16 * 1024 * 1024),
+       requestChunkCount =
+           (maxInFlightBytes ?? (16 * 1024 * 1024)) ~/
+           (chunkSize ?? Dpftp.defaultChunkSize);
 
   Future<void> start() async {
     try {
@@ -145,7 +150,7 @@ class DpftpSender {
     // Ask for window size appropriate amount (4 chunks = 32MB)
     _sockets.sendControl(
       Dpftp.typeRequestChunks,
-      Dpftp.int16(_requestChunkCount),
+      Dpftp.int16(requestChunkCount),
     );
   }
 
@@ -199,7 +204,7 @@ class DpftpSender {
 
     // Check if we can unblock the pump
     if (_flowControlWait != null && !(_flowControlWait!.isCompleted)) {
-      if (_pushedBytes - _ackedBytes < _maxInFlightBytes) {
+      if (_pushedBytes - _ackedBytes < maxInFlightBytes) {
         _flowControlWait!.complete();
       }
     }
@@ -236,7 +241,7 @@ class DpftpSender {
     try {
       while (_chunkQueue.isNotEmpty) {
         // Flow Control Check
-        if (_pushedBytes - _ackedBytes >= _maxInFlightBytes) {
+        if (_pushedBytes - _ackedBytes >= maxInFlightBytes) {
           // Window Full
           _flowControlWait ??= Completer<void>();
           await _flowControlWait!.future;
@@ -252,7 +257,8 @@ class DpftpSender {
         await _sendChunk(id, _socketIdx++);
 
         // Pipelining: Request more work if queue is getting low
-        if (_chunkQueue.length < 2 && !_waitingForAssignment) {
+        if (_chunkQueue.length < requestChunkCount / 2 &&
+            !_waitingForAssignment) {
           _requestWork();
         }
       }
