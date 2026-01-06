@@ -163,9 +163,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     _shareIntentService = ShareIntentService();
     _shareIntentService.sharedFilesStream.listen((files) {
-      print('ChatScreen: Stream listener received ${files.length} shared files');
+      print(
+        'ChatScreen: Stream listener received ${files.length} shared files',
+      );
       if (mounted) {
-        print('ChatScreen: Received ${files.length} shared files from external app');
+        print(
+          'ChatScreen: Received ${files.length} shared files from external app',
+        );
         setState(() => _sharedFiles = List<SharedMediaFile>.from(files));
       }
     });
@@ -173,7 +177,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     // Also check for any existing shared files that might have been received before init
     final existingFiles = _shareIntentService.getCurrentSharedFiles();
     if (existingFiles.isNotEmpty) {
-      print('ChatScreen: Found ${existingFiles.length} existing shared files on init');
+      print(
+        'ChatScreen: Found ${existingFiles.length} existing shared files on init',
+      );
       setState(() => _sharedFiles = List<SharedMediaFile>.from(existingFiles));
     }
 
@@ -221,14 +227,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<void> _handleDroppedFiles(List<XFile> droppedFiles) async {
     final sharedMediaFiles = <SharedMediaFile>[];
-    
+
     for (final xFile in droppedFiles) {
       final file = io.File(xFile.path);
       if (await file.exists()) {
         final fileName = xFile.name;
         final filePath = xFile.path;
         await file.length();
-        
+
         // Determine MIME type
         String? mimeType;
         final extension = fileName.split('.').last.toLowerCase();
@@ -259,15 +265,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             mimeType = 'application/octet-stream';
         }
 
-        sharedMediaFiles.add(SharedMediaFile(
-          path: filePath,
-          type: mimeType.contains('image') ? SharedMediaType.image : 
-                mimeType.contains('video') ? SharedMediaType.video : 
-                SharedMediaType.file,
-          mimeType: mimeType,
-          duration: null, // Not needed for dropped files
-          thumbnail: null, // Not needed for dropped files
-        ));
+        sharedMediaFiles.add(
+          SharedMediaFile(
+            path: filePath,
+            type: mimeType.contains('image')
+                ? SharedMediaType.image
+                : mimeType.contains('video')
+                ? SharedMediaType.video
+                : SharedMediaType.file,
+            mimeType: mimeType,
+            duration: null, // Not needed for dropped files
+            thumbnail: null, // Not needed for dropped files
+          ),
+        );
       }
     }
 
@@ -284,6 +294,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  final Set<String> _completedTransferIds = {};
+
   void _onMessageReceived(DeviceMessage message) {
     if (!mounted) return;
     switch (message.type) {
@@ -292,6 +304,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         break;
       case 'file_progress':
         final tId = message.metadata?['transferId'] as String?;
+
+        // 🛡️ Guard: Ignore progress for already completed transfers
+        if (tId != null && _completedTransferIds.contains(tId)) {
+          return;
+        }
+
         final bytes = message.metadata?['bytes'] as int?;
         final total = message.metadata?['total'] as int?;
         final mime = message.metadata?['mime'] as String?;
@@ -311,7 +329,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             );
             map[tId]!.updateProgress(bytes.toDouble());
             map[tId]!.isPending = false; // Clear pending state on progress
-            
+
             // Track transfer start time
             if (isNewTransfer) {
               _transferStartTimes[tId] = DateTime.now();
@@ -326,6 +344,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         break;
       case 'file_pending':
         final tId = message.metadata?['transferId'] as String?;
+        if (tId != null && _completedTransferIds.contains(tId)) return;
+
         final buffered = message.metadata?['buffered'] as int? ?? 0;
         final outgoing = message.metadata?['outgoing'] as bool? ?? false;
         if (tId != null) {
@@ -340,13 +360,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         break;
       case 'file_complete':
         final tId = message.metadata?['transferId'] as String?;
+        if (tId != null) _completedTransferIds.add(tId);
+
         final path = message.metadata?['path'] as String?;
         final isOutgoing = message.metadata?['outgoing'] as bool? ?? false;
         final wasFirstReceivedFile = _receivedFiles.isEmpty && !isOutgoing;
         final wasSecondReceivedFile = _receivedFiles.length == 1 && !isOutgoing;
 
         // Calculate transfer statistics
-        if (tId != null && _transferStartTimes.containsKey(tId)) {
+        // Calculate transfer statistics
+        final durationMs = message.metadata?['durationMs'] as int?;
+        if (durationMs != null) {
+          _lastTransferDuration = Duration(milliseconds: durationMs);
+          _lastTransferEndTime = DateTime.now(); // Just for timestamp reference
+          final size = message.metadata?['size'] as int?;
+          if (size != null) {
+            _lastTransferBytes = size;
+          }
+          if (tId != null) _transferStartTimes.remove(tId);
+        } else if (tId != null && _transferStartTimes.containsKey(tId)) {
           final endTime = DateTime.now();
           final startTime = _transferStartTimes[tId]!;
           _lastTransferDuration = endTime.difference(startTime);
@@ -552,10 +584,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
       // Auto-send shared files when connection is established
       if (_sharedFiles.isNotEmpty) {
-        print('ChatScreen: Auto-send triggered - sharedFiles: ${_sharedFiles.length}');
+        print(
+          'ChatScreen: Auto-send triggered - sharedFiles: ${_sharedFiles.length}',
+        );
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          print('ChatScreen: Executing auto-send for ${_sharedFiles.length} files');
+          print(
+            'ChatScreen: Executing auto-send for ${_sharedFiles.length} files',
+          );
           _sendSharedFiles();
         });
       } else {
@@ -588,9 +624,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       if (_scrollController.hasClients) {
         _isProgrammaticScroll = true;
-        _scrollController.jumpTo(
-          _scrollController.position.maxScrollExtent,
-        );
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
         // Reset the flag after a short delay to allow the scroll to complete
         Future.delayed(const Duration(milliseconds: 100), () {
           _isProgrammaticScroll = false;
@@ -653,7 +687,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _sendSharedFiles() {
-    print('ChatScreen: _sendSharedFiles called with ${_sharedFiles.length} files');
+    print(
+      'ChatScreen: _sendSharedFiles called with ${_sharedFiles.length} files',
+    );
     if (_sharedFiles.isNotEmpty) {
       print('ChatScreen: Sending shared files to connection service');
       _connectionService.sendSharedFiles(_sharedFiles);
@@ -1111,7 +1147,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     // print(
     //   'ChatScreen: isConnected = $isConnected, sharedFiles = ${_sharedFiles.length}',
     // );
-    print('ChatScreen: Build - isConnected = $isConnected, sharedFiles = ${_sharedFiles.length}, connectionInfo = ${_connectionInfo?.status}');
+    print(
+      'ChatScreen: Build - isConnected = $isConnected, sharedFiles = ${_sharedFiles.length}, connectionInfo = ${_connectionInfo?.status}',
+    );
     // ignore: deprecated_member_use
     return ShowCaseWidget(
       builder: (context) => Scaffold(
@@ -1121,7 +1159,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             setState(() {
               _dragging = false;
             });
-            
+
             // Handle dropped files
             if (detail.files.isNotEmpty) {
               await _handleDroppedFiles(detail.files);
@@ -1148,237 +1186,270 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     stops: [0.0, 1.0],
                   ),
                 ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                ChatTopBar(
-                  deviceName: _connectionService.deviceName,
-                  statusText: _statusText(),
-                  receivedFilesCount: _receivedFiles.length,
-                  connectionsCount:
-                      widget.connectionManager.activeConnections.length,
-                  onBack: () => Navigator.of(context).pop(),
-                  onShowReceivedFiles: _showReceivedFilesSheet,
-                  onShowDevices: _showAllConnectedDevices,
-                  onDisconnect: isConnected ? _disconnect : null,
-                  onSaveAll: _receivedFiles.length > 1 ? _saveAll : null,
-                  connectionManager: widget.connectionManager,
-                  isConnected: isConnected,
-                ),
-                if (_isConnecting ||
-                    _connectionInfo?.status == ConnectionStatus.connecting)
-                  ConnectingBanner(deviceName: _connectionService.deviceName),
-                if (_connectionInfo?.status == ConnectionStatus.failed)
-                  ErrorBanner(
-                    error: _connectionInfo?.error,
-                    onRetry: _connectToDevice,
-                  ),
-                WiFiDirectBanner(
-                  statusNotifier: _connectionService.wifiDirectStatusNotifier,
-                  canConnect: _connectionService.canConnectWifiDirect,
-                  onConnect: () async {
-                    await _connectionService.connectWifiDirect();
-                    if (mounted) {
-                      setState(() {});
-                    }
-                  },
-                ),
-                const TemporaryFilesWarningBanner(),
-                if (_lastTransferBytes != null && 
-                    _lastTransferDuration != null)
-                  TransferStatsBanner(
-                    totalBytes: _lastTransferBytes!,
-                    duration: _lastTransferDuration!,
-                  ),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () {
-                      // Close keyboard when tapping outside input field
-                      FocusScope.of(context).unfocus();
-                    },
-                    child: (() {
-                      final totalItems =
-                          _messages.length +
-                          _incomingProgress.length +
-                          _outgoingProgress.length;
-                      if (totalItems == 0) {
-                        return EmptyDataWidget();
-                      }
-                      return ListView.builder(
-                        controller: _scrollController,
-                        physics: const ClampingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      ChatTopBar(
+                        deviceName: _connectionService.deviceName,
+                        statusText: _statusText(),
+                        receivedFilesCount: _receivedFiles.length,
+                        connectionsCount:
+                            widget.connectionManager.activeConnections.length,
+                        onBack: () => Navigator.of(context).pop(),
+                        onShowReceivedFiles: _showReceivedFilesSheet,
+                        onShowDevices: _showAllConnectedDevices,
+                        onDisconnect: isConnected ? _disconnect : null,
+                        onSaveAll: _receivedFiles.length > 1 ? _saveAll : null,
+                        connectionManager: widget.connectionManager,
+                        isConnected: isConnected,
+                      ),
+                      if (_isConnecting ||
+                          _connectionInfo?.status ==
+                              ConnectionStatus.connecting)
+                        ConnectingBanner(
+                          deviceName: _connectionService.deviceName,
                         ),
-                        itemCount: totalItems,
-                      itemBuilder: (context, index) {
-                        if (index < _messages.length) {
-                          final msg = _messages[index];
-                          final isMine = msg.senderName == widget.myDeviceName;
-                          if (msg.type == 'file_complete') {
-                            // Use 'outgoing' metadata for file transfers to be more reliable
-                            final isOutgoing =
-                                msg.metadata?['outgoing'] as bool? ?? isMine;
-                            final savedPath = msg.metadata?['path'] as String?;
-                            // Use updated path if file was saved
-                            final actualPath = savedPath != null
-                                ? (_savedFilePaths[savedPath] ?? savedPath)
-                                : null;
+                      if (_connectionInfo?.status == ConnectionStatus.failed)
+                        ErrorBanner(
+                          error: _connectionInfo?.error,
+                          onRetry: _connectToDevice,
+                        ),
+                      WiFiDirectBanner(
+                        statusNotifier:
+                            _connectionService.wifiDirectStatusNotifier,
+                        canConnect: _connectionService.canConnectWifiDirect,
+                        onConnect: () async {
+                          await _connectionService.connectWifiDirect();
+                          if (mounted) {
+                            setState(() {});
+                          }
+                        },
+                      ),
+                      const TemporaryFilesWarningBanner(),
+                      if (_lastTransferBytes != null &&
+                          _lastTransferDuration != null)
+                        TransferStatsBanner(
+                          totalBytes: _lastTransferBytes!,
+                          duration: _lastTransferDuration!,
+                        ),
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () {
+                            // Close keyboard when tapping outside input field
+                            FocusScope.of(context).unfocus();
+                          },
+                          child: (() {
+                            final totalItems =
+                                _messages.length +
+                                _incomingProgress.length +
+                                _outgoingProgress.length;
+                            if (totalItems == 0) {
+                              return EmptyDataWidget();
+                            }
+                            return ListView.builder(
+                              controller: _scrollController,
+                              physics: const ClampingScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              itemCount: totalItems,
+                              itemBuilder: (context, index) {
+                                if (index < _messages.length) {
+                                  final msg = _messages[index];
+                                  final isMine =
+                                      msg.senderName == widget.myDeviceName;
+                                  if (msg.type == 'file_complete') {
+                                    // Use 'outgoing' metadata for file transfers to be more reliable
+                                    final isOutgoing =
+                                        msg.metadata?['outgoing'] as bool? ??
+                                        isMine;
+                                    final savedPath =
+                                        msg.metadata?['path'] as String?;
+                                    // Use updated path if file was saved
+                                    final actualPath = savedPath != null
+                                        ? (_savedFilePaths[savedPath] ??
+                                              savedPath)
+                                        : null;
 
-                            // Show showcase on first received file only
-                            final isFirstReceivedFile =
-                                !isOutgoing &&
-                                _messages
-                                        .where(
-                                          (m) =>
-                                              m.type == 'file_complete' &&
-                                              (m.metadata?['outgoing']
-                                                          as bool? ??
-                                                      false) ==
-                                                  false,
-                                        )
-                                        .first ==
-                                    msg;
+                                    // Show showcase on first received file only
+                                    final isFirstReceivedFile =
+                                        !isOutgoing &&
+                                        _messages
+                                                .where(
+                                                  (m) =>
+                                                      m.type ==
+                                                          'file_complete' &&
+                                                      (m.metadata?['outgoing']
+                                                                  as bool? ??
+                                                              false) ==
+                                                          false,
+                                                )
+                                                .first ==
+                                            msg;
 
-                            return CompletedFileCard(
-                              message: msg,
-                              isMine: isOutgoing,
-                              savedPath: actualPath,
-                              onOpen: (p, n) => _openFile(p, n),
-                              onSaveAs: (p, n) => _saveAs(p, n),
-                              showShowcase: isFirstReceivedFile,
+                                    return CompletedFileCard(
+                                      message: msg,
+                                      isMine: isOutgoing,
+                                      savedPath: actualPath,
+                                      onOpen: (p, n) => _openFile(p, n),
+                                      onSaveAs: (p, n) => _saveAs(p, n),
+                                      showShowcase: isFirstReceivedFile,
+                                    );
+                                  }
+                                  if (msg.type == 'file_offer') {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return MessageBubble(
+                                    message: msg,
+                                    isMine: isMine,
+                                  );
+                                }
+                                final extra = index - _messages.length;
+                                final incomingKeys = _incomingProgress.keys
+                                    .toList();
+                                if (extra < incomingKeys.length) {
+                                  final tId = incomingKeys[extra];
+                                  return TransferProgressTile(
+                                    progress: _incomingProgress[tId]!,
+                                    onCancel: () {
+                                      _connectionService.cancelTransfer(tId);
+                                      setState(() {
+                                        _incomingProgress.remove(tId);
+                                        _outgoingProgress.remove(tId);
+                                      });
+                                    },
+                                    onResume: () async {
+                                      if (_incomingProgress.containsKey(tId)) {
+                                        await _connectionService.resumeIncoming(
+                                          tId,
+                                        );
+                                      } else if (_outgoingProgress.containsKey(
+                                        tId,
+                                      )) {
+                                        await _connectionService.requestResume(
+                                          tId,
+                                        );
+                                      }
+                                    },
+                                  );
+                                }
+                                final outExtra = extra - incomingKeys.length;
+                                final outKeys = _outgoingProgress.keys.toList();
+                                if (outExtra < outKeys.length) {
+                                  final tId = outKeys[outExtra];
+                                  return TransferProgressTile(
+                                    progress: _outgoingProgress[tId]!,
+                                    onCancel: () {
+                                      _connectionService.cancelTransfer(tId);
+                                      setState(() {
+                                        _incomingProgress.remove(tId);
+                                        _outgoingProgress.remove(tId);
+                                      });
+                                    },
+                                    onResume: () async {
+                                      if (_incomingProgress.containsKey(tId)) {
+                                        await _connectionService.resumeIncoming(
+                                          tId,
+                                        );
+                                      } else if (_outgoingProgress.containsKey(
+                                        tId,
+                                      )) {
+                                        await _connectionService.requestResume(
+                                          tId,
+                                        );
+                                      }
+                                    },
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
                             );
-                          }
-                          if (msg.type == 'file_offer') {
-                            return const SizedBox.shrink();
-                          }
-                          return MessageBubble(message: msg, isMine: isMine);
-                        }
-                        final extra = index - _messages.length;
-                        final incomingKeys = _incomingProgress.keys.toList();
-                        if (extra < incomingKeys.length) {
-                          final tId = incomingKeys[extra];
-                          return TransferProgressTile(
-                            progress: _incomingProgress[tId]!,
-                            onCancel: () {
-                              _connectionService.cancelTransfer(tId);
-                              setState(() {
-                                _incomingProgress.remove(tId);
-                                _outgoingProgress.remove(tId);
-                              });
-                            },
-                            onResume: () async {
-                              if (_incomingProgress.containsKey(tId)) {
-                                await _connectionService.resumeIncoming(tId);
-                              } else if (_outgoingProgress.containsKey(tId)) {
-                                await _connectionService.requestResume(tId);
-                              }
-                            },
-                          );
-                        }
-                        final outExtra = extra - incomingKeys.length;
-                        final outKeys = _outgoingProgress.keys.toList();
-                        if (outExtra < outKeys.length) {
-                          final tId = outKeys[outExtra];
-                          return TransferProgressTile(
-                            progress: _outgoingProgress[tId]!,
-                            onCancel: () {
-                              _connectionService.cancelTransfer(tId);
-                              setState(() {
-                                _incomingProgress.remove(tId);
-                                _outgoingProgress.remove(tId);
-                              });
-                            },
-                            onResume: () async {
-                              if (_incomingProgress.containsKey(tId)) {
-                                await _connectionService.resumeIncoming(tId);
-                              } else if (_outgoingProgress.containsKey(tId)) {
-                                await _connectionService.requestResume(tId);
-                              }
-                            },
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    );
-                  })(),
-                  ),
-                ),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) => SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 1),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    ),
-                  ),
-                  child: (isConnected && MediaQuery.of(context).viewInsets.bottom == 0)
-                      ? Showcase(
-                          key: ShowcaseHelper.sendFileButtonKey,
-                          disableBarrierInteraction: false,
-                          targetPadding: const EdgeInsets.all(8),
-                          title: 'Send Files',
-                          description:
-                              'Tap here to select and send files to the connected device.',
-                          tooltipBackgroundColor: Colors.white,
-                          textColor: Colors.black,
-                          descTextStyle: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black87,
-                          ),
-                          titleTextStyle: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                            fontSize: 16,
-                          ),
-                          tooltipBorderRadius: BorderRadius.circular(12),
-                          targetBorderRadius: BorderRadius.circular(12),
-                          child: FileTaglineBar(
-                            onTapMain: _pickAndSendFile,
-                            onTapFab: _pickAndSendFile,
-                            pulseController: _fileIconPulse!,
-                            fileIcons: fileIcons,
-                            fileIconIndex: _fileIconIndex,
-                            slideFromLeft: _slideFromLeft,
-                            isLoading: _isPickingFile,
-                          ),
-                        )
-                      : const SizedBox.shrink(key: ValueKey('hidden')),
-                ),
-                if (_sharedFiles.isNotEmpty && isConnected) // Auto-send enabled, banner disabled
-                  // print('ChatScreen: Showing shared files banner, files: ${_sharedFiles.length}, connected: $isConnected');
-                  SharedFilesBanner(
-                    files: _sharedFiles,
-                    onSend: _sendSharedFiles,
-                  ),
+                          })(),
+                        ),
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) =>
+                            SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 1),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              ),
+                            ),
+                        child:
+                            (isConnected &&
+                                MediaQuery.of(context).viewInsets.bottom == 0)
+                            ? Showcase(
+                                key: ShowcaseHelper.sendFileButtonKey,
+                                disableBarrierInteraction: false,
+                                targetPadding: const EdgeInsets.all(8),
+                                title: 'Send Files',
+                                description:
+                                    'Tap here to select and send files to the connected device.',
+                                tooltipBackgroundColor: Colors.white,
+                                textColor: Colors.black,
+                                descTextStyle: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black87,
+                                ),
+                                titleTextStyle: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                ),
+                                tooltipBorderRadius: BorderRadius.circular(12),
+                                targetBorderRadius: BorderRadius.circular(12),
+                                child: FileTaglineBar(
+                                  onTapMain: _pickAndSendFile,
+                                  onTapFab: _pickAndSendFile,
+                                  pulseController: _fileIconPulse!,
+                                  fileIcons: fileIcons,
+                                  fileIconIndex: _fileIconIndex,
+                                  slideFromLeft: _slideFromLeft,
+                                  isLoading: _isPickingFile,
+                                ),
+                              )
+                            : const SizedBox.shrink(key: ValueKey('hidden')),
+                      ),
+                      if (_sharedFiles.isNotEmpty &&
+                          isConnected) // Auto-send enabled, banner disabled
+                        // print('ChatScreen: Showing shared files banner, files: ${_sharedFiles.length}, connected: $isConnected');
+                        SharedFilesBanner(
+                          files: _sharedFiles,
+                          onSend: _sendSharedFiles,
+                        ),
 
-                MessageInputBar(
-                  controller: _messageController,
-                  focusNode: _inputFocus,
-                  onSend: _sendMessage,
-                  enabled: isConnected,
+                      MessageInputBar(
+                        controller: _messageController,
+                        focusNode: _inputFocus,
+                        onSend: _sendMessage,
+                        enabled: isConnected,
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+              // Drag overlay
+              ...(_dragging
+                  ? [
+                      DragOverlay(
+                        title: 'Drop files to send',
+                        subtitle: 'Release to send files to this device',
+                      ),
+                    ]
+                  : []),
+            ],
           ),
-          ),
-          // Drag overlay
-          ...(_dragging ? [
-            DragOverlay(
-              title: 'Drop files to send',
-              subtitle: 'Release to send files to this device',
-            ),
-          ] : []),
-        ],
+        ),
       ),
-    )));
+    );
   }
 }

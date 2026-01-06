@@ -11,28 +11,33 @@ import 'package:path_provider/path_provider.dart';
 import 'package:fylooo/services/notification_service.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:flutter/services.dart';
-import 'package:fylooo/utils/network_utils.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
+import 'package:fylooo/features/dpftp/dpftp_service.dart';
+import 'package:fylooo/features/dpftp/dpftp_types.dart';
 
 // 🔬 PERF: Global profiling state
 class _PerfMetrics {
   int _totalBytesReceived = 0;
   DateTime? _startTime;
   int _lastReportBytes = 0;
-  
+
   void recordBytes(int bytes) {
     _totalBytesReceived += bytes;
     _startTime ??= DateTime.now();
-    
+
     // Report every 10MB for more frequent updates
     if (_totalBytesReceived - _lastReportBytes >= (10 * 1024 * 1024)) {
       final elapsed = DateTime.now().difference(_startTime!);
-      final mbps = (_totalBytesReceived * 8.0 / (elapsed.inMilliseconds / 1000.0)) / 1000000;
-      debugPrint('[PERF] Socket arrival rate: ${mbps.toStringAsFixed(1)} Mbps (${_totalBytesReceived ~/ (1024*1024)} MB in ${elapsed.inSeconds}s)');
+      final mbps =
+          (_totalBytesReceived * 8.0 / (elapsed.inMilliseconds / 1000.0)) /
+          1000000;
+      debugPrint(
+        '[PERF] Socket arrival rate: ${mbps.toStringAsFixed(1)} Mbps (${_totalBytesReceived ~/ (1024 * 1024)} MB in ${elapsed.inSeconds}s)',
+      );
       _lastReportBytes = _totalBytesReceived;
     }
   }
-  
+
   void reset() {
     _totalBytesReceived = 0;
     _startTime = null;
@@ -50,7 +55,11 @@ Uint8List _int32(int value) {
 }
 
 int _readInt32(Uint8List data, int offset) {
-  return ByteData.sublistView(data, offset, offset + 4).getInt32(0, Endian.big);
+  return ByteData.sublistView(
+    data,
+    offset,
+    offset + 4,
+  ).getUint32(0, Endian.big);
 }
 
 /// Service for managing device-to-device connections
@@ -59,6 +68,8 @@ class ConnectionService {
   static const bool _enablePerfLogs = false;
   static const bool _enableBinaryChunkLogs = false;
   static const int _binaryChunkLogEveryN = 256;
+  // Magic byte sequence to identify frame start [AC, DC, 12, 34]
+  static const int _frameMagic = 0xACDC1234;
 
   final String deviceName;
   List<Socket> _sockets = [];
@@ -76,8 +87,10 @@ class ConnectionService {
   final Map<String, FileOffer> _pendingOffers = {};
   final Map<String, _OutgoingTransfer> _outgoingTransfers = {};
   final Map<String, List<_PendingBinaryChunk>> _pendingBinary = {};
-  final Map<String, Socket> _nativeReceiverSockets = {}; // Socket pool for native receiver per transfer
-  final Map<String, int> _nativeReceiverLastFlush = {}; // Track last flush chunk index per transfer
+  final Map<String, Socket> _nativeReceiverSockets =
+      {}; // Socket pool for native receiver per transfer
+  final Map<String, int> _nativeReceiverLastFlush =
+      {}; // Track last flush chunk index per transfer
   // Flow control: limit by bytes in-flight (instead of chunk count). Default 256MB.
   static const int _maxPendingBytes = 256 * 1024 * 1024; // 256MB
   // Keep old chunk-count constant for safety/backwards-compat but not used.
@@ -89,9 +102,10 @@ class ConnectionService {
   Completer<void>? _parallelAckCompleter;
   int _expectedParallelStreams = 1;
   final _wifiDirectFrameParser = _FrameParser();
-  
+
   // WiFi Direct state
-  final ValueNotifier<WifiDirectStatus> wifiDirectStatusNotifier = ValueNotifier(WifiDirectStatus.disconnected);
+  final ValueNotifier<WifiDirectStatus> wifiDirectStatusNotifier =
+      ValueNotifier(WifiDirectStatus.disconnected);
   bool _wifiDirectAttempted = false;
   bool _usingWifiDirect = false;
   final _wifiDirectService = WiFiDirectService();
@@ -118,13 +132,15 @@ class ConnectionService {
   // How often to flush to native receiver (in chunks). With 4MB chunks, 16
   // chunks ~= 64MB which reduces syscall/flush overhead on localhost.
   static const int _nativeReceiverFlushEveryChunks = 16;
-  
+
   // 🚀 Use native receiver with optimized forwarding (targeting 50+ Mbps)
   static bool useNativeReceiver = true;
   // 🚀 Enable parallel TCP streams for non-Android platforms to boost speed
-  static const bool enableParallelTransfers = true;
+  static const bool enableParallelTransfers = false;
   static const int parallelSockets = 4; // Number of parallel sockets
 
+  // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
+  static const bool useDpftp = true;
 
   Future<void> _writeFrame(
     int type,
@@ -133,16 +149,31 @@ class ConnectionService {
   }) async {
     if (_primarySocket == null) return;
 
-    // frame = [payloadLen:int32][type:1][payload]
+    // frame = [MAGIC:4][payloadLen:int32][type:1][payload]
     final payloadLen = 1 + payload.length;
 
     final buffer = BytesBuilder(copy: false);
+    buffer.add(_int32(_frameMagic));
     buffer.add(_int32(payloadLen));
     buffer.add([type & 0xFF]);
     buffer.add(payload);
-    _primarySocket!.add(buffer.takeBytes());
-    if (forceFlush) {
-      await _primarySocket!.flush();
+
+    try {
+      _primarySocket!.add(buffer.takeBytes());
+      if (forceFlush) {
+        await _primarySocket!.flush();
+      }
+    } catch (e) {
+      debugPrint('[ConnectionService] ❌ Error writing to socket: $e');
+      // If socket is in bad state, trigger reconnection
+      if (e.toString().contains('StreamSink is bound') ||
+          e.toString().contains('Socket is closed')) {
+        debugPrint(
+          '[ConnectionService] Socket is in bad state, will attempt to recover',
+        );
+        _handleConnectionError('Socket write error: $e');
+      }
+      rethrow;
     }
   }
 
@@ -152,10 +183,11 @@ class ConnectionService {
     Uint8List payload, {
     bool forceFlush = false,
   }) async {
-    // frame = [payloadLen:int32][type:1][payload]
+    // frame = [MAGIC:4][payloadLen:int32][type:1][payload]
     final payloadLen = 1 + payload.length;
 
     final buffer = BytesBuilder(copy: false);
+    buffer.add(_int32(_frameMagic));
     buffer.add(_int32(payloadLen));
     buffer.add([type & 0xFF]);
     buffer.add(payload);
@@ -170,11 +202,20 @@ class ConnectionService {
     Uint8List payload, {
     bool forceFlush = false,
   }) async {
-    // Serialize ALL socket writes (JSON + binary) to preserve ordering.
-    _sendChain = _sendChain.then((_) async {
-      await _writeFrame(type, payload, forceFlush: forceFlush);
-    });
-    await _sendChain;
+    // Use _sendChains[0] if available (parallel sockets), otherwise use _sendChain
+    // This ensures coordination with binary transfers
+    if (_sendChains.isNotEmpty) {
+      _sendChains[0] = _sendChains[0].then((_) async {
+        await _writeFrame(type, payload, forceFlush: forceFlush);
+      });
+      await _sendChains[0];
+    } else {
+      // Fallback to _sendChain for single socket mode
+      _sendChain = _sendChain.then((_) async {
+        await _writeFrame(type, payload, forceFlush: forceFlush);
+      });
+      await _sendChain;
+    }
   }
 
   Future<void> _enqueueWifiDirectFrame(
@@ -215,9 +256,21 @@ class ConnectionService {
     required Uint8List bytes,
     bool flush = false,
   }) async {
-    final socketIndex = _sockets.length > 1 ? index % _sockets.length : 0;
     final targetSocket = _getTransferSocket(chunkIndex: index);
     if (targetSocket == null) return;
+
+    // Find the actual index of targetSocket in _sockets list
+    // This is critical for using the correct send chain
+    int socketIndex = 0;
+    if (!identical(targetSocket, _wifiDirectDataSocket)) {
+      socketIndex = _sockets.indexOf(targetSocket);
+      if (socketIndex == -1) {
+        debugPrint(
+          '[ConnectionService] ❌ targetSocket not found in _sockets list!',
+        );
+        return;
+      }
+    }
 
     final tid = utf8.encode(transferId);
 
@@ -225,25 +278,35 @@ class ConnectionService {
       throw StateError('transferId too long (${tid.length} bytes)');
     }
 
-    // Frame structure: [payloadLen:4][type:1][tidLen:1][tid:N][index:4][isLast:1][bytes:M]
+    // Frame structure: [MAGIC:4][payloadLen:4][type:1][tidLen:1][tid:N][index:4][isLast:1][bytes:M]
     final payloadLen = 1 + 1 + tid.length + 4 + 1 + bytes.length;
     final tidLen = tid.length;
-    
-    final headerSize = 4 + 1 + 1 + tidLen + 4 + 1;
+
+    final headerSize =
+        4 + 4 + 1 + 1 + tidLen + 4 + 1; // Added 4 bytes for magic
     final header = Uint8List(headerSize);
     final bd = ByteData.view(header.buffer);
-    
+
     int offset = 0;
-    bd.setInt32(offset, payloadLen, Endian.big); offset += 4;
+    bd.setInt32(offset, _frameMagic, Endian.big);
+    offset += 4;
+    bd.setInt32(offset, payloadLen, Endian.big);
+    offset += 4;
     header[offset++] = 1;
     header[offset++] = tidLen;
-    header.setRange(offset, offset + tidLen, tid); offset += tidLen;
-    bd.setInt32(offset, index, Endian.big); offset += 4;
+    header.setRange(offset, offset + tidLen, tid);
+    offset += tidLen;
+    bd.setInt32(offset, index, Endian.big);
+    offset += 4;
     header[offset++] = isLast ? 1 : 0;
 
     Future<void> write() async {
-      targetSocket.add(header);
-      targetSocket.add(bytes);
+      // Combine header and bytes into a single buffer for atomic write
+      // This prevents interleaving issues when multiple chunks are sent in parallel
+      final combined = BytesBuilder(copy: false);
+      combined.add(header);
+      combined.add(bytes);
+      targetSocket.add(combined.takeBytes());
       if (flush) {
         await targetSocket.flush();
       }
@@ -281,10 +344,17 @@ class ConnectionService {
   }
 
   /// Forward binary chunk to native Android receiver
-  Future<void> _forwardToNativeReceiver(String transferId, int index, bool isLast, Uint8List bytes) async {
+  Future<void> _forwardToNativeReceiver(
+    String transferId,
+    int index,
+    bool isLast,
+    Uint8List bytes,
+  ) async {
     // Verify transfer is registered before forwarding
     if (!_incomingFiles.containsKey(transferId)) {
-      debugPrint('[ConnectionService] ⚠️ Cannot forward chunk $index: transfer $transferId not registered yet');
+      debugPrint(
+        '[ConnectionService] ⚠️ Cannot forward chunk $index: transfer $transferId not registered yet',
+      );
       throw StateError('Transfer not registered in _incomingFiles');
     }
 
@@ -302,26 +372,31 @@ class ConnectionService {
       final tid = utf8.encode(transferId);
       final tidLen = tid.length;
       final payloadLen = 1 + tidLen + 4 + 1 + bytes.length;
-      
+
       // Write frame: [payloadLen:4][tidLen:1][tid][index:4][isLast:1][bytes]
       // Combine header into one buffer
       final headerSize = 4 + 1 + tidLen + 4 + 1;
       final header = Uint8List(headerSize);
       final bd = ByteData.view(header.buffer);
-      
+
       int offset = 0;
-      bd.setInt32(offset, payloadLen, Endian.big); offset += 4;
+      bd.setInt32(offset, payloadLen, Endian.big);
+      offset += 4;
       header[offset++] = tidLen;
-      header.setRange(offset, offset + tidLen, tid); offset += tidLen;
-      bd.setInt32(offset, index, Endian.big); offset += 4;
+      header.setRange(offset, offset + tidLen, tid);
+      offset += tidLen;
+      bd.setInt32(offset, index, Endian.big);
+      offset += 4;
       header[offset++] = isLast ? 1 : 0;
-      
+
       socket.add(header);
       socket.add(bytes);
-      
+
       // Batch flushes to reduce syscall overhead on localhost
       final lastFlush = _nativeReceiverLastFlush[transferId] ?? -1;
-      if (isLast || (index - lastFlush >= ConnectionService._nativeReceiverFlushEveryChunks)) {
+      if (isLast ||
+          (index - lastFlush >=
+              ConnectionService._nativeReceiverFlushEveryChunks)) {
         await socket.flush();
         _nativeReceiverLastFlush[transferId] = index;
       }
@@ -337,7 +412,9 @@ class ConnectionService {
         _nativeReceiverLastFlush.remove(transferId);
       }
     } catch (e) {
-      debugPrint('[ConnectionService] ❌ Failed to forward chunk to native receiver: $e');
+      debugPrint(
+        '[ConnectionService] ❌ Failed to forward chunk to native receiver: $e',
+      );
       // Clean up socket on error
       try {
         _nativeReceiverSockets[transferId]?.close();
@@ -354,8 +431,88 @@ class ConnectionService {
 
     // Set up native receiver progress channel for Android
     if (Platform.isAndroid) {
-      const nativeReceiverProgressChannel = MethodChannel('com.omnity.fylooo/native_receiver_progress');
-      nativeReceiverProgressChannel.setMethodCallHandler(_handleNativeReceiverProgress);
+      const nativeReceiverProgressChannel = MethodChannel(
+        'com.omnity.fylooo/native_receiver_progress',
+      );
+      nativeReceiverProgressChannel.setMethodCallHandler(
+        _handleNativeReceiverProgress,
+      );
+    }
+
+    if (Platform.isAndroid) {
+      cleanupOldReceivedFiles().catchError((e) {
+        debugPrint('[ConnectionService] ⚠️ Startup cleanup error: $e');
+      });
+    }
+
+    if (useDpftp) {
+      _initDpftp();
+    }
+  }
+
+  Future<void> _initDpftp() async {
+    try {
+      Directory? dir;
+      if (Platform.isAndroid || Platform.isIOS) {
+        dir = await getApplicationDocumentsDirectory();
+      } else {
+        dir = await getDownloadsDirectory();
+        dir ??= await getApplicationDocumentsDirectory();
+      }
+      await DpftpService().startReceiver(saveDirectory: dir.path);
+
+      // Listen to progress
+      DpftpService().progress.listen((p) {
+        _notifyMessageListeners(
+          DeviceMessage(
+            type: 'file_progress',
+            content: p.transferId,
+            senderName: deviceName,
+            timestamp: DateTime.now(),
+            metadata: {
+              'transferId': p.transferId,
+              'bytes': (p.bytesTransferred > p.totalBytes)
+                  ? p.totalBytes
+                  : p.bytesTransferred,
+              'total': p.totalBytes,
+              'outgoing': p.isOutgoing,
+              'path': p.filePath,
+            },
+          ),
+        );
+
+        // If complete, signal legacy UI completion
+        // If complete, signal legacy UI completion
+        if (p.isComplete) {
+          debugPrint(
+            '[ConnectionService] 🏁 DPFTP Transfer ${p.transferId} Complete. Signaling UI.',
+          );
+
+          // Get file name from legacy offer if available
+          final name =
+              _incomingFiles[p.transferId]?.offer.fileName ??
+              p.filePath?.split(Platform.pathSeparator).last ??
+              'Unknown File';
+
+          _notifyMessageListeners(
+            DeviceMessage(
+              type: 'file_complete',
+              content: name,
+              senderName: deviceName,
+              timestamp: DateTime.now(),
+              metadata: {
+                'transferId': p.transferId,
+                'path': p.filePath,
+                'size': p.totalBytes,
+                'outgoing': p.isOutgoing,
+                'durationMs': p.durationMs, // Pass accurate duration to UI
+              },
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('[ConnectionService] ⚠️ Failed to init DPFTP: $e');
     }
   }
 
@@ -371,7 +528,10 @@ class ConnectionService {
 
   /// Check if WiFi Direct connection is available but not yet established
   bool get canConnectWifiDirect =>
-      Platform.isAndroid && isConnected && !_usingWifiDirect && !_wifiDirectAttempted;
+      Platform.isAndroid &&
+      isConnected &&
+      !_usingWifiDirect &&
+      !_wifiDirectAttempted;
 
   /// Manually trigger WiFi Direct connection attempt
   Future<void> connectWifiDirect() async {
@@ -432,7 +592,11 @@ class ConnectionService {
 
     try {
       // Step 1: Connect primary socket
-      final primarySocket = await Socket.connect(ipAddress, port, timeout: const Duration(seconds: 10));
+      final primarySocket = await Socket.connect(
+        ipAddress,
+        port,
+        timeout: const Duration(seconds: 10),
+      );
       _sockets.add(primarySocket);
       _sendChains.add(Future.value());
       _incomingChains.add(Future.value());
@@ -448,46 +612,118 @@ class ConnectionService {
 
       // Step 2: Send handshake and parallel request
       await _sendHandshake();
-      final int streams = enableParallelTransfers && !Platform.isAndroid ? parallelSockets : 1;
+      final int streams = enableParallelTransfers ? parallelSockets : 1;
       if (streams > 1) {
         try {
           _parallelAckCompleter = Completer<void>();
-          await sendMessage(DeviceMessage(
-            type: 'parallel_request',
-            content: streams.toString(),
-            senderName: deviceName,
-          ));
-          debugPrint('[ConnectionService] 📤 Sent parallel_request for $streams streams');
+          await sendMessage(
+            DeviceMessage(
+              type: 'parallel_request',
+              content: streams.toString(),
+              senderName: deviceName,
+            ),
+          );
+          debugPrint(
+            '[ConnectionService] 📤 Sent parallel_request for $streams streams',
+          );
 
-          await _parallelAckCompleter!.future.timeout(const Duration(seconds: 5));
+          await _parallelAckCompleter!.future.timeout(
+            const Duration(seconds: 5),
+          );
           debugPrint('[ConnectionService] ✅ Received parallel_ack');
 
           // Step 3: Connect parallel sockets
           for (int i = 1; i < streams; i++) {
-          final socket = await Socket.connect(ipAddress, port, timeout: const Duration(seconds: 10));
-          _sockets.add(socket);
-          _sendChains.add(Future.value());
-          _incomingChains.add(Future.value());
-          _frameParsers.add(_FrameParser());
-          socket.setOption(SocketOption.tcpNoDelay, true);
-          final sub = socket.listen(
-            (data) => _handleIncomingData(data, i),
-            onError: (e) => _handleConnectionError(e.toString()),
-            onDone: () => disconnect(),
-          );
-          _socketSubscriptions.add(sub);
-          debugPrint('[ConnectionService] ✅ Socket ${i + 1}/$streams connected');
-        }
+            try {
+              debugPrint(
+                '[ConnectionService] 🔌 Connecting parallel socket ${i + 1}/$streams...',
+              );
+              final socket = await Socket.connect(
+                ipAddress,
+                port,
+                timeout: const Duration(seconds: 10),
+              );
+              _sockets.add(socket);
+              _sendChains.add(Future.value());
+              _incomingChains.add(Future.value());
+              _frameParsers.add(_FrameParser());
+              socket.setOption(SocketOption.tcpNoDelay, true);
+              final sub = socket.listen(
+                (data) => _handleIncomingData(data, i),
+                onError: (e) {
+                  debugPrint(
+                    '[ConnectionService] ❌ Parallel socket $i error: $e',
+                  );
+                  _handleConnectionError(e.toString());
+                },
+                onDone: () {
+                  debugPrint(
+                    '[ConnectionService] 🔌 Parallel socket $i closed',
+                  );
+                  disconnect();
+                },
+              );
+              _socketSubscriptions.add(sub);
+              debugPrint(
+                '[ConnectionService] ✅ Socket ${i + 1}/$streams connected',
+              );
+            } catch (e) {
+              debugPrint(
+                '[ConnectionService] ❌ Failed to connect parallel socket ${i + 1}: $e',
+              );
+              // Don't fail the entire connection if one parallel socket fails
+              // Just continue with fewer sockets
+              break;
+            }
+          }
 
-        // Step 4: Send ready message
-        await sendMessage(DeviceMessage(type: 'parallel_ready', senderName: deviceName, content: ''));
-        debugPrint('[ConnectionService] 📤 Sent parallel_ready');
+          debugPrint(
+            '[ConnectionService] 📊 Connected ${_sockets.length}/$streams sockets',
+          );
+
+          // Wait a bit to ensure all sockets are fully established
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          // Verify all sockets are still connected
+          final connectedCount = _sockets.length;
+          debugPrint(
+            '[ConnectionService] 🔍 Verifying sockets: $connectedCount/$streams',
+          );
+
+          if (connectedCount < streams) {
+            debugPrint(
+              '[ConnectionService] ⚠️ Not all parallel sockets connected, expected $streams but got $connectedCount',
+            );
+            // Continue anyway with fewer sockets
+          }
+
+          // Step 4: Send ready message
+          await sendMessage(
+            DeviceMessage(
+              type: 'parallel_ready',
+              senderName: deviceName,
+              content: connectedCount.toString(), // Send actual count
+            ),
+          );
+          debugPrint(
+            '[ConnectionService] 📤 Sent parallel_ready with $connectedCount sockets',
+          );
         } on TimeoutException {
-          debugPrint('[ConnectionService] ⚠️ parallel_ack timeout, falling back to single stream');
+          debugPrint(
+            '[ConnectionService] ⚠️ parallel_ack timeout, falling back to single stream',
+          );
         }
       }
 
-      _updateStatus(_currentConnection!.copyWith(status: ConnectionStatus.connected, connectedAt: DateTime.now()));
+      // Don't set status to connected yet - wait for handshake response
+      // The status will be updated to connected when we receive the handshake
+      // response in _handleIncomingMessage
+      // _updateStatus(
+      //   _currentConnection!.copyWith(
+      //     status: ConnectionStatus.connected,
+      //     connectedAt: DateTime.now(),
+      //   ),
+      // );
       _startKeepAlive();
       _attemptWiFiDirectUpgrade();
 
@@ -555,14 +791,22 @@ class ConnectionService {
     // MODIFIED: Handle parallel connections
     final incomingIp = socket.remoteAddress.address;
     if (_currentConnection != null &&
-        _currentConnection!.ipAddress == incomingIp &&
-        _currentConnection!.status == ConnectionStatus.connecting) {
-      debugPrint('[ConnectionService] 📞 Accepting parallel stream from $deviceName');
+        _normalizeIp(_currentConnection!.ipAddress) ==
+            _normalizeIp(incomingIp) &&
+        (_currentConnection!.status == ConnectionStatus.connecting ||
+            _currentConnection!.status == ConnectionStatus.connected)) {
+      debugPrint(
+        '[ConnectionService] 📞 Accepting parallel stream from $deviceName',
+      );
     } else if (_sockets.isNotEmpty) {
-      debugPrint('[ConnectionService] ⚠️  Existing connection, disconnecting...');
-      await disconnect();
+      debugPrint(
+        '[ConnectionService] ⚠️  Existing connection, performing silent cleanup for replacement...',
+      );
+      await _cleanupForReplacement();
       await Future.delayed(const Duration(milliseconds: 100));
-      debugPrint('[ConnectionService] ✅ Previous connection cleaned up');
+      debugPrint(
+        '[ConnectionService] ✅ Previous connection cleaned up (silent)',
+      );
     }
 
     try {
@@ -573,7 +817,9 @@ class ConnectionService {
       final ipAddress = socket.remoteAddress.address;
       final port = socket.remotePort;
 
-      if (_currentConnection == null || _currentConnection!.status != ConnectionStatus.connecting) {
+      if (_currentConnection == null ||
+          (_currentConnection!.status != ConnectionStatus.connecting &&
+              _currentConnection!.status != ConnectionStatus.connected)) {
         _updateStatus(
           ConnectionInfo(
             deviceName: deviceName,
@@ -586,7 +832,9 @@ class ConnectionService {
 
       try {
         socket.setOption(SocketOption.tcpNoDelay, true);
-        debugPrint('[ConnectionService] ✅ Socket options configured (tcpNoDelay)');
+        debugPrint(
+          '[ConnectionService] ✅ Socket options configured (tcpNoDelay)',
+        );
       } catch (e) {
         debugPrint('[ConnectionService] ⚠️  Failed to set socket options: $e');
       }
@@ -616,20 +864,22 @@ class ConnectionService {
         throw Exception('Failed to listen to socket: $e');
       }
 
-      // Handshake response is sent after 'handshake' message is received,
-      // to determine if parallel sockets are supported by sender.
-      // For now, connection is marked as 'connecting' until then.
+      // Send handshake to notify the initiator that we've accepted the connection
+      await _sendHandshake();
+      debugPrint('[ConnectionService] 📤 Sent handshake to initiator');
 
+      // Keep status as connecting - will transition to connected when we receive
+      // the handshake response from the initiator
       // Update connection status
-      _updateStatus(
-        ConnectionInfo(
-          deviceName: deviceName,
-          ipAddress: ipAddress,
-          port: port,
-          status: ConnectionStatus.connected,
-          connectedAt: DateTime.now(),
-        ),
-      );
+      // _updateStatus(
+      //   ConnectionInfo(
+      //     deviceName: deviceName,
+      //     ipAddress: ipAddress,
+      //     port: port,
+      //     status: ConnectionStatus.connected,
+      //     connectedAt: DateTime.now(),
+      //   ),
+      // );
 
       debugPrint('[ConnectionService] ✅ Accepted connection from $deviceName');
       return true;
@@ -662,7 +912,7 @@ class ConnectionService {
   Future<void> _attemptWiFiDirectUpgrade() async {
     if (_wifiDirectAttempted) return;
     _wifiDirectAttempted = true;
-    
+
     // Only attempt WiFi Direct on Android
     if (!Platform.isAndroid) {
       debugPrint('[ConnectionService] 📡 WiFi Direct: Not Android, skipping');
@@ -670,7 +920,7 @@ class ConnectionService {
     }
 
     wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
-    
+
     try {
       debugPrint('[ConnectionService] 📡 Attempting WiFi Direct upgrade...');
 
@@ -685,18 +935,20 @@ class ConnectionService {
       debugPrint(
         '[ConnectionService] 📡 WiFi Direct: local p2pId=$_localWifiDirectPeerId, p2pName=$_localWifiDirectName',
       );
-      
+
       // Send WiFi Direct capability announcement
-      await sendMessage(DeviceMessage(
-        type: 'wifi_direct_offer',
-        content: 'WiFi Direct capable',
-        senderName: deviceName,
-        metadata: {
-          'platform': 'android',
-          if (_localWifiDirectPeerId != null) 'p2pId': _localWifiDirectPeerId,
-          if (_localWifiDirectName != null) 'p2pName': _localWifiDirectName,
-        },
-      ));
+      await sendMessage(
+        DeviceMessage(
+          type: 'wifi_direct_offer',
+          content: 'WiFi Direct capable',
+          senderName: deviceName,
+          metadata: {
+            'platform': 'android',
+            if (_localWifiDirectPeerId != null) 'p2pId': _localWifiDirectPeerId,
+            if (_localWifiDirectName != null) 'p2pName': _localWifiDirectName,
+          },
+        ),
+      );
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️  WiFi Direct upgrade failed: $e');
     }
@@ -754,7 +1006,7 @@ class ConnectionService {
           // Match by p2pName (most reliable) or p2pId if available.
           final targetName = _remoteWifiDirectName;
           final targetId = _remoteWifiDirectPeerId;
-          
+
           WiFiDirectPeer? match;
           if (targetName != null && targetName.isNotEmpty) {
             // Prefer exact name match
@@ -776,7 +1028,8 @@ class ConnectionService {
             return;
           }
 
-          if (_remotePeerAddress == match.id) return; // already connecting/connected
+          if (_remotePeerAddress == match.id)
+            return; // already connecting/connected
           _remotePeerAddress = match.id;
 
           debugPrint(
@@ -822,7 +1075,9 @@ class ConnectionService {
 
     try {
       if (isGroupOwner) {
-        debugPrint('[ConnectionService] 🚀 WiFi Direct: binding server on :$port');
+        debugPrint(
+          '[ConnectionService] 🚀 WiFi Direct: binding server on :$port',
+        );
         if (_wifiDirectServer == null) {
           _wifiDirectServer = await ServerSocket.bind(
             InternetAddress.anyIPv4,
@@ -833,7 +1088,9 @@ class ConnectionService {
         final socket = await _wifiDirectServer!.first;
         await _attachWifiDirectDataSocket(socket);
       } else {
-        debugPrint('[ConnectionService] 🚀 WiFi Direct: connecting to $ipAddress:$port');
+        debugPrint(
+          '[ConnectionService] 🚀 WiFi Direct: connecting to $ipAddress:$port',
+        );
         Socket? socket;
         for (int attempt = 1; attempt <= 5; attempt++) {
           try {
@@ -860,10 +1117,12 @@ class ConnectionService {
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️  WiFi Direct data socket failed: $e');
       _teardownWifiDirectDataSocket();
-      
+
       // 🔄 Retry logic: Keep trying to connect if failed
       wifiDirectStatusNotifier.value = WifiDirectStatus.failed;
-      debugPrint('[ConnectionService] 🔄 Scheduling WiFi Direct retry in 5s...');
+      debugPrint(
+        '[ConnectionService] 🔄 Scheduling WiFi Direct retry in 5s...',
+      );
       _wifiDirectRetryTimer = Timer(const Duration(seconds: 5), () {
         debugPrint('[ConnectionService] 🔄 Retrying WiFi Direct connection...');
         _ensureWifiDirectDataSocket(
@@ -879,13 +1138,17 @@ class ConnectionService {
 
   Future<void> _attachWifiDirectDataSocket(Socket socket) async {
     _wifiDirectDataSocket = socket;
-    
+
     // 🚀 CRITICAL: Optimize WiFi Direct P2P socket for maximum throughput
     try {
       socket.setOption(SocketOption.tcpNoDelay, true);
-      debugPrint('[ConnectionService] 🚀 WiFi Direct socket optimized (TCP_NODELAY)');
+      debugPrint(
+        '[ConnectionService] 🚀 WiFi Direct socket optimized (TCP_NODELAY)',
+      );
     } catch (e) {
-      debugPrint('[ConnectionService] ⚠️  Could not optimize WiFi Direct socket: $e');
+      debugPrint(
+        '[ConnectionService] ⚠️  Could not optimize WiFi Direct socket: $e',
+      );
     }
 
     await _wifiDirectDataSub?.cancel();
@@ -918,7 +1181,7 @@ class ConnectionService {
   void _teardownWifiDirectDataSocket() {
     wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
     _wifiDirectRetryTimer?.cancel();
-    
+
     try {
       _wifiDirectDataSub?.cancel();
     } catch (_) {}
@@ -991,15 +1254,19 @@ class ConnectionService {
   /// Handle incoming data from socket
   void _handleIncomingData(List<int> data, int socketIndex) async {
     _perfMetrics.recordBytes(data.length);
-    
+
     // Serialize processing per-socket, but allow sockets to be processed in parallel.
     final parser = _frameParsers[socketIndex];
 
-    _incomingChains[socketIndex] = _incomingChains[socketIndex].then((_) async {
-      await parser.process(Uint8List.fromList(data), this);
-    }).catchError((e) {
-      debugPrint('[ConnectionService] ❌ Incoming processing error on socket $socketIndex: $e');
-    });
+    _incomingChains[socketIndex] = _incomingChains[socketIndex]
+        .then((_) async {
+          await parser.process(Uint8List.fromList(data), this);
+        })
+        .catchError((e) {
+          debugPrint(
+            '[ConnectionService] ❌ Incoming processing error on socket $socketIndex: $e',
+          );
+        });
 
     // Reset error count on successful data reception
     if (_consecutiveErrors > 0) {
@@ -1036,17 +1303,26 @@ class ConnectionService {
     }
 
     if (message.type == 'handshake') {
-      final wasConnected = isConnected;
-      if (!wasConnected &&
-          _currentConnection != null &&
+      if (_currentConnection != null &&
           _currentConnection!.status == ConnectionStatus.connecting) {
         debugPrint(
           '[ConnectionService] 🤝 Handshake received from ${message.senderName}.',
         );
 
-        // Don't transition to connected state until parallel negotiation is complete
+        // Send handshake response
         await _sendHandshake();
-      } else {
+
+        // Now transition to connected state
+        _updateStatus(
+          _currentConnection!.copyWith(
+            status: ConnectionStatus.connected,
+            connectedAt: DateTime.now(),
+          ),
+        );
+        debugPrint(
+          '[ConnectionService] ✅ Handshake complete, connection established',
+        );
+      } else if (isConnected) {
         debugPrint(
           '[ConnectionService] 🤝 Received handshake (already connected), ignoring',
         );
@@ -1056,8 +1332,16 @@ class ConnectionService {
 
     if (message.type == 'parallel_request') {
       _expectedParallelStreams = int.tryParse(message.content) ?? 1;
-      debugPrint('[ConnectionService] 🤝 Received parallel_request for $_expectedParallelStreams streams');
-      await sendMessage(DeviceMessage(type: 'parallel_ack', senderName: deviceName, content: ''));
+      debugPrint(
+        '[ConnectionService] 🤝 Received parallel_request for $_expectedParallelStreams streams',
+      );
+      await sendMessage(
+        DeviceMessage(
+          type: 'parallel_ack',
+          senderName: deviceName,
+          content: '',
+        ),
+      );
       return;
     }
 
@@ -1069,19 +1353,34 @@ class ConnectionService {
     if (message.type == 'parallel_ready') {
       debugPrint('[ConnectionService] 🤝 Received parallel_ready');
       if (_sockets.length == _expectedParallelStreams) {
-        _updateStatus(_currentConnection!.copyWith(status: ConnectionStatus.connected, connectedAt: DateTime.now()));
+        if (_currentConnection!.status != ConnectionStatus.connected) {
+          _updateStatus(
+            _currentConnection!.copyWith(
+              status: ConnectionStatus.connected,
+              connectedAt: DateTime.now(),
+            ),
+          );
+        } else {
+          debugPrint(
+            '[ConnectionService] 🤝 Parallel ready (already connected, skipping status update)',
+          );
+        }
         _startKeepAlive();
         _attemptWiFiDirectUpgrade();
         debugPrint('[ConnectionService] ✅ All parallel sockets connected');
       } else {
-        debugPrint('[ConnectionService] ❌ Parallel connection failed: expected $_expectedParallelStreams, got ${_sockets.length}');
+        debugPrint(
+          '[ConnectionService] ❌ Parallel connection failed: expected $_expectedParallelStreams, got ${_sockets.length}',
+        );
         disconnect();
       }
       return;
     }
 
     if (message.type == 'wifi_direct_offer') {
-      debugPrint('[ConnectionService] 📡 Received WiFi Direct offer from ${message.senderName}');
+      debugPrint(
+        '[ConnectionService] 📡 Received WiFi Direct offer from ${message.senderName}',
+      );
 
       final remoteP2pId = message.metadata?['p2pId'] as String?;
       if (remoteP2pId != null) {
@@ -1108,16 +1407,19 @@ class ConnectionService {
         debugPrint(
           '[ConnectionService] 📡 WiFi Direct: sending accept with local p2pId=$_localWifiDirectPeerId, p2pName=$_localWifiDirectName',
         );
-        await sendMessage(DeviceMessage(
-          type: 'wifi_direct_accept',
-          content: 'Accepted',
-          senderName: deviceName,
-          metadata: {
-            'platform': 'android',
-            if (_localWifiDirectPeerId != null) 'p2pId': _localWifiDirectPeerId,
-            if (_localWifiDirectName != null) 'p2pName': _localWifiDirectName,
-          },
-        ));
+        await sendMessage(
+          DeviceMessage(
+            type: 'wifi_direct_accept',
+            content: 'Accepted',
+            senderName: deviceName,
+            metadata: {
+              'platform': 'android',
+              if (_localWifiDirectPeerId != null)
+                'p2pId': _localWifiDirectPeerId,
+              if (_localWifiDirectName != null) 'p2pName': _localWifiDirectName,
+            },
+          ),
+        );
         debugPrint('[ConnectionService] 📡 Sent WiFi Direct acceptance');
 
         // Prepare responder side (register receiver + wait for group formation).
@@ -1125,9 +1427,11 @@ class ConnectionService {
       }
       return;
     }
-    
+
     if (message.type == 'wifi_direct_accept') {
-      debugPrint('[ConnectionService] 📡 Received WiFi Direct acceptance from ${message.senderName}');
+      debugPrint(
+        '[ConnectionService] 📡 Received WiFi Direct acceptance from ${message.senderName}',
+      );
 
       final remoteP2pId = message.metadata?['p2pId'] as String?;
       if (remoteP2pId != null) {
@@ -1148,23 +1452,29 @@ class ConnectionService {
       }
       return;
     }
-    
+
     if (message.type == 'wifi_direct_connected') {
-      debugPrint('[ConnectionService] 📡 Peer established WiFi Direct P2P connection');
+      debugPrint(
+        '[ConnectionService] 📡 Peer established WiFi Direct P2P connection',
+      );
       final ip = message.metadata?['ip'] as String?;
       final port = message.metadata?['port'] as int?;
-      
+
       if (ip != null && port != null) {
         _usingWifiDirect = true;
-        debugPrint('[ConnectionService] 🚀 Will use WiFi Direct for future transfers: $ip:$port');
+        debugPrint(
+          '[ConnectionService] 🚀 Will use WiFi Direct for future transfers: $ip:$port',
+        );
 
         // If we learned connection details via app protocol (e.g., future iOS support),
         // try establishing the data socket.
-        unawaited(_ensureWifiDirectDataSocket(
-          ipAddress: ip,
-          port: port,
-          isGroupOwner: false,
-        ));
+        unawaited(
+          _ensureWifiDirectDataSocket(
+            ipAddress: ip,
+            port: port,
+            isGroupOwner: false,
+          ),
+        );
       }
       return;
     }
@@ -1177,15 +1487,18 @@ class ConnectionService {
           outgoing.initialAckReceived = true;
           final oldIndex = outgoing.lastAckIndex;
           final newIndex = ack.nextExpectedIndex - 1;
-          
+
           debugPrint(
             '[ConnectionService] 📬 Sender received ACK: transferId=${ack.transferId}, oldIndex=$oldIndex, newIndex=$newIndex, sentBytes=${outgoing.sentBytes}',
           );
-          
+
           for (int i = oldIndex + 1; i <= newIndex; i++) {
             final s = outgoing.chunkSizes[i] ?? 0;
             outgoing.sentBytes += s;
-            outgoing.pendingBytes = (outgoing.pendingBytes - s).clamp(0, outgoing.totalSize);
+            outgoing.pendingBytes = (outgoing.pendingBytes - s).clamp(
+              0,
+              outgoing.totalSize,
+            );
           }
           outgoing.lastAckIndex = newIndex;
           outgoing.resetWatchdog();
@@ -1212,6 +1525,9 @@ class ConnectionService {
           );
 
           if (ack.completed) {
+            debugPrint(
+              '[Sender-Debug] ✅ Completion COMPLETED signal (file_ack) received for ${ack.transferId}',
+            );
             outgoing.watchdogTimer?.cancel();
             outgoing.completer?.complete();
             _outgoingTransfers.remove(ack.transferId);
@@ -1410,6 +1726,44 @@ class ConnectionService {
       return;
     }
 
+    if (message.type == 'dpftp_start') {
+      try {
+        final transferId = message.content;
+        final ot = _outgoingTransfers[transferId];
+        if (ot != null) {
+          final ip = _currentConnection?.ipAddress; // FIX: use ipAddress
+          if (ip != null && ot.path != null) {
+            debugPrint(
+              '[ConnectionService] 🚀 Starting DPFTP Transfer for $transferId to $ip',
+            );
+
+            // Cancel legacy watchdog to prevent "Initial ACK not received"
+            ot.watchdogTimer?.cancel();
+            ot.initialAckReceived = true;
+            if (ot.chunkPermit != null && !ot.chunkPermit!.isCompleted) {
+              ot.chunkPermit!.complete();
+            }
+
+            // Helper to run in background or just awaited
+            unawaited(
+              DpftpService().sendFile(
+                ip: ip,
+                file: File(ot.path!),
+                transferId: transferId,
+              ),
+            );
+          } else {
+            debugPrint(
+              '[ConnectionService] ❌ DPFTP Start Failed: IP($ip) or Path(${ot.path}) null',
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[ConnectionService] ❌ DPFTP Start Error: $e');
+      }
+      return;
+    }
+
     if (message.type == 'pong') {
       debugPrint('[ConnectionService] 🏓 Received pong (connection alive)');
       return;
@@ -1470,7 +1824,9 @@ class ConnectionService {
       // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
       // Android uses 16MB to balance memory usage on diverse hardware.
       final int chunkSize = (Platform.isAndroid)
-          ? 16 * 1024 * 1024 // 16MB Android
+          ? 16 *
+                1024 *
+                1024 // 16MB Android
           : 32 * 1024 * 1024; // 32MB iOS/Desktop
       int index = 0;
 
@@ -1565,6 +1921,20 @@ class ConnectionService {
             }
           }
 
+          if (useDpftp) {
+            debugPrint(
+              '[ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.',
+            );
+            continue; // Skip to next file (or finish if last)
+          }
+
+          if (useDpftp) {
+            debugPrint(
+              '[ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.',
+            );
+            continue;
+          }
+
           debugPrint(
             '[ConnectionService] ✅ Initial ACK received, starting chunk stream for $transferId',
           );
@@ -1583,7 +1953,9 @@ class ConnectionService {
         // 🚀 WiFi Direct: When P2P is established, transfers automatically use the direct connection
         // This provides faster speeds without router bottleneck
         if (_usingWifiDirect) {
-          debugPrint('[ConnectionService] 🚀 Using WiFi Direct P2P for file transfer');
+          debugPrint(
+            '[ConnectionService] 🚀 Using WiFi Direct P2P for file transfer',
+          );
         }
 
         final f = File(file.path!);
@@ -1638,9 +2010,18 @@ class ConnectionService {
             totalChunks++;
             ot.resetWatchdog();
             if (index % 128 == 0) {
-              final elapsed = DateTime.now().difference(sendStartTime).inSeconds;
-              final mbps = (totalChunks * chunkSize * 8.0 / (elapsed > 0 ? elapsed : 1)) / 1000000;
-              debugPrint('[SENDER-PERF] Chunk $index: ${mbps.toStringAsFixed(1)} Mbps, flowControlWaits=$flowControlWaits');
+              final elapsed = DateTime.now()
+                  .difference(sendStartTime)
+                  .inSeconds;
+              final mbps =
+                  (totalChunks *
+                      chunkSize *
+                      8.0 /
+                      (elapsed > 0 ? elapsed : 1)) /
+                  1000000;
+              debugPrint(
+                '[SENDER-PERF] Chunk $index: ${mbps.toStringAsFixed(1)} Mbps, flowControlWaits=$flowControlWaits',
+              );
               await Future.microtask(() {});
             }
           }
@@ -1698,13 +2079,16 @@ class ConnectionService {
         if (otFinal.pendingBytes >= ConnectionService._maxPendingBytes) {
           otFinal.chunkPermit = Completer<void>();
           debugPrint(
-            '[ConnectionService] ⏳ Final: waiting for ACK (pendingBytes=${otFinal.pendingBytes})',
+            '[ConnectionService] ⏳ Final: waiting for flow control (pendingBytes=${otFinal.pendingBytes})',
           );
           await otFinal.chunkPermit!.future;
         }
 
         // Send final marker as binary chunk
         otFinal.completer = Completer<void>();
+        debugPrint(
+          '[Sender-Debug] 📤 Sending final marker for $transferId at index $index',
+        );
         await _sendBinaryChunk(
           transferId: transferId,
           index: index,
@@ -1712,7 +2096,11 @@ class ConnectionService {
           bytes: Uint8List(0),
           flush: true,
         );
+        debugPrint(
+          '[Sender-Debug] ⏳ Sent final marker, waiting for Final ACK...',
+        );
         await otFinal.completer!.future; // Wait for final ack
+        debugPrint('[Sender-Debug] ✅ Final ACK received for $transferId');
       }
     }
   }
@@ -1799,7 +2187,9 @@ class ConnectionService {
       // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
       // Android uses 16MB to balance memory usage on diverse hardware.
       final int chunkSize = (Platform.isAndroid)
-          ? 16 * 1024 * 1024 // 16MB Android
+          ? 16 *
+                1024 *
+                1024 // 16MB Android
           : 32 * 1024 * 1024; // 32MB iOS/Desktop
       int index = 0;
       // Stream the file with controlled chunk size using RandomAccessFile to avoid tiny default chunks
@@ -1975,6 +2365,19 @@ class ConnectionService {
       debugPrint('[ConnectionService] No pending offer for $transferId');
       return;
     }
+
+    if (useDpftp) {
+      debugPrint('[ConnectionService] 🚀 Accepting with DPFTP for $transferId');
+      await sendMessage(
+        DeviceMessage(
+          type: 'dpftp_start',
+          content: transferId,
+          senderName: deviceName,
+        ),
+      );
+      return;
+    }
+
     // Choose directory: Downloads on desktop, Documents on mobile
     Directory dir;
     if (saveDir != null && saveDir.isNotEmpty) {
@@ -2097,7 +2500,6 @@ class ConnectionService {
 
     // Start watchdog for receiver side
     _startIncomingWatchdog(offer.transferId);
-
   }
 
   /// Decline a pending incoming file offer
@@ -2143,7 +2545,7 @@ class ConnectionService {
       out.watchdogTimer?.cancel(); // Stop watchdog
     }
     _pendingOffers.remove(transferId);
-    
+
     // Clean up native receiver socket for this transfer
     try {
       _nativeReceiverSockets[transferId]?.close();
@@ -2236,7 +2638,9 @@ class ConnectionService {
   /// Update connection status
   void _updateStatus(ConnectionInfo info) {
     _currentConnection = info;
-    _notifyStatusListeners(info);
+    for (final listener in List.of(_statusListeners)) {
+      listener(info);
+    }
   }
 
   /// Notify message listeners
@@ -2268,20 +2672,51 @@ class ConnectionService {
   /// Expose immutable view of message history
   List<DeviceMessage> get messageHistory => List.unmodifiable(_messageHistory);
 
-  /// Notify status listeners
-  void _notifyStatusListeners(ConnectionInfo info) {
-    for (final listener in _statusListeners) {
-      try {
-        listener(info);
-      } catch (e) {
-        debugPrint('[ConnectionService] ❌ Error notifying status listener: $e');
-      }
+  /// Clean up previous connection resources WITHOUT emitting disconnected status.
+  /// This is used when replacing a connection (glare resolution) to prevent
+  /// the manager from removing the service.
+  Future<void> _cleanupForReplacement() async {
+    debugPrint(
+      '[ConnectionService] 🧹 Cleaning up previous connection for replacement...',
+    );
+
+    // Cancel subscriptions to prevent onDone/onError triggering disconnect()
+    for (final sub in _socketSubscriptions) {
+      await sub.cancel();
     }
+    _socketSubscriptions.clear();
+
+    _wifiDirectConnSub?.cancel();
+    _wifiDirectConnSub = null;
+    _teardownWifiDirectDataSocket();
+
+    // Stop keep-alive timer
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = null;
+
+    // Close sockets
+    for (final socket in _sockets) {
+      try {
+        socket.destroy();
+      } catch (_) {}
+    }
+    _sockets.clear();
+    _sendChains.clear();
+    _incomingChains.clear();
+
+    for (final p in _frameParsers) {
+      p.reset();
+    }
+    _frameParsers.clear();
+
+    // NOTE: Status is purposefully NOT updated to disconnected here.
+    // The caller (acceptConnection) will immediately set it to Connected/Connecting.
   }
 
   /// Disconnect from current device
   Future<void> disconnect() async {
-    if (_primarySocket != null && _currentConnection?.status == ConnectionStatus.connected) {
+    if (_primarySocket != null &&
+        _currentConnection?.status == ConnectionStatus.connected) {
       try {
         final goodbye = DeviceMessage(
           type: 'goodbye',
@@ -2290,7 +2725,9 @@ class ConnectionService {
         );
         await sendMessage(goodbye);
       } catch (e) {
-        debugPrint('[ConnectionService] ⚠️  Could not send goodbye message: $e');
+        debugPrint(
+          '[ConnectionService] ⚠️  Could not send goodbye message: $e',
+        );
       }
     }
 
@@ -2481,7 +2918,7 @@ class ConnectionService {
 
   /// Clean up old received files on Android to prevent storage bloat
   /// Removes files older than specified days from Documents directory
-  static Future<void> cleanupOldReceivedFiles({int olderThanDays = 0 }) async {
+  static Future<void> cleanupOldReceivedFiles({int olderThanDays = 7}) async {
     if (!Platform.isAndroid) {
       debugPrint('[ConnectionService] 🧹 Cleanup skipped - not Android');
       return;
@@ -2523,7 +2960,7 @@ class ConnectionService {
               );
             } else {
               debugPrint(
-                '[ConnectionService] ⏭️  Kept: $fileName (only $age days old)',
+                '[ConnectionService] ⏭️ Kept: $fileName (Age: $age days <= $olderThanDays)',
               );
             }
           } catch (e) {
@@ -2573,7 +3010,9 @@ class ConnectionService {
       int deletedCount = 0;
       int deletedBytes = 0;
 
-      debugPrint('[ConnectionService] 🧹 Starting temp cleanup: dir=${tmp.path}');
+      debugPrint(
+        '[ConnectionService] 🧹 Starting temp cleanup: dir=${tmp.path}',
+      );
 
       await for (final entity in tmp.list(recursive: false)) {
         try {
@@ -2604,9 +3043,13 @@ class ConnectionService {
 
       if (deletedCount > 0) {
         final freedMB = deletedBytes / 1024 / 1024;
-        debugPrint('[ConnectionService] ✅ Temp cleanup complete: deleted $deletedCount items, freed ${freedMB.toStringAsFixed(2)} MB');
+        debugPrint(
+          '[ConnectionService] ✅ Temp cleanup complete: deleted $deletedCount items, freed ${freedMB.toStringAsFixed(2)} MB',
+        );
       } else {
-        debugPrint('[ConnectionService] ✅ Temp cleanup complete: nothing to delete');
+        debugPrint(
+          '[ConnectionService] ✅ Temp cleanup complete: nothing to delete',
+        );
       }
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️ Temp cleanup failed: $e');
@@ -2655,7 +3098,9 @@ class ConnectionService {
           );
         }
       } catch (e) {
-        debugPrint('[ConnectionService] ❌ Failed to forward to native receiver: $e');
+        debugPrint(
+          '[ConnectionService] ❌ Failed to forward to native receiver: $e',
+        );
       }
       return;
     }
@@ -2693,7 +3138,7 @@ class ConnectionService {
         inc._chunkBuffer.length > (ConnectionService._maxPendingChunks ~/ 3)) {
       final t3 = DateTime.now();
       // 🚀 PERF: Don't force flush to disk on every ACK. Let processBinary handle it based on buffer size.
-      // await inc._flushWrites(); 
+      // await inc._flushWrites();
       await _sendAck(transferId, inc.nextIndex);
       final t4 = DateTime.now();
       if (_enablePerfLogs && index % 256 == 0) {
@@ -2708,7 +3153,7 @@ class ConnectionService {
     }
 
     // Completion requires final marker AND all chunks up to it processed
-    if (isLast && inc.isComplete()) {
+    if (inc.isComplete()) {
       await inc.finish();
 
       if (inc.offer.sha256 != null) {
@@ -2751,12 +3196,6 @@ class ConnectionService {
         title: 'File Received',
         body: 'Successfully received ${inc.offer.fileName}',
       );
-
-      if (Platform.isAndroid) {
-        ConnectionService.cleanupOldReceivedFiles().catchError((e) {
-          debugPrint('[ConnectionService] ⚠️ Cleanup error: $e');
-        });
-      }
 
       await _sendAck(transferId, inc.nextIndex, completed: true);
     }
@@ -2815,9 +3254,11 @@ class ConnectionService {
       final isLast = (args['isLast'] ?? false) as bool;
       final filePath = args['filePath'] as String?;
 
-      debugPrint(
-        '[ConnectionService] 📊 Native receiver progress: $transferId, bytes=$bytes, isLast=$isLast',
-      );
+      if (_enablePerfLogs || isLast) {
+        debugPrint(
+          '[ConnectionService] 📊 Native receiver progress: $transferId, bytes=$bytes, isLast=$isLast, filePath=$filePath',
+        );
+      }
 
       if (inc != null) {
         inc.resetWatchdog();
@@ -2845,6 +3286,38 @@ class ConnectionService {
         completedInc?.watchdogTimer?.cancel();
 
         if (completedInc != null) {
+          // Notify sender of success
+          await sendMessage(
+            DeviceMessage(
+              type: 'file_status',
+              content: completedInc.offer.fileName,
+              senderName: deviceName,
+              timestamp: DateTime.now(),
+              metadata: {
+                'transferId': transferId,
+                'status': 'success',
+                'path': filePath,
+              },
+            ),
+          );
+
+          // Force send final ACK to ensure sender unblocks
+          await _sendControlMessage(
+            DeviceMessage(
+              type: 'file_ack',
+              senderName: deviceName,
+              content: jsonEncode(
+                FileAck(
+                  transferId: transferId,
+                  nextExpectedIndex: completedInc
+                      .offer
+                      .fileSize, // Use size as index proxy or just assume completed handles it
+                  completed: true,
+                ).toJson(),
+              ),
+            ),
+          );
+
           _notifyMessageListeners(
             DeviceMessage(
               type: 'file_complete',
@@ -2866,18 +3339,20 @@ class ConnectionService {
             title: 'File Received',
             body: 'Successfully received ${completedInc.offer.fileName}',
           );
-
-          if (Platform.isAndroid) {
-            ConnectionService.cleanupOldReceivedFiles().catchError((e) {
-              debugPrint('[ConnectionService] ⚠️ Cleanup error: $e');
-            });
-          }
         }
       }
     } catch (e, st) {
       debugPrint('[ConnectionService] ❌ Native receiver handler error: $e');
       debugPrint('$st');
     }
+  }
+
+  /// Normalize IP address to handle IPv6 mapped IPv4 addresses
+  String _normalizeIp(String ip) {
+    if (ip.startsWith('::ffff:')) {
+      return ip.substring(7);
+    }
+    return ip;
   }
 }
 
@@ -2888,11 +3363,12 @@ class _IncomingFile {
   int receivedBytes;
   int nextIndex;
   final Map<int, Uint8List> _chunkBuffer = {}; // Buffer for out-of-order chunks
-  
+
   // 🚀 PERF: Buffer writes in memory to reduce disk syscalls
   final BytesBuilder _writeBuffer = BytesBuilder();
   int _writeBufferBytes = 0;
-  static const int _writeBufferLimit = 64 * 1024 * 1024; // 64MB write buffer for maximum batching
+  static const int _writeBufferLimit =
+      64 * 1024 * 1024; // 64MB write buffer for maximum batching
 
   bool _finalSeen = false;
   int? _finalIndex;
@@ -2906,28 +3382,47 @@ class _IncomingFile {
     required this.sink,
     required this.receivedBytes,
     required this.nextIndex,
-  });
+  }) {
+    _startWatchdog();
+  }
+
+  void _startWatchdog() {
+    watchdogTimer?.cancel();
+    watchdogTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      final elapsed = DateTime.now().difference(lastActivity);
+      if (elapsed.inSeconds >= 5) {
+        debugPrint(
+          '[ConnectionService] ⚠️ Transfer stalled? Waiting for chunk $nextIndex (buffered: ${_chunkBuffer.length}) for ${elapsed.inSeconds}s',
+        );
+      }
+    });
+  }
 
   void resetWatchdog() {
     lastActivity = DateTime.now();
+  }
+
+  void cancelWatchdog() {
+    watchdogTimer?.cancel();
+    watchdogTimer = null;
   }
 
   void markFinal(int index) {
     _finalSeen = true;
     _finalIndex = index;
   }
-  
+
   /// Flush accumulated writes to disk
   Future<void> _flushWrites() async {
     if (_writeBufferBytes == 0) return;
-    
+
     final s = sink;
     if (s == null) return;
-    
+
     final data = _writeBuffer.takeBytes();
     await s.writeFrom(data);
     _writeBufferBytes = 0;
-    debugPrint('[PERF] Flushed ${data.length ~/ (1024*1024)}MB to disk');
+    debugPrint('[PERF] Flushed ${data.length ~/ (1024 * 1024)}MB to disk');
   }
 
   // Process a binary chunk (new method for binary protocol)
@@ -2954,15 +3449,15 @@ class _IncomingFile {
         receivedBytes += bufferedBytes.length;
         nextIndex++;
       }
-      
+
       // Flush if buffer is full OR every 32MB of buffered data
       // This ensures we don't report stale progress from old buffered data
       if (_writeBufferBytes >= _writeBufferLimit) {
         await _flushWrites();
       }
-      
+
       debugPrint(
-        '[ConnectionService] ✅ Processed binary chunk $index, next expected: $nextIndex, buffered: ${_chunkBuffer.length}, writeBuffer: ${_writeBufferBytes ~/ (1024*1024)}MB',
+        '[ConnectionService] ✅ Processed binary chunk $index, next expected: $nextIndex, buffered: ${_chunkBuffer.length}, writeBuffer: ${_writeBufferBytes ~/ (1024 * 1024)}MB',
       );
     } else if (index > nextIndex) {
       // Future chunk, buffer it
@@ -3083,9 +3578,19 @@ class _FrameParser {
 
     while (true) {
       final available = _end - _start;
-      if (available < 5) return; // need [len(4)] + [type(1)]
+      if (available < 9) return; // need [MAGIC(4)] + [len(4)] + [type(1)]
 
-      final payloadLen = _readInt32(_buf, _start);
+      // Check magic byte
+      final magic = _readInt32(_buf, _start);
+      if (magic != ConnectionService._frameMagic) {
+        // Fast scan to find next magic byte
+        final found = _scanForMagic();
+        if (!found) return; // wait for more data to find magic
+        // If found, _start is updated to point to magic
+        continue;
+      }
+
+      final payloadLen = _readInt32(_buf, _start + 4);
       if (payloadLen <= 0 ||
           payloadLen > ConnectionService._maxFramePayloadBytes) {
         // If this looks like an HTTP request accidentally hitting the P2P port,
@@ -3099,23 +3604,37 @@ class _FrameParser {
           return;
         }
 
-        // Attempt to resynchronize to the next plausible frame boundary.
-        final resynced = _tryResync();
-        if (!resynced) {
-          debugPrint(
-            '[FrameParser] ⚠️ Invalid payloadLen=$payloadLen, dropping buffer',
-          );
-          reset();
-          return;
-        }
+        debugPrint(
+          '[FrameParser] ⚠️ Invalid payloadLen=$payloadLen, skipping current magic and rescanning.',
+        );
+        _start += 1; // Advance past this valid magic to look for another one
         continue;
       }
 
-      final frameLen = 4 + payloadLen;
+      final frameLen = 4 + 4 + payloadLen; // MAGIC + LEN + PAYLOAD
       if (available < frameLen) return; // wait for more
 
-      final type = _buf[_start + 4];
-      final payloadStart = _start + 5;
+      final type = _buf[_start + 8];
+
+      // Validate frame type before extracting payload
+      if (type != 0 && type != 1) {
+        debugPrint(
+          '[FrameParser] ⚠️ Unknown frame type=$type at offset $_start. Skipping current magic.',
+        );
+        _start += 1;
+        continue;
+      }
+
+      // Additional validation: JSON control messages (type 0) should be reasonably small
+      if (type == 0 && payloadLen > 1024 * 1024) {
+        debugPrint(
+          '[FrameParser] ⚠️ Suspiciously large control message: $payloadLen bytes. Skipping.',
+        );
+        _start += 1;
+        continue;
+      }
+
+      final payloadStart = _start + 9; // MAGIC(4) + LEN(4) + TYPE(1)
       final payloadEnd = _start + frameLen;
       final payload = Uint8List.sublistView(_buf, payloadStart, payloadEnd);
 
@@ -3127,11 +3646,12 @@ class _FrameParser {
           await svc._handleIncomingMessage(message);
         } else if (type == 1) {
           await _parseBinaryChunkPayload(payload, svc);
-        } else {
-          debugPrint('[FrameParser] ⚠️ Unknown frame type=$type, skipping');
         }
       } catch (e) {
         debugPrint('[FrameParser] ❌ Frame parse error: $e');
+        // If parsing fails despite magic byte, it might be a collision or corruption
+        _start += 1;
+        continue;
       }
 
       _start += frameLen;
@@ -3149,19 +3669,28 @@ class _FrameParser {
     }
   }
 
-  bool _tryResync() {
-    final available = _end - _start;
-    if (available < 6) return false;
+  bool _scanForMagic() {
+    // efficient byte-by-byte scan for magic
+    final magicBytes = [0xAC, 0xDC, 0x12, 0x34];
 
-    // Scan forward for a plausible header: [len:int32][type:0|1]
-    // We require len within bounds and enough bytes for at least header.
-    for (int i = _start + 1; i <= _end - 5; i++) {
-      final len = _readInt32(_buf, i);
-      if (len <= 0 || len > ConnectionService._maxFramePayloadBytes) continue;
-      final type = _buf[i + 4];
-      if (type != 0 && type != 1) continue;
-      _start = i;
-      return true;
+    // We start at _start to see if we need to advance
+    // But since we already checked that _start isn't magic (in the caller),
+    // we should start scanning from _start + 1
+
+    for (int i = _start + 1; i <= _end - 4; i++) {
+      if (_buf[i] == magicBytes[0] &&
+          _buf[i + 1] == magicBytes[1] &&
+          _buf[i + 2] == magicBytes[2] &&
+          _buf[i + 3] == magicBytes[3]) {
+        _start = i;
+        return true;
+      }
+    }
+
+    // If not found, discard everything except the last 3 bytes
+    // (which might be the start of a magic sequence arriving later)
+    if (_end > _start + 3) {
+      _start = _end - 3;
     }
     return false;
   }
@@ -3245,7 +3774,9 @@ class _FrameParser {
       final newBuf = Uint8List(newCap);
       final remaining = _end - _start;
       if (remaining > 0) {
-        newBuf.setRange(0, remaining, _buf, _start);
+        // Create a copy to avoid concurrent modification error
+        final oldData = Uint8List.fromList(_buf.sublist(_start, _end));
+        newBuf.setRange(0, remaining, oldData);
       }
       _buf = newBuf;
       _start = 0;

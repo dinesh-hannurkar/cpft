@@ -148,6 +148,65 @@ class ConnectionManager {
     );
   }
 
+  /// Normalize IP address by removing IPv6 mapping prefix if present
+  String _normalizeIp(String ip) {
+    if (ip.startsWith('::ffff:')) {
+      return ip.substring(7);
+    }
+    return ip;
+  }
+
+  /// Try to auto-accept a connection if it's a parallel socket for an existing connection.
+  /// Returns true if accepted (processed), false if it should be handled as a simplified incoming request.
+  Future<bool> tryAutoAcceptConnection(Socket socket) async {
+    final ip = _normalizeIp(socket.remoteAddress.address);
+    AppLogger.v(
+      'Auto-accept check for IP: $ip (raw: ${socket.remoteAddress.address})',
+      tag: 'ConnMgr',
+    );
+
+    // 1. Find existing service via IP match
+    ConnectionService? existingServiceByIp;
+    String? existingKeyByIp;
+
+    for (final entry in _activeConnections.entries) {
+      final connInfo = entry.value.currentConnection;
+      if (connInfo != null) {
+        final existingIp = _normalizeIp(connInfo.ipAddress);
+        if (existingIp == ip) {
+          existingServiceByIp = entry.value;
+          existingKeyByIp = entry.key;
+          break;
+        }
+      }
+    }
+
+    if (existingServiceByIp != null && existingKeyByIp != null) {
+      final status = existingServiceByIp.currentConnection?.status;
+      // If connected or connecting, this might be a parallel socket
+      if (status == ConnectionStatus.connected ||
+          status == ConnectionStatus.connecting) {
+        AppLogger.d(
+          'Attempting to auto-accept parallel socket for $existingKeyByIp (status: $status)',
+          tag: 'ConnMgr',
+        );
+        final success = await existingServiceByIp.acceptConnection(
+          socket,
+          existingKeyByIp!,
+        );
+        if (success) {
+          AppLogger.d(
+            'Auto-accepted parallel socket for $existingKeyByIp',
+            tag: 'ConnMgr',
+          );
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   /// Handle incoming connection (socket-only, legacy path)
   Future<void> handleIncomingConnection(
     Socket socket,
@@ -155,15 +214,20 @@ class ConnectionManager {
   ) async {
     // Validate remoteName
     if (remoteName.isEmpty) {
-      AppLogger.w('Cannot handle incoming connection with empty remote name', tag: 'ConnMgr');
+      AppLogger.w(
+        'Cannot handle incoming connection with empty remote name',
+        tag: 'ConnMgr',
+      );
       socket.close();
       return;
     }
 
     try {
-      final ip = socket.remoteAddress.address;
+      final rawIp = socket.remoteAddress.address;
+      final ip = _normalizeIp(rawIp);
+
       AppLogger.d(
-        'Incoming connection from $remoteName (IP: $ip)',
+        'Incoming connection from $remoteName (IP: $ip, raw: $rawIp)',
         tag: 'ConnMgr',
       );
       AppLogger.v(
@@ -176,14 +240,21 @@ class ConnectionManager {
 
       for (final entry in _activeConnections.entries) {
         final connInfo = entry.value.currentConnection;
-        if (connInfo != null && connInfo.ipAddress == ip) {
-          existingServiceByIp = entry.value;
-          existingKeyByIp = entry.key;
-          AppLogger.d(
-            'Found existing connection to IP $ip under key: $existingKeyByIp',
+        if (connInfo != null) {
+          final existingIp = _normalizeIp(connInfo.ipAddress);
+          AppLogger.v(
+            'Checking active connection: ${entry.key} -> IP: ${connInfo.ipAddress} (norm: $existingIp) vs incoming: $ip',
             tag: 'ConnMgr',
           );
-          break;
+          if (existingIp == ip) {
+            existingServiceByIp = entry.value;
+            existingKeyByIp = entry.key;
+            AppLogger.d(
+              'Found existing connection to IP $ip under key: $existingKeyByIp',
+              tag: 'ConnMgr',
+            );
+            break;
+          }
         }
       }
 
@@ -206,30 +277,78 @@ class ConnectionManager {
         if (status == ConnectionStatus.connected ||
             status == ConnectionStatus.connecting) {
           if (status == ConnectionStatus.connected) {
-            // Already fully connected - notify UI to navigate
+            // Check if this might be a parallel socket connection
+            // If the connection is already connected and this is from the same IP,
+            // it might be a parallel socket - pass it to the service
             AppLogger.d(
-              'Notify listeners to navigate to existing chat with $foundKey',
+              'Passing potential parallel socket to existing connected service for $foundKey',
               tag: 'ConnMgr',
             );
-            _notifyConnectionListeners(
+            final success = await foundService.acceptConnection(
+              socket,
               foundKey,
-              foundService,
-              isIncoming: true,
             );
-            // Close the duplicate incoming socket
-            try {
-              socket.close();
-            } catch (_) {}
+            if (success) {
+              AppLogger.d(
+                'Parallel socket accepted for $foundKey',
+                tag: 'ConnMgr',
+              );
+            } else {
+              AppLogger.w(
+                'Failed to accept parallel socket for $foundKey, might be a duplicate',
+                tag: 'ConnMgr',
+              );
+              // If it's truly a duplicate (not a parallel socket), notify UI to navigate
+              _notifyConnectionListeners(
+                foundKey,
+                foundService,
+                isIncoming: true,
+              );
+            }
             return;
           } else if (status == ConnectionStatus.connecting) {
-            // Connection in progress - use "alphabetical order" tie-breaker
-            // Lower device name accepts incoming, higher device name keeps outgoing
-            final shouldAcceptIncoming =
-                foundKey.compareTo(deviceName ?? '') < 0;
+            // Connection in progress - Handle glare/tie-breaker
+
+            // Compare names first
+            int comparison = foundKey.compareTo(deviceName ?? '');
+            bool shouldAcceptIncoming;
+
+            if (comparison != 0) {
+              // Different names: use alphabetical order
+              // If remote name < local name, accept incoming (and drop our outgoing)
+              shouldAcceptIncoming = comparison < 0;
+              AppLogger.d(
+                'Tie-breaker (Name): Remote "$foundKey" vs Local "${deviceName ?? ''}" -> ${shouldAcceptIncoming ? "ACCEPT" : "REJECT"}',
+                tag: 'ConnMgr',
+              );
+            } else {
+              // Identical names: use IP comparison as fallback
+              try {
+                // We use our local socket address as "Local IP"
+                final localIp = _normalizeIp(socket.address.address);
+                final remoteIp = ip; // already normalized
+
+                comparison = remoteIp.compareTo(localIp);
+
+                // If remote IP < local IP, accept incoming
+                shouldAcceptIncoming = comparison < 0;
+
+                AppLogger.d(
+                  'Tie-breaker (IP): Names identical. Remote $remoteIp vs Local $localIp -> ${shouldAcceptIncoming ? "ACCEPT" : "REJECT"}',
+                  tag: 'ConnMgr',
+                );
+              } catch (e) {
+                AppLogger.w(
+                  'Tie-breaker: IP comparison failed, defaulting to reject',
+                  tag: 'ConnMgr',
+                );
+                shouldAcceptIncoming = false;
+              }
+            }
 
             if (shouldAcceptIncoming) {
               AppLogger.d(
-                'Tie-breaker: accepting incoming (remote: $foundKey < local: $deviceName)',
+                'Tie-breaker decision: accepting incoming from $foundKey',
                 tag: 'ConnMgr',
               );
               AppLogger.v(
@@ -262,7 +381,7 @@ class ConnectionManager {
               return;
             } else {
               AppLogger.d(
-                'Tie-breaker: keeping outgoing (local: $deviceName < remote: $foundKey)',
+                'Tie-breaker decision: keeping outgoing to $foundKey (rejecting incoming)',
                 tag: 'ConnMgr',
               );
               // Keep the outgoing connection, reject this incoming one
@@ -344,6 +463,8 @@ class ConnectionManager {
             title: 'Connected',
             body: 'Successfully connected to ${info.deviceName}',
           );
+          // Notify listeners to trigger navigation for incoming connections
+          _notifyConnectionListeners(remoteName, service, isIncoming: true);
         } else if (info.status == ConnectionStatus.failed) {
           // ONLY remove failed connections. NEVER remove disconnected connections.
           AppLogger.w(
@@ -480,7 +601,7 @@ class ConnectionManager {
         .take(3)
         .toList();
     final deviceNames = validDeviceNames.join(', ');
-    
+
     AppLogger.d(
       'Updating foreground notification: count=$count, validDeviceNames=$validDeviceNames, deviceNames="$deviceNames", entries=${connectedEntries.map((e) => '${e.key}:${e.value.isConnected}').join(', ')}',
       tag: 'ConnMgr',
@@ -490,7 +611,7 @@ class ConnectionManager {
 
     String notificationText;
     String notificationTitle;
-    
+
     if (validCount == 0) {
       // No valid device names - show generic message
       notificationTitle = 'CPFT Connected';
@@ -537,7 +658,7 @@ class ConnectionManager {
       'Notifying ${_connectionListeners.length} listeners about ${isIncoming ? "incoming" : "outgoing"} connection to $deviceName',
       tag: 'ConnMgr',
     );
-    for (final listener in _connectionListeners) {
+    for (final listener in List.of(_connectionListeners)) {
       try {
         listener(deviceName, service, isIncoming);
       } catch (e) {

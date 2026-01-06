@@ -14,6 +14,7 @@ import 'multicast_platform_helper.dart';
 import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import '../../features/chat/services/connection_manager.dart';
+import 'package:fylooo/features/dpftp/dpftp_service.dart';
 import 'background_service.dart';
 
 class DiscoveryService {
@@ -344,6 +345,20 @@ class DiscoveryService {
       }
     } catch (_) {}
 
+    // Check for parallel connection auto-accept
+    if (_sharedConnectionManager != null) {
+      bool accepted = await _sharedConnectionManager!.tryAutoAcceptConnection(
+        socket,
+      );
+      if (accepted) {
+        AppLogger.d(
+          'Auto-accepted incoming connection from $ip',
+          tag: 'Discovery',
+        );
+        return;
+      }
+    }
+
     // If no listeners yet, queue the request to avoid losing the prompt
     if (_incomingRequestListeners.isEmpty) {
       AppLogger.w(
@@ -580,7 +595,9 @@ class DiscoveryService {
     _cleanupTimer?.cancel();
     _networkScanTimer?.cancel();
     _healthCheckTimer?.cancel();
+    _healthCheckTimer?.cancel();
     _multicastService?.dispose();
+    DpftpService().stop(); // Release port 61234
 
     // Properly await Bonjour service disposal (important for iOS/macOS)
     if (_bonjourService != null) {

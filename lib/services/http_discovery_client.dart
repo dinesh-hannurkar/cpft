@@ -56,31 +56,31 @@ class HttpDiscoveryClient {
 
         switch (errorCode) {
           case 113: // EHOSTUNREACH - No route to host
-            AppLogger.w(
-              'Cannot register - no route to host $ip:$port',
-              tag: 'HttpDisc',
-            );
+            // AppLogger.w(
+            //   'Cannot register - no route to host $ip:$port',
+            //   tag: 'HttpDisc',
+            // );
             break;
           case 111: // ECONNREFUSED - Connection refused
-            AppLogger.w(
-              'Registration refused by $ip:$port - device may not be running CPFT',
-              tag: 'HttpDisc',
-            );
+            // AppLogger.w(
+            //   'Registration refused by $ip:$port - device may not be running CPFT',
+            //   tag: 'HttpDisc',
+            // );
             break;
           case 110: // ETIMEDOUT - Connection timed out
-            AppLogger.w('Registration timeout to $ip:$port', tag: 'HttpDisc');
+            // AppLogger.w('Registration timeout to $ip:$port', tag: 'HttpDisc');
             break;
           default:
           // debugPrint('[HttpClient] ❌ Socket error ($errorCode) during registration with $ip:$port: $errorMessage');
         }
       } else if (e is TimeoutException) {
-        AppLogger.w('Registration timeout with $ip:$port', tag: 'HttpDisc');
+        // AppLogger.w('Registration timeout with $ip:$port', tag: 'HttpDisc');
       } else {
-        AppLogger.w(
-          'Error registering with $ip:$port: $e',
-          tag: 'HttpDisc',
-          error: e,
-        );
+        // AppLogger.w(
+        //   'Error registering with $ip:$port: $e',
+        //   tag: 'HttpDisc',
+        //   error: e,
+        // );
       }
       return false;
     }
@@ -96,10 +96,10 @@ class HttpDiscoveryClient {
         AppLogger.d('Got info from ${dto.alias}', tag: 'HttpDisc');
         return dto;
       } else {
-        AppLogger.w(
-          'Get info failed: ${response.statusCode} ($ip:$port)',
-          tag: 'HttpDisc',
-        );
+        // AppLogger.w(
+        //   'Get info failed: ${response.statusCode} ($ip:$port)',
+        //   tag: 'HttpDisc',
+        // );
         return null;
       }
     } catch (e) {
@@ -107,32 +107,32 @@ class HttpDiscoveryClient {
         final errorCode = e.osError?.errorCode ?? 'unknown';
         switch (errorCode) {
           case 113: // EHOSTUNREACH - No route to host
-            AppLogger.w(
-              'Check host reachability / firewall for $ip:$port',
-              tag: 'HttpDisc',
-            );
+            // AppLogger.w(
+            //   'Check host reachability / firewall for $ip:$port',
+            //   tag: 'HttpDisc',
+            // );
             break;
           case 111: // ECONNREFUSED - Connection refused
-            AppLogger.w(
-              'Connection refused by $ip:$port - target may not run CPFT',
-              tag: 'HttpDisc',
-            );
-            AppLogger.d(
-              'Advise: ensure CPFT running on remote device',
-              tag: 'HttpDisc',
-            );
+            // AppLogger.w(
+            //   'Connection refused by $ip:$port - target may not run CPFT',
+            //   tag: 'HttpDisc',
+            // );
+            // AppLogger.d(
+            //   'Advise: ensure CPFT running on remote device',
+            //   tag: 'HttpDisc',
+            // );
             break;
           case 110: // ETIMEDOUT - Connection timed out
-            AppLogger.w(
-              'Connection timeout to $ip:$port - network slow or unreachable',
-              tag: 'HttpDisc',
-            );
+            // AppLogger.w(
+            //   'Connection timeout to $ip:$port - network slow or unreachable',
+            //   tag: 'HttpDisc',
+            // );
             break;
           case 101: // ENETUNREACH - Network unreachable
-            AppLogger.w(
-              'Network unreachable for $ip:$port - check connectivity',
-              tag: 'HttpDisc',
-            );
+            // AppLogger.w(
+            //   'Network unreachable for $ip:$port - check connectivity',
+            //   tag: 'HttpDisc',
+            // );
             break;
           default:
           // debugPrint('[HttpClient] ❌ Socket error ($errorCode) connecting to $ip:$port: $errorMessage');
