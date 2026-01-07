@@ -42,14 +42,12 @@ class QuicTransportDart implements QuicTransport {
   @override
   Future<void> start() async {
     _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, localPort);
-    // Optimization: Maximize Socket Buffers (2MB)
-    // Optimization: Maximize Socket Buffers (2MB) - NOT SUPPORTED on RawDatagramSocket API yet
-    // Default OS buffers will be used.
+
+    // Optimization: Maximize Socket Buffers using Native Tuning
+    QuicSocketTuner.tune(_socket!);
 
     _socket!.listen(_handleSocketEvent);
-    debugPrint(
-      '[QUIC] Transport bound to port $localPort with optimized buffers',
-    );
+    debugPrint('[QUIC] Transport bound to port $localPort with tuned buffers');
   }
 
   void _handleSocketEvent(RawSocketEvent event) {
