@@ -162,7 +162,8 @@ class NetworkBanner extends StatelessWidget {
               ),
             ],
           ),
-          if (isConnected && onSwitchToHotspot != null && !Platform.isMacOS) ...[
+          // Show hotspot button when not in hotspot mode and on Android/iOS
+          if (onSwitchToHotspot != null && !Platform.isMacOS) ...[
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: onSwitchToHotspot,
@@ -171,11 +172,15 @@ class NetworkBanner extends StatelessWidget {
                   horizontal: 12,
                   vertical: 6,
                 ),
-                side: const BorderSide(color: Color(0xFF00C853)),
+                side: BorderSide(
+                  color: isConnected
+                      ? const Color(0xFF00C853)
+                      : const Color(0xFF2962FF),
+                ),
                 minimumSize: const Size(0, 32),
               ),
               child: const Text(
-                'Switch to Temporary Hotspot',
+                'Connect Non-Android Devices',
                 style: TextStyle(fontSize: 12),
               ),
             ),

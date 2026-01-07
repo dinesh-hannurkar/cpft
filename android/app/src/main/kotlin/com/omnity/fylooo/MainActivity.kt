@@ -135,6 +135,9 @@ class MainActivity : FlutterActivity() {
                 "disconnectWifi" -> {
                     disconnectWifi(result)
                 }
+                "disableWifi" -> {
+                    disableWifi(result)
+                }
                 "openWifiSettings" -> {
                     try {
                         val intent = Intent(Settings.ACTION_WIFI_SETTINGS)
@@ -552,6 +555,37 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun disableWifi(result: MethodChannel.Result) {
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+        try {
+            // On Android 10+ (Q), we cannot programmatically disable WiFi
+            // We can only disconnect from the current network
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.util.Log.d("WiFiDisable", "Android 10+ detected, disconnecting from WiFi instead of disabling")
+                val disconnectSuccess = wifiManager.disconnect()
+                if (disconnectSuccess) {
+                    result.success(mapOf("status" to "disconnected", "note" to "WiFi disconnected (Android 10+ limitation)"))
+                } else {
+                    result.error("DISCONNECT_FAILED", "Failed to disconnect from WiFi", null)
+                }
+            } else {
+                // On Android 9 and below, we can actually disable WiFi
+                @Suppress("DEPRECATION")
+                val disableSuccess = wifiManager.setWifiEnabled(false)
+                android.util.Log.d("WiFiDisable", "WiFi disable success: $disableSuccess")
+                if (disableSuccess) {
+                    result.success(mapOf("status" to "disabled"))
+                } else {
+                    result.error("DISABLE_FAILED", "Failed to disable WiFi", null)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("WiFiDisable", "Error disabling WiFi: ${e.message}")
+            result.error("DISABLE_ERROR", "Error disabling WiFi: ${e.message}", null)
+        }
+    }
+
     private fun getCurrentWifiSsid(): String? {
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val wifiInfo = wifiManager.connectionInfo
@@ -565,40 +599,68 @@ class MainActivity : FlutterActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     private fun startLocalOnlyHotspot(result: MethodChannel.Result) {
         try {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            
+            // CRITICAL: WiFi handling differs by Android version
+            // Android 10+: WiFi MUST be enabled but NOT connected to any network
+            // Android 9-: WiFi must be completely disabled
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+: Ensure WiFi is enabled, then disconnect from any network
+                android.util.Log.d("Hotspot", "Android 10+ detected")
+                
+                if (!wifiManager.isWifiEnabled) {
+                    android.util.Log.d("Hotspot", "WiFi is disabled, enabling it for hotspot...")
+                    @Suppress("DEPRECATION")
+                    wifiManager.setWifiEnabled(true)
+                    Thread.sleep(1000) // Wait for WiFi to enable
+                }
+                
+                // Disconnect from any connected network
+                if (wifiManager.connectionInfo?.networkId != -1) {
+                    android.util.Log.d("Hotspot", "Disconnecting from current WiFi network...")
+                    wifiManager.disconnect()
+                    Thread.sleep(500)
+                }
+            } else {
+                // Android 9 and below: Disable WiFi completely
+                if (wifiManager.isWifiEnabled) {
+                    android.util.Log.d("Hotspot", "Android 9 or below, disabling WiFi completely")
+                    @Suppress("DEPRECATION")
+                    wifiManager.setWifiEnabled(false)
+                    Thread.sleep(1000)
+                }
+            }
+
             // Stop existing hotspot if running
             if (hotspotReservation != null) {
                 hotspotReservation?.close()
                 hotspotReservation = null
             }
 
-            // Start new hotspot
             wifiManager.startLocalOnlyHotspot(
                 object : WifiManager.LocalOnlyHotspotCallback() {
-
+                    @RequiresApi(Build.VERSION_CODES.O)
                     override fun onStarted(reservation: WifiManager.LocalOnlyHotspotReservation) {
                         super.onStarted(reservation)
                         hotspotReservation = reservation
 
                         try {
-                            // Get hotspot configuration
                             val config = reservation.wifiConfiguration
-
-                            val ssid = config?.SSID?.removeSurrounding("\"") ?: "Unknown"
-                            val password = config?.preSharedKey ?: "Unknown"
+                            val ssid = config?.SSID ?: "Unknown"
+                            val password = config?.preSharedKey ?: "No password"
                             val securityType = getSecurityType(config)
 
                             android.util.Log.d("Hotspot", "Started - SSID: $ssid, Password: $password, Security: $securityType")
 
-                            // Return success with hotspot details
-                            val resultMap = mapOf(
-                                "success" to true,
-                                "ssid" to ssid,
-                                "password" to password,
-                                "securityType" to securityType,
-                                "message" to "Hotspot started successfully"
+                            result.success(
+                                mapOf(
+                                    "success" to true,
+                                    "ssid" to ssid,
+                                    "password" to password,
+                                    "securityType" to securityType,
+                                    "message" to "Hotspot started successfully"
+                                )
                             )
-                            result.success(resultMap)
-
                         } catch (e: Exception) {
                             android.util.Log.e("Hotspot", "Error getting config: ${e.message}")
                             result.error("CONFIG_ERROR", e.message, null)
@@ -607,33 +669,31 @@ class MainActivity : FlutterActivity() {
 
                     override fun onStopped() {
                         super.onStopped()
-                        hotspotReservation = null
                         android.util.Log.d("Hotspot", "Hotspot stopped")
+                        hotspotReservation = null
                     }
 
                     override fun onFailed(reason: Int) {
                         super.onFailed(reason)
-                        hotspotReservation = null
-
                         val errorMsg = when (reason) {
                             WifiManager.LocalOnlyHotspotCallback.ERROR_GENERIC ->
-                                "Generic error occurred"
+                                "Generic error occurred. Make sure WiFi is enabled and you're not connected to a network."
                             WifiManager.LocalOnlyHotspotCallback.ERROR_INCOMPATIBLE_MODE ->
-                                "Incompatible mode - WiFi is on"
+                                "Incompatible mode - another app may be using WiFi"
                             WifiManager.LocalOnlyHotspotCallback.ERROR_NO_CHANNEL ->
-                                "No WiFi channel available"
+                                "No available channel"
                             WifiManager.LocalOnlyHotspotCallback.ERROR_TETHERING_DISALLOWED ->
-                                "Tethering is disallowed"
+                                "Tethering is not allowed on this device"
                             else -> "Unknown error: $reason"
                         }
 
                         android.util.Log.e("Hotspot", "Failed: $errorMsg")
-                        result.error("HOTSPOT_START_FAILED", errorMsg, null)
+                        result.error("HOTSPOT_ERROR", errorMsg, null)
+                        hotspotReservation = null
                     }
                 },
-                Handler(Looper.getMainLooper())
+                null
             )
-
         } catch (e: Exception) {
             android.util.Log.e("Hotspot", "Exception: ${e.message}")
             result.error("EXCEPTION", e.message, null)

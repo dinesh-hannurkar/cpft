@@ -19,25 +19,37 @@ class ConnectionHandler {
     List<XFile>? droppedFiles,
     VoidCallback? onFilesSent,
   }) async {
-    debugPrint('[ConnectionHandler] 🔍 Tapped device: ${device.name} (IP: ${device.ip})');
-    debugPrint('[ConnectionHandler] 🔍 Active connections keys: ${connectionManager.activeConnections.keys.join(", ")}');
+    debugPrint(
+      '[ConnectionHandler] 🔍 Tapped device: ${device.name} (IP: ${device.ip})',
+    );
+    debugPrint(
+      '[ConnectionHandler] 🔍 Active connections keys: ${connectionManager.activeConnections.keys.join(", ")}',
+    );
 
     // Try to find connection by name first, then by IP
     var existingConnection = connectionManager.getConnection(device.name);
     if (existingConnection == null) {
-      debugPrint('[ConnectionHandler] 🔍 No connection found by name, trying by IP: ${device.ip}');
+      debugPrint(
+        '[ConnectionHandler] 🔍 No connection found by name, trying by IP: ${device.ip}',
+      );
       existingConnection = connectionManager.getConnection(device.ip);
     }
 
-    debugPrint('[ConnectionHandler] 🔍 Connection found: ${existingConnection != null}, isConnected: ${existingConnection?.isConnected}, status: ${existingConnection?.currentConnection?.status}');
+    debugPrint(
+      '[ConnectionHandler] 🔍 Connection found: ${existingConnection != null}, isConnected: ${existingConnection?.isConnected}, status: ${existingConnection?.currentConnection?.status}',
+    );
 
     if (existingConnection != null) {
       final status = existingConnection.currentConnection?.status;
-      final connectionDeviceName = existingConnection.currentConnection?.deviceName ?? device.name;
+      final connectionDeviceName =
+          existingConnection.currentConnection?.deviceName ?? device.name;
 
       // If connected or connecting, navigate directly
-      if (status == ConnectionStatus.connected || status == ConnectionStatus.connecting) {
-        debugPrint('[ConnectionHandler] ✅ Already connected/connecting to $connectionDeviceName, navigating to chat');
+      if (status == ConnectionStatus.connected ||
+          status == ConnectionStatus.connecting) {
+        debugPrint(
+          '[ConnectionHandler] ✅ Already connected/connecting to $connectionDeviceName, navigating to chat',
+        );
         _navigateToChat(
           context: context,
           deviceName: connectionDeviceName,
@@ -50,7 +62,9 @@ class ConnectionHandler {
         return;
       } else if (status == ConnectionStatus.disconnected) {
         // Connection exists but is disconnected - navigate to chat to allow reconnect
-        debugPrint('[ConnectionHandler] 📡 Connection to $connectionDeviceName is disconnected, navigating to chat for reconnect');
+        debugPrint(
+          '[ConnectionHandler] 📡 Connection to $connectionDeviceName is disconnected, navigating to chat for reconnect',
+        );
         _navigateToChat(
           context: context,
           deviceName: connectionDeviceName,
@@ -65,7 +79,9 @@ class ConnectionHandler {
     }
 
     // Not connected - show confirmation dialog
-    debugPrint('[ConnectionHandler] Showing connection dialog for ${device.name}');
+    debugPrint(
+      '[ConnectionHandler] Showing connection dialog for ${device.name}',
+    );
     final result = await app_dialog.showAppDialog(
       context: context,
       builder: (_) => ConnectionFlowDialog(

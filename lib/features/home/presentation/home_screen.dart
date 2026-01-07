@@ -64,7 +64,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late HomeController controller;
   String? _networkName;
-  bool _autoHotspotEnabled = true;
+  bool _autoHotspotEnabled =
+      false; // Disabled auto-start, user must manually start hotspot
   bool _hotspotStarting = false;
   HotspotInfo? _hotspotInfo;
   Timer? _autoHotspotCooldown;
@@ -283,12 +284,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       if (isNowDisconnected && !wasDisconnected) {
         widget.discoveryService.clearDevices();
-        // Don't pause radar if iOS user is in manual hotspot mode or Android hotspot is active
-        if (!_iosManualHotspotMode && _hotspotInfo == null) {
+        // On Android, keep radar active since WiFi Direct discovery is still running
+        // Only pause radar on iOS if not in manual hotspot mode
+        if (Platform.isIOS && !_iosManualHotspotMode && _hotspotInfo == null) {
           controller.pauseRadar();
         }
-        // Auto-start hotspot when no Wi‑Fi
-        _maybeStartHotspot();
+        // Note: Auto-start hotspot is disabled, user must manually start it
         if (mounted) setState(() {});
       } else if (!isNowDisconnected && wasDisconnected) {
         // We reconnected to some network. If hotspot is active, keep it
@@ -893,13 +894,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     _autoHotspotEnabled = true;
-    if (_networkName != 'Not Connected') {
-      // Disconnect from Wi‑Fi first, then start hotspot
+
+    // Disconnect from WiFi if currently connected
+    if (_networkName != null && _networkName != 'Not Connected') {
+      // Disconnect from WiFi before starting hotspot
+      // The native layer will handle WiFi state correctly:
+      // - Android 10+: Keeps WiFi enabled, just disconnects
+      // - Android 9-: Fully disables WiFi
       try {
         await WifiService.disconnectWifi();
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 500));
     }
+
     _maybeStartHotspot(autoShowQr: true);
   }
 
@@ -1097,10 +1104,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ? _showHotspotQrCode
                               : null,
                           onSwitchToHotspot:
-                              (_networkName != null &&
-                                  _networkName != 'Not Connected' &&
-                                  _hotspotInfo == null &&
-                                  !_iosManualHotspotMode)
+                              (_hotspotInfo == null && !_iosManualHotspotMode)
                               ? _switchToHotspot
                               : null,
                         ),

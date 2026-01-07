@@ -699,7 +699,7 @@ class DiscoveryService {
         await _wifiDirectService.stopDiscovery();
         _isWifiDirectDiscoveryActive = false;
         AppLogger.d(
-          '[DiscoveryService] Stopped WiFi Direct discovery (Standard mode active)',
+          '[DiscoveryService] Started WiFi Direct discovery (WiFi connected mode)',
         );
       }
 

@@ -35,6 +35,22 @@ class WifiService {
     }
   }
 
+  /// Disable WiFi completely (Android only)
+  /// On Android 10+, this will only disconnect from the current network
+  /// On Android 9 and below, this will actually turn off WiFi
+  static Future<Map<String, dynamic>> disableWifi() async {
+    if (!Platform.isAndroid) {
+      throw UnsupportedError('WiFi disable is only supported on Android');
+    }
+
+    try {
+      final result = await _channel.invokeMethod('disableWifi');
+      return Map<String, dynamic>.from(result);
+    } on PlatformException catch (e) {
+      throw 'Failed to disable WiFi: ${e.message}';
+    }
+  }
+
   /// Get current connected WiFi SSID
   static Future<String?> getCurrentWifiSsid() async {
     if (!Platform.isAndroid) {
