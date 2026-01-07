@@ -59,11 +59,15 @@ class NetworkUtils {
 
       for (final iface in interfaces) {
         final name = iface.name.toLowerCase();
-        if (name.startsWith('wlan') ||
+        final isWifiLike = name.startsWith('wlan') ||
+            name.contains('wifi') ||
+            name.contains('wi-fi') ||
             name.startsWith('en') ||
             name.startsWith('eth') ||
             name.startsWith('ap') ||
-            name.startsWith('bridge')) {
+            name.startsWith('bridge') ||
+            name.startsWith('wl');
+        if (isWifiLike) {
           wifiInterfaces.add(iface);
         } else {
           otherInterfaces.add(iface);
@@ -91,6 +95,19 @@ class NetworkUtils {
           if (!addr.isLoopback && _isValidLanAddress(addr.address)) {
             AppLogger.d(
               '[NetworkUtils] Using WiFi interface ${iface.name}: ${addr.address}',
+              tag: 'Network',
+            );
+            return addr.address;
+          }
+        }
+      }
+
+      // Fallback: use any other interface with a valid private LAN address (e.g., Ethernet)
+      for (final iface in otherInterfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback && _isValidLanAddress(addr.address)) {
+            AppLogger.d(
+              '[NetworkUtils] Using non-WiFi interface ${iface.name}: ${addr.address}',
               tag: 'Network',
             );
             return addr.address;
