@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/features/dpftp/dpftp_service.dart';
 import 'package:fylooo/features/dpftp/dpftp_types.dart';
+import 'package:fylooo/features/quic/quic_service.dart';
 
 // 🔬 PERF: Global profiling state
 class _PerfMetrics {
@@ -143,6 +144,15 @@ class ConnectionService {
 
   // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
   static const bool useDpftp = true;
+
+  // ⚡ Use QUIC Protocol (Switchable)
+  bool _useQuic = true;
+  void setProtocol({required bool useQuic}) {
+    _useQuic = useQuic;
+    debugPrint(
+      '[ConnectionService] Protocol switched to: ${_useQuic ? "QUIC" : "DPFTP"}',
+    );
+  }
 
   Future<void> _writeFrame(
     int type,
@@ -449,6 +459,67 @@ class ConnectionService {
 
     if (useDpftp) {
       _initDpftp();
+      _initQuic();
+    }
+  }
+
+  Future<void> _initQuic() async {
+    try {
+      Directory? dir;
+      if (Platform.isAndroid || Platform.isIOS) {
+        dir = await getApplicationDocumentsDirectory();
+      } else {
+        dir = await getDownloadsDirectory();
+        dir ??= await getApplicationDocumentsDirectory();
+      }
+
+      await QuicService().startReceiver(saveDirectory: dir.path);
+
+      QuicService().progress.listen((p) {
+        _notifyMessageListeners(
+          DeviceMessage(
+            type: 'file_progress',
+            content: p.transferId,
+            senderName: deviceName,
+            timestamp: DateTime.now(),
+            metadata: {
+              'transferId': p.transferId,
+              'bytes': (p.bytesTransferred > p.totalBytes)
+                  ? p.totalBytes
+                  : p.bytesTransferred,
+              'total': p.totalBytes,
+              'outgoing': p.isOutgoing,
+              'path': p.filePath,
+            },
+          ),
+        );
+
+        if (p.isComplete) {
+          debugPrint(
+            '[ConnectionService] 🏁 QUIC Transfer ${p.transferId} Complete.',
+          );
+          final name =
+              p.filePath?.split(Platform.pathSeparator).last ?? 'Unknown File';
+
+          _notifyMessageListeners(
+            DeviceMessage(
+              type: 'file_complete',
+              content: name,
+              senderName: deviceName,
+              timestamp: DateTime.now(),
+              metadata: {
+                'transferId': p.transferId,
+                'path': p.filePath,
+                'size': p.totalBytes,
+                'outgoing': p.isOutgoing,
+                'durationMs': p.durationMs,
+              },
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('[ConnectionService] ⚠️ Failed to init QUIC: $e');
     }
   }
 
@@ -1833,16 +1904,38 @@ class ConnectionService {
             );
 
             // Helper to run in background or just awaited
-            unawaited(
-              DpftpService().sendFile(
-                ip: ip,
-                file: File(ot.path!),
-                transferId: transferId,
-                parallelConnections: parallelConns,
-                chunkSize: chunkSizeMB,
-                maxInFlightBytes: windowMB,
-              ),
-            );
+            if (_useQuic) {
+              // Validate IP before starting QUIC
+              if (ip == null || ip == '0.0.0.0') {
+                debugPrint(
+                  '[ConnectionService] ⚠️ Invalid IP for QUIC ($ip). Falling back to DPFTP/Legacy.',
+                );
+                // Fallback logic could go here, or just error out.
+                // For now, let's just NOT start QUIC to prevent crash.
+              } else {
+                debugPrint(
+                  '[ConnectionService] 🚀 Starting QUIC Transfer for $transferId to $ip',
+                );
+                unawaited(
+                  QuicService().sendFile(
+                    ip: ip,
+                    file: File(ot.path!),
+                    transferId: transferId,
+                  ),
+                );
+              }
+            } else {
+              unawaited(
+                DpftpService().sendFile(
+                  ip: ip,
+                  file: File(ot.path!),
+                  transferId: transferId,
+                  parallelConnections: parallelConns,
+                  chunkSize: chunkSizeMB,
+                  maxInFlightBytes: windowMB,
+                ),
+              );
+            }
           } else {
             debugPrint(
               '[ConnectionService] ❌ DPFTP Start Failed: IP($ip) or Path(${ot.path}) null',

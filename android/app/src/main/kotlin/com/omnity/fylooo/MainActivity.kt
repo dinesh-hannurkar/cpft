@@ -202,9 +202,10 @@ class MainActivity : FlutterActivity() {
             }
         }
         
-        // Hotspot channel for local-only hotspot functionality
+        // Local-Only Hotspot Channel
         val hotspotChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HOTSPOT_CHANNEL)
         hotspotChannel.setMethodCallHandler { call, result ->
+            // ... (existing handler logic) ...
             when (call.method) {
                 "startLocalOnlyHotspot" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -224,6 +225,15 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+
+        // Native QUIC Plugin Registration
+        try {
+             val quicChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.cpft.quic")
+             QuicNativePlugin.register(applicationContext, quicChannel)
+             android.util.Log.d("MainActivity", "Registered QuicNativePlugin")
+        } catch (e: Exception) {
+             android.util.Log.e("MainActivity", "Failed to register QuicNativePlugin: ${e.message}")
         }
     }
 
