@@ -13,7 +13,6 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:flutter/services.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/features/dpftp/dpftp_service.dart';
-import 'package:fylooo/features/dpftp/dpftp_types.dart';
 import 'package:fylooo/features/quic/quic_service.dart';
 
 // 🔬 PERF: Global profiling state
@@ -146,7 +145,7 @@ class ConnectionService {
   static const bool useDpftp = true;
 
   // ⚡ Use QUIC Protocol (Switchable)
-  bool _useQuic = true;
+  bool _useQuic = false;
   void setProtocol({required bool useQuic}) {
     _useQuic = useQuic;
     debugPrint(
@@ -1894,7 +1893,7 @@ class ConnectionService {
             final int parallelConns = isRemoteWindows ? 8 : 4;
             final int chunkSizeMB = isRemoteWindows
                 ? (8 * 1024 * 1024)
-                : (3 * 1024 * 1024);
+                : (4 * 1024 * 1024);
             final int windowMB = isRemoteWindows
                 ? (64 * 1024 * 1024)
                 : (16 * 1024 * 1024);

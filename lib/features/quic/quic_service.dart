@@ -5,7 +5,6 @@ import 'quic_progress.dart';
 import 'quic_transport.dart';
 import 'quic_sender.dart';
 import 'quic_receiver.dart';
-import 'quic_transport_native.dart';
 
 /// Service facade for QUIC-based file transfer.
 /// This implementation is completely separate from DpftpService.
@@ -37,17 +36,7 @@ class QuicService {
 
     debugPrint('[QUIC] Starting Receiver Service on port $quicPort');
 
-    // Use Native Transport ONLY on iOS (Network.framework)
-    // Android's native plugin requires Cronet dependencies not currently linked.
-    // Windows/Linux use the Tuned Dart Transport (via QuicSocketTuner).
-    if (Platform.isIOS) {
-      debugPrint('[QUIC] Using NATIVE Transport (iOS)');
-      _transport = QuicTransportNative(localPort: quicPort);
-    } else {
-      debugPrint('[QUIC] Using DART Transport (Tuned)');
-      _transport = QuicTransportDart(localPort: quicPort);
-    }
-
+    _transport = QuicTransportDart(localPort: quicPort);
     await _transport!.start();
 
     _receiver = QuicReceiver(
@@ -66,12 +55,15 @@ class QuicService {
   }) async {
     debugPrint('[QUIC] Sending file $transferId to $ip');
 
+    // Note: If we are only a client, we might need ephemeral port binding.
+    // But for P2P, we often bind to the same port or rely on QuicTransport
+    // to handle it.
+    // If startReceiver() was called, _transport is already bound.
+    // If not, we should bind it.
     if (_transport == null) {
-      if (Platform.isIOS) {
-        _transport = QuicTransportNative(localPort: 0);
-      } else {
-        _transport = QuicTransportDart(localPort: 0);
-      }
+      // Bind to ephemeral for client-only, or fixed if we want symmetry?
+      // Let's bind to 0 (any ephemeral) if not acting as receiver
+      _transport = QuicTransportDart(localPort: 0);
       await _transport!.start();
     }
 

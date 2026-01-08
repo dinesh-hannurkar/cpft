@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -36,6 +37,14 @@ class QuicReceiver {
     // But for Data Streams, use Stream Map.
 
     if (event.streamId == 0) {
+      if (event.data.length == 2 &&
+          event.data[0] == 0xFF &&
+          event.data[1] == 0xFF) {
+        debugPrint('[QUIC-Rx] FIN signal received from ${event.remoteIp}');
+        _contexts[event.remoteIp]?.markRemoteDone();
+        return;
+      }
+
       debugPrint('[QUIC-Rx] Metadata Packet Received from ${event.remoteIp}');
       final ctx = _contexts.putIfAbsent(
         event.remoteIp,
@@ -108,10 +117,31 @@ class _RxContext {
   String? fileName;
   RandomAccessFile? _raf;
   int _receivedBytes = 0;
+  bool _isRemoteDone = false;
+  Timer? _finTimeout;
 
   _RxContext(this.saveDir, this.onProgress);
 
   int _startTime = 0;
+
+  void markRemoteDone() {
+    if (_isRemoteDone) return;
+    _isRemoteDone = true;
+    debugPrint('[QUIC] Remote says DONE. Checked: $_receivedBytes / $fileSize');
+
+    if (fileSize != null && _receivedBytes >= fileSize!) {
+      finish();
+    } else {
+      // Wait for out-of-order packets, but set a hard limit
+      debugPrint('[QUIC] Missing data. Waiting up to 10s for reordering...');
+      _finTimeout = Timer(const Duration(seconds: 10), () {
+        if (_raf != null) {
+          debugPrint('[QUIC] Final Timeout. Forcing finish.');
+          finish(force: true);
+        }
+      });
+    }
+  }
 
   int? handleMetadata(Uint8List data) {
     try {
@@ -195,9 +225,17 @@ class _RxContext {
     }
   }
 
-  void finish() {
+  void finish({bool force = false}) {
+    _finTimeout?.cancel();
     if (_raf == null) return;
-    debugPrint('[QUIC] Rx Finished: $fileName (100% Complete). Closing file.');
+
+    if (force && fileSize != null && _receivedBytes < fileSize!) {
+      debugPrint(
+        '[QUIC] WARNING: Forced finish with incomplete data! Received $_receivedBytes / $fileSize',
+      );
+    }
+
+    debugPrint('[QUIC] Rx Finished: $fileName. Closing file.');
     try {
       _raf?.closeSync();
       _raf = null;

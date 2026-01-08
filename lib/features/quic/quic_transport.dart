@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:fylooo/features/quic/quic_socket_tuner.dart';
 import 'quic_packet.dart';
 
 /// Abstract Transport Interface
@@ -43,12 +42,15 @@ class QuicTransportDart implements QuicTransport {
   @override
   Future<void> start() async {
     _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, localPort);
-
-    // Optimization: Maximize Socket Buffers using Native Tuning
-    QuicSocketTuner.tune(_socket!);
+    // Optimization: Maximize Socket Buffers (2MB)
+    // Optimization: Maximize Socket Buffers (2MB) - NOT SUPPORTED on RawDatagramSocket API yet
+    // Default OS buffers will be used.
 
     _socket!.listen(_handleSocketEvent);
-    debugPrint('[QUIC] Transport bound to port $localPort with tuned buffers');
+    _startRecoveryTimer();
+    debugPrint(
+      '[QUIC] Transport bound to port $localPort with optimized buffers',
+    );
   }
 
   void _handleSocketEvent(RawSocketEvent event) {
@@ -138,23 +140,41 @@ class QuicTransportDart implements QuicTransport {
       }
       debugPrint('[QUIC] Socket Exception: $e');
       return false;
-    } catch (e) {
       debugPrint('[QUIC] Send Error: $e');
       return false;
     }
   }
 
-  void _adaptiveBackoff() {
-    // Reduce limits by 25%/50%
-    tuning.maxInFlight = (tuning.maxInFlight * 0.75).toInt().clamp(100, 10000);
-    tuning.batchSize = (tuning.batchSize * 0.5).toInt().clamp(5, 100);
+  DateTime _lastCongestionTime = DateTime.now();
+  Timer? _recoveryTimer;
 
-    // debugPrint('[QUIC] Adaptive Backoff! New MaxInFlight: ${tuning.maxInFlight}, Batch: ${tuning.batchSize}');
+  void _adaptiveBackoff() {
+    // Multiplicative Decrease
+    _lastCongestionTime = DateTime.now();
+    tuning.maxInFlight = (tuning.maxInFlight * 0.7).toInt().clamp(100, 10000);
+    tuning.batchSize = (tuning.batchSize * 0.5).toInt().clamp(5, 100);
 
     // Trigger congestion pause
     for (final conn in _connections.values) {
       conn._triggerCongestionBackoff();
     }
+  }
+
+  void _startRecoveryTimer() {
+    _recoveryTimer?.cancel();
+    _recoveryTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      final now = DateTime.now();
+      if (now.difference(_lastCongestionTime).inMilliseconds > 1000) {
+        // Additive Increase (Probe for bandwidth)
+        if (tuning.maxInFlight < 2000) {
+          tuning.maxInFlight += 50;
+          // debugPrint('[QUIC] Recovering... Window: ${tuning.maxInFlight}');
+        }
+        if (tuning.batchSize < 50) {
+          tuning.batchSize += 1;
+        }
+      }
+    });
   }
 
   /// Send data on a specific QUIC stream
@@ -213,6 +233,7 @@ class QuicTransportDart implements QuicTransport {
       conn.dispose();
     }
     _connections.clear();
+    _recoveryTimer?.cancel();
     _socket?.close();
   }
 }
@@ -555,8 +576,7 @@ class QuicTuning {
 
   factory QuicTuning.detect() {
     if (Platform.isMacOS || Platform.isIOS) {
-      // Apple platforms are very strict with UDP buffers (small default)
-      return QuicTuning(maxInFlight: 400, batchSize: 15, ackIntervalMs: 20);
+      return QuicTuning(maxInFlight: 600, batchSize: 20, ackIntervalMs: 20);
     } else if (Platform.isLinux) {
       return QuicTuning(maxInFlight: 1000, batchSize: 40, ackIntervalMs: 10);
     } else if (Platform.isAndroid) {

@@ -35,6 +35,7 @@ class QuicSender {
 
       await _sendMetadata();
       await _sendFileData();
+      await _sendFin();
 
       debugPrint('[QUIC] Sender finished $transferId');
     } catch (e) {
@@ -81,6 +82,12 @@ class QuicSender {
     metaBuilder.add(streamIdBytes.buffer.asUint8List());
 
     await transport.sendStreamData(ip, port, 0, metaBuilder.takeBytes());
+  }
+
+  Future<void> _sendFin() async {
+    debugPrint('[QUIC] Sending FIN signal...');
+    final finBytes = Uint8List.fromList([0xFF, 0xFF]);
+    await transport.sendStreamData(ip, port, 0, finBytes);
   }
 
   // Parallel Transfer State
