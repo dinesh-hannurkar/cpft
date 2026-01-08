@@ -38,12 +38,9 @@ class QuicSocketTuner {
       ); // Windows is Little Endian
 
     try {
-      socket.setRawOption(
-        RawSocketOption.fromInt(SOL_SOCKET, SO_RCVBUF, _bufferSize),
-      ); // Some versions take int directly?
-      // Wait, RawSocketOption constructor takes (level, option, val). 'val' is Uint8List.
-
+      // Apply SO_RCVBUF (Receive Buffer)
       socket.setRawOption(RawSocketOption(SOL_SOCKET, SO_RCVBUF, value));
+      // Apply SO_SNDBUF (Send Buffer)
       socket.setRawOption(RawSocketOption(SOL_SOCKET, SO_SNDBUF, value));
       debugPrint('[QUIC-Tuner] ✅ Windows Socket Tuned Success');
     } catch (e) {

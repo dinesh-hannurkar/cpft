@@ -37,10 +37,14 @@ class QuicService {
 
     debugPrint('[QUIC] Starting Receiver Service on port $quicPort');
 
-    if (Platform.isAndroid || Platform.isIOS) {
-      debugPrint('[QUIC] Using NATIVE Transport');
+    // Use Native Transport ONLY on iOS (Network.framework)
+    // Android's native plugin requires Cronet dependencies not currently linked.
+    // Windows/Linux use the Tuned Dart Transport (via QuicSocketTuner).
+    if (Platform.isIOS) {
+      debugPrint('[QUIC] Using NATIVE Transport (iOS)');
       _transport = QuicTransportNative(localPort: quicPort);
     } else {
+      debugPrint('[QUIC] Using DART Transport (Tuned)');
       _transport = QuicTransportDart(localPort: quicPort);
     }
 
@@ -63,7 +67,7 @@ class QuicService {
     debugPrint('[QUIC] Sending file $transferId to $ip');
 
     if (_transport == null) {
-      if (Platform.isAndroid || Platform.isIOS) {
+      if (Platform.isIOS) {
         _transport = QuicTransportNative(localPort: 0);
       } else {
         _transport = QuicTransportDart(localPort: 0);
