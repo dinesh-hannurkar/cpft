@@ -1281,7 +1281,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               key: ShowcaseHelper.linkShareKey,
               disableBarrierInteraction: false,
               targetPadding: const EdgeInsets.all(8),
-              title: 'Link Share',
+              title: 'Web Share',
               description: 'Share files via web without application.',
               tooltipBackgroundColor: Colors.white,
               textColor: Colors.black,
@@ -1307,7 +1307,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   final hasNetwork = lanIp != null;
 
                   AppLogger.d(
-                    'Link share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
+                    'Web share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
                     tag: 'HomeScreen',
                   );
 
@@ -1388,7 +1388,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                   showAppBottomSheet(
                     context: context,
-                    title: 'Link Share',
+                    title: 'Web Share',
                     subtitle:
                         'Establish direct web connection for file sharing.',
                     showCloseButton: true,

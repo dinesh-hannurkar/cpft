@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:fylooo/firebase_options.dart';
 import 'package:fylooo/core/logging/app_logger.dart';
@@ -77,6 +78,29 @@ class FirebaseInitializer {
       _projectId = Firebase.apps.first.options.projectId;
     } catch (_) {
       _projectId = opts.projectId;
+    }
+
+    // Sign in anonymously to enable Firestore access
+    try {
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser == null) {
+        await auth.signInAnonymously();
+        AppLogger.i(
+          'Firebase Anonymous Authentication successful',
+          tag: 'Startup',
+        );
+      } else {
+        AppLogger.i(
+          'Firebase user already authenticated: ${auth.currentUser?.uid}',
+          tag: 'Startup',
+        );
+      }
+    } catch (e) {
+      AppLogger.e(
+        'Firebase Anonymous Authentication failed: $e',
+        tag: 'Startup',
+      );
+      // Don't throw - allow app to continue even if auth fails
     }
   }
 

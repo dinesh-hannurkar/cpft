@@ -37,8 +37,9 @@ class ConnectionManager {
       'Creating new connection service for $deviceName',
       tag: 'ConnMgr',
     );
-    // FIX: Use the remote device's name, not local deviceName, for proper identity in handshake
-    final service = ConnectionService(deviceName: deviceName);
+    // Use LOCAL device name for ConnectionService (for handshake identity)
+    // The remote device name will be updated from the handshake
+    final service = ConnectionService(deviceName: this.deviceName ?? 'Unknown');
     _activeConnections[deviceName] = service;
     AppLogger.d(
       'Active connections: ${_activeConnections.length} -> ${_activeConnections.keys.join(", ")}',
@@ -440,14 +441,13 @@ class ConnectionManager {
       }
 
       // Create new connection service for the REMOTE device.
-      // BUG FIX: Previously passed `this.deviceName` (local device name), causing
-      // the ConnectionService to think it was connected to itself. This broke
-      // handshakes and led to premature socket closes after declines.
+      // Use LOCAL device name for ConnectionService (for handshake identity)
+      // The remote device name will be stored in ConnectionInfo and updated from handshake
       AppLogger.d(
         'Creating new connection service for remote device $remoteName',
         tag: 'ConnMgr',
       );
-      final service = ConnectionService(deviceName: remoteName);
+      final service = ConnectionService(deviceName: deviceName ?? 'Unknown');
       _activeConnections[remoteName] = service;
 
       // Attach status listener for incoming connections (same as outgoing)

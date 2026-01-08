@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'dart:io';
+import 'package:window_manager/window_manager.dart';
 // import 'package:flutter_web_plugins/flutter_web_plugins.dart'
 //     if (dart.library.io) 'package:flutter/foundation.dart'
 //     as web_plugins; // uncomment when deploying on web
@@ -49,6 +51,26 @@ void main() async {
     );
   }
 
+  // Initialize WindowManager for desktop
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    await windowManager.ensureInitialized();
+
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(450, 800),
+      minimumSize: Size(450, 600),
+      maximumSize: Size(450, 4000), // Effectively fixed width, flexible height
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      title: 'Fylooo',
+    );
+
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+
   // Enable path-based routing on web (instead of hash-based) //uncomment when deploying on web
   // if (kIsWeb) {
   //   web_plugins.usePathUrlStrategy();
@@ -78,7 +100,6 @@ void main() async {
 
   runApp(const MainApp());
 }
-
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});

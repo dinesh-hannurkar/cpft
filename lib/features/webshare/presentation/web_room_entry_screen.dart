@@ -23,7 +23,7 @@ class WebRoomEntryScreen extends StatefulWidget {
 
 class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
   static bool _globalJoinInProgress = false; // Prevent duplicate joins globally
-  
+
   final TextEditingController _roomIdController = TextEditingController();
   late WebRTCFileTransferService _webrtcService;
   WebShareService _webShareService = WebShareService(deviceName: 'WebClient');
@@ -39,14 +39,14 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
     super.initState();
     _webrtcService = WebRTCFileTransferService();
     _loadDeviceName();
-    
+
     // Check for share code from URL parameters
     final roomIdFromUrl = WebUrlUtils.getRoomIdFromUrl();
     if (roomIdFromUrl != null && roomIdFromUrl.isNotEmpty) {
       _roomIdController.text = roomIdFromUrl;
-// Set immediately to prevent any duplicate triggers
+      // Set immediately to prevent any duplicate triggers
     }
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
       final hasSeenShowcase = prefs.getBool('web_entry_showcase_seen') ?? false;
@@ -61,31 +61,38 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           }
         });
       }
-      
+
       // Auto-join if URL has room parameter (single callback for all initialization)
-      if (roomIdFromUrl != null && roomIdFromUrl.isNotEmpty && mounted && !_isJoining) {
+      if (roomIdFromUrl != null &&
+          roomIdFromUrl.isNotEmpty &&
+          mounted &&
+          !_isJoining) {
         // First set the loading state so user sees the button spinner
         debugPrint('[WebRoomEntry] postFrameCallback: Setting _isJoining=true');
         setState(() {
           _isJoining = true;
         });
-        
+
         // Start timeout immediately
         _loadingTimeout?.cancel();
         _loadingTimeout = Timer(const Duration(seconds: 30), () {
           if (mounted && _isJoining && !_serviceTransferred) {
-            debugPrint('[WebRoomEntry] Loading timeout reached (30s), forcing loader to stop');
+            debugPrint(
+              '[WebRoomEntry] Loading timeout reached (30s), forcing loader to stop',
+            );
             setState(() {
               _isJoining = false;
             });
             _globalJoinInProgress = false;
           }
         });
-        
+
         // Wait a bit to ensure the loading UI is visible
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted && _isJoining && !_serviceTransferred) {
-            debugPrint('[WebRoomEntry] Auto-joining room from URL: $roomIdFromUrl');
+            debugPrint(
+              '[WebRoomEntry] Auto-joining room from URL: $roomIdFromUrl',
+            );
             _joinWebRTCRoom(roomIdFromUrl);
           }
         });
@@ -117,19 +124,25 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
   }
 
   Future<void> _joinWebRTCRoom(String roomId) async {
-    debugPrint('[WebRoomEntry] _joinWebRTCRoom called with roomId=$roomId, _isJoining=$_isJoining, _serviceTransferred=$_serviceTransferred, _globalJoinInProgress=$_globalJoinInProgress');
-    
+    debugPrint(
+      '[WebRoomEntry] _joinWebRTCRoom called with roomId=$roomId, _isJoining=$_isJoining, _serviceTransferred=$_serviceTransferred, _globalJoinInProgress=$_globalJoinInProgress',
+    );
+
     if (_serviceTransferred) {
-      debugPrint('[WebRoomEntry] Service already transferred, ignoring duplicate call');
+      debugPrint(
+        '[WebRoomEntry] Service already transferred, ignoring duplicate call',
+      );
       return;
     }
     if (_globalJoinInProgress && _isJoining) {
-      debugPrint('[WebRoomEntry] Global join in progress, ignoring duplicate call');
+      debugPrint(
+        '[WebRoomEntry] Global join in progress, ignoring duplicate call',
+      );
       return;
     }
 
     _globalJoinInProgress = true; // Set global lock
-    
+
     // Only set _isJoining if not already set (auto-join may have pre-set it)
     if (!_isJoining) {
       debugPrint('[WebRoomEntry] _joinWebRTCRoom: Setting _isJoining=true');
@@ -145,7 +158,9 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
     _loadingTimeout?.cancel();
     _loadingTimeout = Timer(const Duration(seconds: 30), () {
       if (mounted && _isJoining && !_serviceTransferred) {
-        debugPrint('[WebRoomEntry] Loading timeout reached (30s), forcing loader to stop');
+        debugPrint(
+          '[WebRoomEntry] Loading timeout reached (30s), forcing loader to stop',
+        );
         setState(() {
           _isJoining = false;
         });
@@ -154,24 +169,28 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
     });
 
     try {
-      debugPrint('[WebRoomEntry] Attempting to connect to signaling server: $roomId');
+      debugPrint(
+        '[WebRoomEntry] Attempting to connect to signaling server: $roomId',
+      );
       await _webrtcService.connectToSignalingServer(roomId);
       debugPrint('[WebRoomEntry] Successfully connected to signaling server');
       if (!mounted) {
-        debugPrint('[WebRoomEntry] Widget unmounted after connection, cleaning up');
+        debugPrint(
+          '[WebRoomEntry] Widget unmounted after connection, cleaning up',
+        );
         _globalJoinInProgress = false;
         _loadingTimeout?.cancel();
         return;
       }
-      
+
       // Cancel the timeout since connection was successful
       _loadingTimeout?.cancel();
-      
+
       // Update URL to include room parameter for web sharing
       // WebUrlUtils.updateUrlWithRoomId(roomId);
-      
+
       _serviceTransferred = true; // Mark service as transferred
-      
+
       debugPrint('[WebRoomEntry] Opening chat screen for room: $roomId');
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -195,7 +214,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         setState(() {
           _isJoining = false;
           _didAutoRetry = false;
-// Reset for potential re-join
+          // Reset for potential re-join
           _serviceTransferred = false;
           _webrtcService = WebRTCFileTransferService();
         });
@@ -207,7 +226,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
       // Prepare friendly error message for missing codes (web is join-only)
       final message = e.toString();
       final friendly = message.contains('not found')
-          ? 'Code not found or expired. Start Link Share from the mobile app and try again.'
+          ? 'Code not found or expired. Start Web Share from the mobile app and try again.'
           : 'Failed to join: $message';
       if (mounted) {
         debugPrint('[WebRoomEntry] First error: Setting _isJoining=false');
@@ -216,16 +235,18 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           _isJoining = false; // Stop loading on first error
         });
       } else {
-        debugPrint('[WebRoomEntry] Widget unmounted, cannot update error state');
+        debugPrint(
+          '[WebRoomEntry] Widget unmounted, cannot update error state',
+        );
         return;
       }
       // One-shot auto-retry on failure
       if (!_didAutoRetry) {
         _didAutoRetry = true;
-        
+
         // Wait a moment to show the error before retrying
         await Future.delayed(const Duration(milliseconds: 1500));
-        
+
         if (mounted) {
           debugPrint('[WebRoomEntry] Before retry: Setting _isJoining=true');
           setState(() {
@@ -249,13 +270,15 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           await Future.delayed(const Duration(milliseconds: 300));
           await _webrtcService.connectToSignalingServer(roomId);
           if (!mounted) return;
-          
+
           // Update URL to include room parameter for web sharing
           // WebUrlUtils.updateUrlWithRoomId(roomId);
-          
+
           _serviceTransferred = true;
-          
-          debugPrint('[WebRoomEntry] Opening chat screen from retry for room: $roomId');
+
+          debugPrint(
+            '[WebRoomEntry] Opening chat screen from retry for room: $roomId',
+          );
           await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => WebRTCChatScreen(
@@ -270,12 +293,14 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
           );
           // After returning from chat, reset local state and reinitialize service
           if (mounted) {
-            debugPrint('[WebRoomEntry] Returned from retry chat screen, resetting state');
+            debugPrint(
+              '[WebRoomEntry] Returned from retry chat screen, resetting state',
+            );
             _globalJoinInProgress = false; // Release global lock
             setState(() {
               _isJoining = false;
               _didAutoRetry = false;
-// Reset for potential re-join
+              // Reset for potential re-join
               _serviceTransferred = false;
               _webrtcService = WebRTCFileTransferService();
             });
@@ -314,7 +339,9 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
       // Ensure loading state is always cleaned up
       // Only skip cleanup if service was successfully transferred to chat screen
       if (_isJoining && !_serviceTransferred) {
-        debugPrint('[WebRoomEntry] Finally block: Cleaning up loading state (_isJoining=$_isJoining, _serviceTransferred=$_serviceTransferred)');
+        debugPrint(
+          '[WebRoomEntry] Finally block: Cleaning up loading state (_isJoining=$_isJoining, _serviceTransferred=$_serviceTransferred)',
+        );
         if (mounted) {
           debugPrint('[WebRoomEntry] Finally block: Setting _isJoining=false');
           setState(() {
@@ -323,7 +350,9 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
         }
         _globalJoinInProgress = false;
       } else {
-        debugPrint('[WebRoomEntry] Finally block: No cleanup needed (_isJoining=$_isJoining, _serviceTransferred=$_serviceTransferred)');
+        debugPrint(
+          '[WebRoomEntry] Finally block: No cleanup needed (_isJoining=$_isJoining, _serviceTransferred=$_serviceTransferred)',
+        );
       }
     }
   }
@@ -345,7 +374,9 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
               onTap: () {
                 if (kIsWeb) {
                   // Navigate to home by popping all routes and going to root
-                  Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+                  Navigator.of(
+                    context,
+                  ).pushNamedAndRemoveUntil('/', (_) => false);
                 }
               },
               child: MouseRegion(

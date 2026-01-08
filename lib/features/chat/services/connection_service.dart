@@ -13,7 +13,6 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:flutter/services.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/features/dpftp/dpftp_service.dart';
-import 'package:fylooo/features/quic/quic_service.dart';
 
 // 🔬 PERF: Global profiling state
 class _PerfMetrics {
@@ -142,15 +141,15 @@ class ConnectionService {
   static const int parallelSockets = 4; // Number of parallel sockets
 
   // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
-  static const bool useDpftp = true;
-
-  // ⚡ Use QUIC Protocol (Switchable)
-  bool _useQuic = false;
-  void setProtocol({required bool useQuic}) {
-    _useQuic = useQuic;
-    debugPrint(
-      '[ConnectionService] Protocol switched to: ${_useQuic ? "QUIC" : "DPFTP"}',
-    );
+  // For macOS connections, use false (standard socket transfer)
+  // For all other platforms, use true (DPFTP)
+  bool get useDpftp {
+    // When connecting to macOS, disable DPFTP
+    if (_remotePlatform == 'macos') {
+      return false;
+    }
+    // For all other platforms (android, ios, windows, linux), use DPFTP
+    return true;
   }
 
   Future<void> _writeFrame(
@@ -458,67 +457,6 @@ class ConnectionService {
 
     if (useDpftp) {
       _initDpftp();
-      _initQuic();
-    }
-  }
-
-  Future<void> _initQuic() async {
-    try {
-      Directory? dir;
-      if (Platform.isAndroid || Platform.isIOS) {
-        dir = await getApplicationDocumentsDirectory();
-      } else {
-        dir = await getDownloadsDirectory();
-        dir ??= await getApplicationDocumentsDirectory();
-      }
-
-      await QuicService().startReceiver(saveDirectory: dir.path);
-
-      QuicService().progress.listen((p) {
-        _notifyMessageListeners(
-          DeviceMessage(
-            type: 'file_progress',
-            content: p.transferId,
-            senderName: deviceName,
-            timestamp: DateTime.now(),
-            metadata: {
-              'transferId': p.transferId,
-              'bytes': (p.bytesTransferred > p.totalBytes)
-                  ? p.totalBytes
-                  : p.bytesTransferred,
-              'total': p.totalBytes,
-              'outgoing': p.isOutgoing,
-              'path': p.filePath,
-            },
-          ),
-        );
-
-        if (p.isComplete) {
-          debugPrint(
-            '[ConnectionService] 🏁 QUIC Transfer ${p.transferId} Complete.',
-          );
-          final name =
-              p.filePath?.split(Platform.pathSeparator).last ?? 'Unknown File';
-
-          _notifyMessageListeners(
-            DeviceMessage(
-              type: 'file_complete',
-              content: name,
-              senderName: deviceName,
-              timestamp: DateTime.now(),
-              metadata: {
-                'transferId': p.transferId,
-                'path': p.filePath,
-                'size': p.totalBytes,
-                'outgoing': p.isOutgoing,
-                'durationMs': p.durationMs,
-              },
-            ),
-          );
-        }
-      });
-    } catch (e) {
-      debugPrint('[ConnectionService] ⚠️ Failed to init QUIC: $e');
     }
   }
 
@@ -599,8 +537,10 @@ class ConnectionService {
   bool get isUsingWifiDirect => _usingWifiDirect;
 
   /// Check if WiFi Direct connection is available but not yet established
+  /// Only available when BOTH devices are Android (WiFi Direct is Android-only)
   bool get canConnectWifiDirect =>
       Platform.isAndroid &&
+      _remotePlatform == 'android' && // Remote device must also be Android
       isConnected &&
       !_usingWifiDirect &&
       !_wifiDirectAttempted;
@@ -1451,15 +1391,17 @@ class ConnectionService {
         // Send handshake response
         await _sendHandshake();
 
-        // Now transition to connected state
+        // Now transition to connected state and update device name with actual remote device name
         _updateStatus(
           _currentConnection!.copyWith(
+            deviceName:
+                message.senderName, // Update with actual remote device name
             status: ConnectionStatus.connected,
             connectedAt: DateTime.now(),
           ),
         );
         debugPrint(
-          '[ConnectionService] ✅ Handshake complete, connection established',
+          '[ConnectionService] ✅ Handshake complete, connection established with ${message.senderName}',
         );
       } else if (isConnected) {
         debugPrint(
@@ -1902,39 +1844,17 @@ class ConnectionService {
               '[ConnectionService] 🚀 DPFTP Config: ${isRemoteWindows ? "Windows-optimized" : "Standard"} (conns=$parallelConns, chunk=${chunkSizeMB ~/ (1024 * 1024)}MB, window=${windowMB ~/ (1024 * 1024)}MB)',
             );
 
-            // Helper to run in background or just awaited
-            if (_useQuic) {
-              // Validate IP before starting QUIC
-              if (ip == null || ip == '0.0.0.0') {
-                debugPrint(
-                  '[ConnectionService] ⚠️ Invalid IP for QUIC ($ip). Falling back to DPFTP/Legacy.',
-                );
-                // Fallback logic could go here, or just error out.
-                // For now, let's just NOT start QUIC to prevent crash.
-              } else {
-                debugPrint(
-                  '[ConnectionService] 🚀 Starting QUIC Transfer for $transferId to $ip',
-                );
-                unawaited(
-                  QuicService().sendFile(
-                    ip: ip,
-                    file: File(ot.path!),
-                    transferId: transferId,
-                  ),
-                );
-              }
-            } else {
-              unawaited(
-                DpftpService().sendFile(
-                  ip: ip,
-                  file: File(ot.path!),
-                  transferId: transferId,
-                  parallelConnections: parallelConns,
-                  chunkSize: chunkSizeMB,
-                  maxInFlightBytes: windowMB,
-                ),
-              );
-            }
+            // Start DPFTP transfer
+            unawaited(
+              DpftpService().sendFile(
+                ip: ip,
+                file: File(ot.path!),
+                transferId: transferId,
+                parallelConnections: parallelConns,
+                chunkSize: chunkSizeMB,
+                maxInFlightBytes: windowMB,
+              ),
+            );
           } else {
             debugPrint(
               '[ConnectionService] ❌ DPFTP Start Failed: IP($ip) or Path(${ot.path}) null',

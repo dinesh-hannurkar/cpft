@@ -288,7 +288,7 @@ class WebRTCFileTransferService {
     // Guard: Website must not create rooms
     if (_joinOnly) {
       throw Exception(
-        'Room creation is disabled on web. Start Link Share from the mobile app.',
+        'Room creation is disabled on web. Start Web Share from the mobile app.',
       );
     }
     await FirebaseInitializer.ensure();
@@ -574,7 +574,7 @@ class WebRTCFileTransferService {
     // If running in join-only mode (e.g., website), refuse to create a new room
     if (!snapExisting.exists && _joinOnly) {
       throw Exception(
-        'Room "$roomId" not found. Please start Link Share from the mobile app and try again.',
+        'Room "$roomId" not found. Please start Web Share from the mobile app and try again.',
       );
     }
     // Create when allowed and not present; otherwise attach to existing doc

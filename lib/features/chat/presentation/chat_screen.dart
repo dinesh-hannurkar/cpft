@@ -215,7 +215,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (!success && mounted) {
       AppSnackbar.showError(
         context,
-        'Failed to connect to ${_connectionService.deviceName}',
+        'Failed to connect to ${_remoteDeviceName()}',
         action: SnackBarAction(
           label: 'Retry',
           textColor: Colors.white,
@@ -1013,14 +1013,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _connectionInfo?.status == ConnectionStatus.connecting) {
       return 'Connecting...';
     } else if (_connectionInfo?.status == ConnectionStatus.connected) {
-      // return '${widget.ipAddress}:${widget.port} • Connected';
       return 'Connected';
     } else if (_connectionInfo?.status == ConnectionStatus.failed) {
       return 'Connection Failed';
     } else if (_connectionInfo?.status == ConnectionStatus.disconnected) {
       return 'Disconnected';
     }
-    return widget.ipAddress;
+    // Don't show IP address - show disconnected status instead
+    return 'Disconnected';
+  }
+
+  String _remoteDeviceName() {
+    // Use the device name from ConnectionInfo if available (updated after handshake)
+    // Otherwise fall back to the initial device name from widget
+    return _connectionInfo?.deviceName ?? widget.deviceName;
   }
 
   void _showReceivedFilesSheet() {
@@ -1190,7 +1196,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   child: Column(
                     children: [
                       ChatTopBar(
-                        deviceName: _connectionService.deviceName,
+                        deviceName: _remoteDeviceName(),
                         statusText: _statusText(),
                         receivedFilesCount: _receivedFiles.length,
                         connectionsCount:
@@ -1206,9 +1212,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       if (_isConnecting ||
                           _connectionInfo?.status ==
                               ConnectionStatus.connecting)
-                        ConnectingBanner(
-                          deviceName: _connectionService.deviceName,
-                        ),
+                        ConnectingBanner(deviceName: _remoteDeviceName()),
                       if (_connectionInfo?.status == ConnectionStatus.failed)
                         ErrorBanner(
                           error: _connectionInfo?.error,
