@@ -12,6 +12,7 @@ class StatusBanner extends StatelessWidget {
   final String? action;
   final VoidCallback? onAction;
   final bool useWhiteText;
+  final Widget? trailing;
 
   const StatusBanner({
     super.key,
@@ -25,6 +26,7 @@ class StatusBanner extends StatelessWidget {
     this.action,
     this.onAction,
     this.useWhiteText = false,
+    this.trailing,
   });
 
   @override
@@ -37,18 +39,22 @@ class StatusBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         border: Border(bottom: BorderSide(color: borderColor)),
-        gradient: useWhiteText ? LinearGradient(
-          colors: [color, borderColor],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ) : null,
+        gradient: useWhiteText
+            ? LinearGradient(
+                colors: [color, borderColor],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: useWhiteText ? Colors.white.withOpacity(0.2) : iconColor.withOpacity(0.1),
+              color: useWhiteText
+                  ? Colors.white.withOpacity(0.2)
+                  : iconColor.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: isLoading
@@ -79,7 +85,9 @@ class StatusBanner extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: useWhiteText ? Colors.white : iconColor.withOpacity(0.9),
+                    color: useWhiteText
+                        ? Colors.white
+                        : iconColor.withOpacity(0.9),
                   ),
                 ),
                 if (subtitle != null)
@@ -87,7 +95,9 @@ class StatusBanner extends StatelessWidget {
                     subtitle!,
                     style: TextStyle(
                       fontSize: 11,
-                      color: useWhiteText ? Colors.white.withOpacity(0.9) : iconColor.withOpacity(0.7),
+                      color: useWhiteText
+                          ? Colors.white.withOpacity(0.9)
+                          : iconColor.withOpacity(0.7),
                     ),
                   ),
               ],
@@ -105,7 +115,9 @@ class StatusBanner extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: useWhiteText ? Colors.white.withOpacity(0.2) : iconColor,
+                    color: useWhiteText
+                        ? Colors.white.withOpacity(0.2)
+                        : iconColor,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -119,6 +131,10 @@ class StatusBanner extends StatelessWidget {
                 ),
               ),
             ),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSizes.md),
+            trailing!,
+          ],
         ],
       ),
     );

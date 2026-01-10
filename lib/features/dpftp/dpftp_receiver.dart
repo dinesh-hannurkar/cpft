@@ -161,6 +161,12 @@ class _Session {
     final offset = chunkId * Dpftp.defaultChunkSize;
     // Serialize IO to prevent race conditions on _raf position
     await (_ioLock = _ioLock.then((_) async {
+      // Double-check _raf is still valid (might have been closed during reset)
+      if (_raf == null) {
+        debugPrint('[DPFTP] RAF closed during write, chunk $chunkId dropped');
+        return;
+      }
+
       // Smart Seek: Only seek if not already there
       if (_rafPosition != offset) {
         await _raf!.setPosition(offset);

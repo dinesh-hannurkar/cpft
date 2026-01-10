@@ -50,17 +50,19 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
           disableBarrierInteraction: false,
           targetPadding: const EdgeInsets.all(8),
           title: 'Download All',
-          description: 'Save all received files at once to a folder of your choice',
+          description:
+              'Save all received files at once to a folder of your choice',
           tooltipBackgroundColor: Colors.white,
           textColor: Colors.black,
           descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-          titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+          titleTextStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+            fontSize: 16,
+          ),
           tooltipBorderRadius: BorderRadius.circular(12),
           targetBorderRadius: BorderRadius.circular(12),
-          child: AppIconButton(
-            icon: Icons.download,
-            onPressed: onSaveAll!,
-          ),
+          child: AppIconButton(icon: Icons.download, onPressed: onSaveAll!),
         ),
       );
     }
@@ -76,7 +78,11 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
           tooltipBackgroundColor: Colors.white,
           textColor: Colors.black,
           descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-          titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+          titleTextStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+            fontSize: 16,
+          ),
           tooltipBorderRadius: BorderRadius.circular(12),
           targetBorderRadius: BorderRadius.circular(12),
           child: AppIconButton(
@@ -110,7 +116,11 @@ class ChatTopBar extends StatelessWidget implements PreferredSizeWidget {
           tooltipBackgroundColor: Colors.white,
           textColor: Colors.black,
           descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-          titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+          titleTextStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+            fontSize: 16,
+          ),
           tooltipBorderRadius: BorderRadius.circular(12),
           targetBorderRadius: BorderRadius.circular(12),
           child: AppIconButton(

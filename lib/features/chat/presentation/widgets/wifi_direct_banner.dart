@@ -6,12 +6,14 @@ class WiFiDirectBanner extends StatelessWidget {
   final ValueNotifier<WifiDirectStatus> statusNotifier;
   final bool canConnect;
   final VoidCallback? onConnect;
+  final VoidCallback? onInfo;
 
   const WiFiDirectBanner({
     super.key,
     required this.statusNotifier,
     required this.canConnect,
     this.onConnect,
+    this.onInfo,
   });
 
   @override
@@ -27,6 +29,11 @@ class WiFiDirectBanner extends StatelessWidget {
             iconColor: Colors.green.shade700,
             title: 'High-Speed Connection Active',
             subtitle: '5GHz channel enabled',
+            trailing: IconButton(
+              icon: Icon(Icons.info_outline, color: Colors.green.shade700),
+              tooltip: 'Connection Details',
+              onPressed: onInfo,
+            ),
           );
         }
 
@@ -62,6 +69,11 @@ class WiFiDirectBanner extends StatelessWidget {
             subtitle: 'Tap to enable 5GHz transfer',
             action: 'Enable',
             onAction: onConnect,
+            trailing: IconButton(
+              icon: Icon(Icons.info_outline, color: Colors.blue.shade700),
+              tooltip: 'Connection Details',
+              onPressed: onInfo,
+            ),
           );
         }
 

@@ -107,6 +107,19 @@ class ConnectionService {
       ValueNotifier(WifiDirectStatus.disconnected);
   bool _wifiDirectAttempted = false;
   bool _usingWifiDirect = false;
+
+  // Track WiFi Direct connection details
+  String? _wifiDirectIp;
+  int? _wifiDirectPort;
+  bool _isWifiDirectGroupOwner = false;
+
+  // Getters for WiFi Direct details
+  String? get wifiDirectIp => _wifiDirectIp;
+  int? get wifiDirectPort => _wifiDirectPort;
+  bool get isWifiDirectGroupOwner => _isWifiDirectGroupOwner;
+  String? get remoteWifiDirectName => _remoteWifiDirectName;
+  String? get remoteWifiDirectMac => _remotePeerAddress;
+  String? get localWifiDirectMac => _localWifiDirectPeerId;
   final _wifiDirectService = WiFiDirectService();
   Timer? _wifiDirectRetryTimer;
   String? _remotePeerAddress; // Store remote device MAC for P2P
@@ -137,8 +150,16 @@ class ConnectionService {
   // 🚀 Use native receiver with optimized forwarding (targeting 50+ Mbps)
   static bool useNativeReceiver = true;
   // 🚀 Enable parallel TCP streams for non-Android platforms to boost speed
-  static const bool enableParallelTransfers = false;
+  // MODIFIED: Enable for Android as well to boost Hotspot speeds
+  static bool get enableParallelTransfers => Platform.isAndroid || !kIsWeb;
   static const int parallelSockets = 4; // Number of parallel sockets
+
+  // 🚀 Socket buffer optimization
+  static const int _SOL_SOCKET = 1; // Socket level
+  static const int _SO_RCVBUF = 8; // Receive buffer size
+  static const int _SO_SNDBUF = 7; // Send buffer size
+  static const int _BUFFER_SIZE =
+      2 * 1024 * 1024; // 2MB (kernel may double to 4MB)
 
   // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
   // For macOS connections, use false (standard socket transfer)
@@ -146,10 +167,64 @@ class ConnectionService {
   bool get useDpftp {
     // When connecting to macOS, disable DPFTP
     if (_remotePlatform == 'macos') {
-      return false;
+      return true;
     }
     // For all other platforms (android, ios, windows, linux), use DPFTP
     return true;
+  }
+
+  /// Optimize socket buffers for high-speed transfer (all platforms)
+  void _optimizeSocketBuffers(Socket socket, {bool verify = true}) {
+    // Skip for web platform only
+    if (kIsWeb) return;
+
+    try {
+      // Create buffer value as 4-byte integer in host byte order
+      final bufferBytes = ByteData(4);
+      bufferBytes.setInt32(0, _BUFFER_SIZE, Endian.host);
+      final bufferValue = bufferBytes.buffer.asUint8List();
+
+      // Set 2MB receive buffer (SO_RCVBUF)
+      socket.setRawOption(
+        RawSocketOption(_SOL_SOCKET, _SO_RCVBUF, bufferValue),
+      );
+
+      // Set 2MB send buffer (SO_SNDBUF)
+      socket.setRawOption(
+        RawSocketOption(_SOL_SOCKET, _SO_SNDBUF, bufferValue),
+      );
+
+      if (verify) {
+        // Verify buffer sizes were applied
+        try {
+          final rcvOption = socket.getRawOption(
+            RawSocketOption(_SOL_SOCKET, _SO_RCVBUF, Uint8List(4)),
+          );
+          final rcvSize = ByteData.sublistView(
+            rcvOption,
+          ).getInt32(0, Endian.host);
+
+          final sndOption = socket.getRawOption(
+            RawSocketOption(_SOL_SOCKET, _SO_SNDBUF, Uint8List(4)),
+          );
+          final sndSize = ByteData.sublistView(
+            sndOption,
+          ).getInt32(0, Endian.host);
+
+          debugPrint(
+            '[ConnectionService] 🚀 Socket buffers optimized - RCV: ${(rcvSize / 1024 / 1024).toStringAsFixed(1)}MB, SND: ${(sndSize / 1024 / 1024).toStringAsFixed(1)}MB',
+          );
+        } catch (e) {
+          debugPrint(
+            '[ConnectionService] ⚠️ Could not verify buffer sizes: $e',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint(
+        '[ConnectionService] ⚠️ Failed to optimize socket buffers: $e',
+      );
+    }
   }
 
   Future<void> _writeFrame(
@@ -661,6 +736,7 @@ class ConnectionService {
       _incomingChains.add(Future.value());
       _frameParsers.add(_FrameParser());
       primarySocket.setOption(SocketOption.tcpNoDelay, true);
+      _optimizeSocketBuffers(primarySocket);
       final sub = primarySocket.listen(
         (data) => _handleIncomingData(data, 0),
         onError: (e) => _handleConnectionError(e.toString()),
@@ -714,6 +790,10 @@ class ConnectionService {
               _incomingChains.add(Future.value());
               _frameParsers.add(_FrameParser());
               socket.setOption(SocketOption.tcpNoDelay, true);
+              _optimizeSocketBuffers(
+                socket,
+                verify: false,
+              ); // Skip verify for parallel sockets
               final sub = socket.listen(
                 (data) => _handleIncomingData(data, i),
                 onError: (e) {
@@ -898,6 +978,7 @@ class ConnectionService {
 
       try {
         socket.setOption(SocketOption.tcpNoDelay, true);
+        _optimizeSocketBuffers(socket, verify: false); // Incoming socket
         debugPrint(
           '[ConnectionService] ✅ Socket options configured (tcpNoDelay)',
         );
@@ -981,7 +1062,7 @@ class ConnectionService {
   Future<void> _attemptWiFiDirectUpgrade() async {
     if (_wifiDirectAttempted) return;
     _wifiDirectAttempted = true;
-
+    return;
     // Only attempt WiFi Direct on Android
     if (!Platform.isAndroid) {
       debugPrint('[ConnectionService] 📡 WiFi Direct: Not Android, skipping');
@@ -1051,6 +1132,12 @@ class ConnectionService {
           final port = event.port;
           if (ip == null || port == null) return;
           _usingWifiDirect = true;
+
+          // Store connection details
+          _wifiDirectIp = ip;
+          _wifiDirectPort = port;
+          _isWifiDirectGroupOwner = event.isGroupOwner;
+
           _ensureWifiDirectDataSocket(
             ipAddress: ip,
             port: port,

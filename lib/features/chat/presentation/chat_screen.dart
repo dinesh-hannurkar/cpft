@@ -1228,6 +1228,111 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             setState(() {});
                           }
                         },
+                        onInfo: () {
+                          if (!mounted) return;
+
+                          // Show connection details dialog
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Row(
+                                children: [
+                                  Icon(
+                                    Icons.wifi_tethering,
+                                    color: Colors.green,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text('WiFi Direct Info'),
+                                ],
+                              ),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildInfoRow(
+                                    'Status',
+                                    _connectionService.isUsingWifiDirect
+                                        ? 'Connected (5GHz)'
+                                        : 'Available (Not Connected)',
+                                    _connectionService.isUsingWifiDirect
+                                        ? Icons.check_circle
+                                        : Icons.info_outline,
+                                    _connectionService.isUsingWifiDirect
+                                        ? Colors.green
+                                        : Colors.blue,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildInfoRow(
+                                    'Role',
+                                    _connectionService.isUsingWifiDirect
+                                        ? (_connectionService
+                                                  .isWifiDirectGroupOwner
+                                              ? 'Group Owner (Host)'
+                                              : 'Client (Peer)')
+                                        : 'Pending Negotiation',
+                                    _connectionService.isUsingWifiDirect
+                                        ? (_connectionService
+                                                  .isWifiDirectGroupOwner
+                                              ? Icons.router
+                                              : Icons.devices)
+                                        : Icons.hourglass_empty,
+                                    Colors.blue,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildInfoRow(
+                                    'Peer IP',
+                                    _connectionService.wifiDirectIp ??
+                                        'Not assigned',
+                                    Icons.link,
+                                    Colors.orange,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildInfoRow(
+                                    'Peer Name',
+                                    _connectionService.remoteWifiDirectName ??
+                                        'Unknown',
+                                    Icons.smartphone,
+                                    Colors.purple,
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    child: Divider(),
+                                  ),
+                                  Text(
+                                    'Credentials (MAC)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow(
+                                    'Remote ID',
+                                    _connectionService.remoteWifiDirectMac ??
+                                        'Scanning...',
+                                    Icons.radar,
+                                    Colors.grey,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow(
+                                    'Local ID',
+                                    _connectionService.localWifiDirectMac ??
+                                        'Initializing...',
+                                    Icons.fingerprint,
+                                    Colors.grey,
+                                  ),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                       const TemporaryFilesWarningBanner(),
                       if (_lastTransferBytes != null &&
@@ -1454,6 +1559,39 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

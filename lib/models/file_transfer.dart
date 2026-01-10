@@ -1,4 +1,3 @@
-
 /// High-level file transfer state and metadata
 class FileOffer {
   final String transferId; // unique per transfer
@@ -97,10 +96,7 @@ class FileCancel {
 
   FileCancel({required this.transferId, required this.reason});
 
-  Map<String, dynamic> toJson() => {
-    'transferId': transferId,
-    'reason': reason,
-  };
+  Map<String, dynamic> toJson() => {'transferId': transferId, 'reason': reason};
 
   factory FileCancel.fromJson(Map<String, dynamic> json) => FileCancel(
     transferId: json['transferId'] as String,
