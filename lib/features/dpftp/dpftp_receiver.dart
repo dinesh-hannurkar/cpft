@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'dpftp_types.dart';
 import 'dpftp_socket_manager.dart';
 import 'dpftp_socket.dart';
+import 'dpftp_disk_writer.dart';
 
 /// Receiver side of DPFTP v1.
 /// - Accepts connections (Control + Data)
@@ -58,6 +59,10 @@ class DpftpReceiver {
         },
       );
     }
+
+    // Optimize socket buffers for high-speed transfer
+    _optimizeSocketBuffers(socket);
+
     _sessions[ip]!.addSocket(socket);
   }
 
@@ -65,6 +70,28 @@ class DpftpReceiver {
     await _server?.close();
     for (var s in _sessions.values) s.dispose();
     _sessions.clear();
+  }
+
+  /// Optimize socket buffers for high-speed transfer
+  void _optimizeSocketBuffers(Socket socket) {
+    if (kIsWeb) return;
+
+    try {
+      // Platform-specific constants
+      final solSocket = Platform.isWindows ? 0xFFFF : 1;
+      final soRcvbuf = Platform.isWindows ? 0x1002 : 8;
+      final soSndbuf = Platform.isWindows ? 0x1001 : 7;
+      const bufferSize = 2 * 1024 * 1024; // 2MB
+
+      final bufferBytes = ByteData(4);
+      bufferBytes.setInt32(0, bufferSize, Endian.host);
+      final bufferValue = bufferBytes.buffer.asUint8List();
+
+      socket.setRawOption(RawSocketOption(solSocket, soRcvbuf, bufferValue));
+      socket.setRawOption(RawSocketOption(solSocket, soSndbuf, bufferValue));
+    } catch (e) {
+      debugPrint('[DPFTP] Failed to optimize socket buffers: $e');
+    }
   }
 }
 
@@ -76,14 +103,13 @@ class _Session {
   final DpftpSocketManager _sockets = DpftpSocketManager();
 
   // State
-  RandomAccessFile? _raf;
-  Future<void> _ioLock = Future.value(); // Mutex for RAF
+  DpftpDiskWriter? _diskWriter; // Isolate-based disk writer
+  RandomAccessFile? _raf; // Kept for metadata/legacy fallback
   DpftpFileInfo? _fileInfo;
   String? _fileName;
   String? _transferId;
   DateTime? _startTime;
-  int _receivedBytes = 0; // Proper naming
-  int _rafPosition = 0;
+  int _receivedBytes = 0;
 
   _Session(this.ip, this.saveDir, this.onProgress, {this.onComplete}) {
     _sockets.controlMessages.listen(_handleControlMessage);
@@ -98,11 +124,12 @@ class _Session {
 
   Future<void> _handleControlMessage(DpftpMessage msg) async {
     try {
-      if (msg.type != Dpftp.typeData && msg.type != Dpftp.typeChunkDone) {
-        debugPrint(
-          '[DPFTP][Rx] Control Msg Type: ${msg.type} (Len: ${msg.payload.length})',
-        );
-      }
+      // Log only control messages, not data
+      // if (msg.type != Dpftp.typeData && msg.type != Dpftp.typeChunkDone) {
+      //   debugPrint(
+      //     '[DPFTP][Rx] Control Msg Type: ${msg.type} (Len: ${msg.payload.length})',
+      //   );
+      // }
       switch (msg.type) {
         case Dpftp.typeHello:
           await _handleHello(msg.payload);
@@ -148,7 +175,7 @@ class _Session {
       return;
     }
 
-    if (_raf == null || _fileInfo == null) return;
+    if (_diskWriter == null || _fileInfo == null) return;
 
     // Track start time on first chunk
     _startTime ??= DateTime.now();
@@ -159,22 +186,17 @@ class _Session {
     final calculated = _calculatedHashes[chunkId] = const <int>[]; // Dummy hash
 
     final offset = chunkId * Dpftp.defaultChunkSize;
-    // Serialize IO to prevent race conditions on _raf position
-    await (_ioLock = _ioLock.then((_) async {
-      // Double-check _raf is still valid (might have been closed during reset)
-      if (_raf == null) {
-        debugPrint('[DPFTP] RAF closed during write, chunk $chunkId dropped');
-        return;
-      }
 
-      // Smart Seek: Only seek if not already there
-      if (_rafPosition != offset) {
-        await _raf!.setPosition(offset);
-        _rafPosition = offset;
-      }
-      await _raf!.writeFrom(data);
-      _rafPosition += len;
-    }));
+    // Send to isolate disk writer (non-blocking!)
+    if (_diskWriter != null) {
+      _diskWriter!.writeChunk(chunkId, offset, data);
+    } else {
+      // Fallback to direct write (should not happen in normal flow)
+      debugPrint(
+        '[DPFTP] Warning: disk writer not initialized, using fallback',
+      );
+      return;
+    }
 
     _receivedBytes += len;
     // PERF: Throttled progress callbacks (chunk 0 + every 8 chunks for UI timing)
@@ -211,7 +233,6 @@ class _Session {
       _inFlightChunks.remove(id); // Done
       _saveMetadata(); // Throttled
 
-      debugPrint('[DPFTP] Chunk $id verified & saved');
       // Send ACK for flow control & progress sync
       _sockets.sendControl(Dpftp.typeChunkAck, Dpftp.int32(id));
 
@@ -371,12 +392,15 @@ class _Session {
       }
       _saveMetadata();
       _receivedBytes = 0;
-      _rafPosition = 0; // Truncated, so at 0
+
+      // Initialize disk writer isolate
+      _diskWriter = DpftpDiskWriter();
+      await _diskWriter!.start('$saveDir/$_fileName', fileSize);
+      debugPrint('[DPFTP] Disk writer isolate started');
     }
 
-    if (_raf == null) {
+    if (_raf == null && _diskWriter == null) {
       _raf = await file.open(mode: FileMode.append); // Re-open for resume
-      _rafPosition = await _raf!.position(); // Valid position
 
       // Calc received bytes (approx)
       final missing = _fileInfo!.bitmap.getMissingChunks(
@@ -384,6 +408,11 @@ class _Session {
       );
       final receivedChunks = _fileInfo!.totalChunks - missing.length;
       _receivedBytes = receivedChunks * _fileInfo!.chunkSize;
+
+      // Initialize disk writer for resume
+      _diskWriter = DpftpDiskWriter();
+      await _diskWriter!.start('$saveDir/$_fileName', fileSize);
+      debugPrint('[DPFTP] Disk writer isolate started (resume)');
     }
 
     // ... rest of function
@@ -472,11 +501,12 @@ class _Session {
     // Reset transfer state without closing sockets (for sequential transfers)
     _raf?.close();
     _raf = null;
+    _diskWriter?.stop();
+    _diskWriter = null;
     _fileInfo = null;
     _fileName = null;
     _transferId = null;
     _receivedBytes = 0;
-    _rafPosition = 0;
     _transferFinished = false;
     _calculatedHashes.clear();
     _pendingDoneHashes.clear();
@@ -489,6 +519,7 @@ class _Session {
 
   void dispose() {
     _raf?.close();
+    _diskWriter?.stop();
     _sockets.dispose(); // Close all sockets
     _metaSaveTimer?.cancel();
   }

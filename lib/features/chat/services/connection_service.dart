@@ -154,12 +154,13 @@ class ConnectionService {
   static bool get enableParallelTransfers => Platform.isAndroid || !kIsWeb;
   static const int parallelSockets = 4; // Number of parallel sockets
 
-  // 🚀 Socket buffer optimization
-  static const int _SOL_SOCKET = 1; // Socket level
-  static const int _SO_RCVBUF = 8; // Receive buffer size
-  static const int _SO_SNDBUF = 7; // Send buffer size
+  // 🚀 Socket buffer optimization - Platform-specific constants
+  // Windows uses different values than Unix/Linux/macOS/Android
+  static int get _SOL_SOCKET => Platform.isWindows ? 0xFFFF : 1;
+  static int get _SO_RCVBUF => Platform.isWindows ? 0x1002 : 8;
+  static int get _SO_SNDBUF => Platform.isWindows ? 0x1001 : 7;
   static const int _BUFFER_SIZE =
-      2 * 1024 * 1024; // 2MB (kernel may double to 4MB)
+      16 * 1024 * 1024; // 2MB (kernel may double to 4MB)
 
   // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
   // For macOS connections, use false (standard socket transfer)

@@ -254,7 +254,8 @@ class DpftpSender {
         final id = _chunkQueue.removeAt(0);
 
         // Send (Awaited but IO is separate from Control)
-        await _sendChunk(id, _socketIdx++);
+        // Cycle through available sockets (0, 1, 2, 3, 0, 1, 2, 3...)
+        await _sendChunk(id, _socketIdx++ % parallelConnections);
 
         // Pipelining: Request more work if queue is getting low
         if (_chunkQueue.length < requestChunkCount / 2 &&
