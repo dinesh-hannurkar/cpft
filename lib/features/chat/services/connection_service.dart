@@ -151,7 +151,7 @@ class ConnectionService {
   static bool useNativeReceiver = true;
   // 🚀 Enable parallel TCP streams for non-Android platforms to boost speed
   // MODIFIED: Enable for Android as well to boost Hotspot speeds
-  static bool get enableParallelTransfers => Platform.isAndroid || !kIsWeb;
+  static bool get enableParallelTransfers => false;
   static const int parallelSockets = 4; // Number of parallel sockets
 
   // 🚀 Socket buffer optimization - Platform-specific constants
@@ -160,7 +160,7 @@ class ConnectionService {
   static int get _SO_RCVBUF => Platform.isWindows ? 0x1002 : 8;
   static int get _SO_SNDBUF => Platform.isWindows ? 0x1001 : 7;
   static const int _BUFFER_SIZE =
-      16 * 1024 * 1024; // 2MB (kernel may double to 4MB)
+      8 * 1024 * 1024; // 8MB (kernel may double to 16MB)
 
   // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
   // For macOS connections, use false (standard socket transfer)
@@ -2014,11 +2014,7 @@ class ConnectionService {
       // Stream chunk size
       // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
       // Android uses 16MB to balance memory usage on diverse hardware.
-      final int chunkSize = (Platform.isAndroid)
-          ? 16 *
-                1024 *
-                1024 // 16MB Android
-          : 32 * 1024 * 1024; // 32MB iOS/Desktop
+      final int chunkSize = 64 * 1024; // 64KB
       int index = 0;
 
       // Register outgoing transfer BEFORE waiting for ACK/streaming
@@ -2378,11 +2374,7 @@ class ConnectionService {
       // Stream chunks
       // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
       // Android uses 16MB to balance memory usage on diverse hardware.
-      final int chunkSize = (Platform.isAndroid)
-          ? 16 *
-                1024 *
-                1024 // 16MB Android
-          : 32 * 1024 * 1024; // 32MB iOS/Desktop
+      final int chunkSize = 64 * 1024; // 64KB
       int index = 0;
       // Stream the file with controlled chunk size using RandomAccessFile to avoid tiny default chunks
       final raf = await file.open(mode: FileMode.read);
