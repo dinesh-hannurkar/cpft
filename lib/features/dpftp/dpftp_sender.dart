@@ -108,9 +108,6 @@ class DpftpSender {
       case Dpftp.typeFileInfo:
         await _handleFileInfo(msg.payload);
         break;
-      case Dpftp.typeAssignChunks:
-        _handleAssignChunks(msg.payload);
-        break;
       case Dpftp.typeChunkAck:
         _handleChunkAck(msg.payload);
         break;
@@ -139,47 +136,11 @@ class DpftpSender {
       await _connectSocket();
     }
 
-    // Start Pump logic by requesting initial work
-    if (!_waitingForAssignment) {
-      _requestWork();
-    }
-  }
-
-  void _requestWork() {
-    // Only request if not already waiting
-    if (_waitingForAssignment) return;
-
-    _waitingForAssignment = true;
-    // Ask for window size appropriate amount (4 chunks = 32MB)
-    _sockets.sendControl(
-      Dpftp.typeRequestChunks,
-      Dpftp.int16(requestChunkCount),
+    // Proactively start sending chunks ("push" model)
+    // Enqueue all chunks and let the pump and flow control manage the rate.
+    _chunkQueue.addAll(
+      List.generate(_serverInfo!.totalChunks, (index) => index),
     );
-  }
-
-  void _handleAssignChunks(Uint8List payload) {
-    // Received assignment
-    _waitingForAssignment = false;
-
-    final count = Dpftp.readInt16(payload, 0);
-    int offset = 2;
-    final newChunks = <int>[];
-
-    for (int i = 0; i < count; i++) {
-      newChunks.add(Dpftp.readInt32(payload, offset));
-      offset += 4;
-    }
-
-    if (newChunks.isEmpty) {
-      // Receiver gave us nothing (shouldn't happen with current receiver logic, but handled gracefully)
-      // This might mean EOF or "Try Again Later"
-      return;
-    }
-
-    debugPrint('[DPFTP] Assigned ${newChunks.length} chunks. Enqueuing.');
-    _chunkQueue.addAll(newChunks);
-
-    // Trigger pump
     _pump();
   }
 
@@ -260,20 +221,6 @@ class DpftpSender {
         // Cycle through available sockets (0, 1, 2, 3, 0, 1, 2, 3...)
         await _sendChunk(id, _socketIdx++ % parallelConnections);
 
-        // Pipelining: Request more work if queue is getting low
-        if (_chunkQueue.length < requestChunkCount / 2 &&
-            !_waitingForAssignment) {
-          _requestWork();
-        }
-      }
-
-      // If queue is empty, ensure we have requested next batch
-      if (_chunkQueue.isEmpty &&
-          !_waitingForAssignment &&
-          _serverInfo != null) {
-        // Simple check: do we think there is more?
-        // Receiver handles "No More", so we just ask.
-        _requestWork();
       }
     } catch (e) {
       debugPrint('[DPFTP] Pump Error: $e');

@@ -109,9 +109,6 @@ class _Session {
         case Dpftp.typeHello:
           await _handleHello(msg.payload);
           break;
-        case Dpftp.typeRequestChunks:
-          await _handleRequestChunks(msg.payload);
-          break;
         case Dpftp.typeChunkDone:
           await _handleChunkDone(msg.payload);
           break;
@@ -222,39 +219,6 @@ class _Session {
   }
 
   // ... (handleHello in between)
-
-  Future<void> _handleRequestChunks(Uint8List payload) async {
-    // Payload: [MaxChunks:2]
-    final maxChunks = Dpftp.readInt16(payload, 0);
-
-    // Find missing chunks in bitmap
-    final missing = _fileInfo!.bitmap.getMissingChunks(
-      maxChunks + _inFlightChunks.length,
-    );
-
-    // Filter out in-flight
-    final assignable = missing
-        .where((id) => !_inFlightChunks.contains(id))
-        .take(maxChunks)
-        .toList();
-
-    if (assignable.isEmpty) {
-      if (_fileInfo!.bitmap.isComplete) {
-        return;
-      }
-      return;
-    }
-
-    // Send ASSIGN_CHUNKS
-    final b = BytesBuilder();
-    b.add(Dpftp.int16(assignable.length));
-    for (final id in assignable) {
-      b.add(Dpftp.int32(id));
-      _inFlightChunks.add(id); // Mark In-Flight
-    }
-
-    await _sockets.sendControl(Dpftp.typeAssignChunks, b.takeBytes());
-  }
 
   Future<void> _handleHello(Uint8List payload) async {
     // Payload: [NameLen:2][Name][Size:8] (Adapted)
