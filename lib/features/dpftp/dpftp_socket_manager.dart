@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import '../../core/socket_helper.dart';
 import 'dpftp_socket.dart';
 import 'dpftp_types.dart';
 
@@ -23,6 +24,9 @@ class DpftpSocketManager {
 
   /// Register a socket. First socket becomes Control, subsequent are Data.
   void addSocket(Socket rawSocket) {
+    // Apply platform-specific TCP tuning for performance.
+    RawSocketTuner.tune(rawSocket);
+
     final socket = DpftpSocket(rawSocket);
 
     if (_controlSocket == null) {

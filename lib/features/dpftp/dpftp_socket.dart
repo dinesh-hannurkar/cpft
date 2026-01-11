@@ -28,12 +28,6 @@ class DpftpSocket {
   int get remotePort => _socket.remotePort;
 
   DpftpSocket(this._socket) {
-    // Disable Nagle's algorithm for lower latency on small control messages
-    try {
-      _socket.setOption(SocketOption.tcpNoDelay, true);
-    } catch (e) {
-      debugPrint('[DPFTP] Failed to set tcpNoDelay: $e');
-    }
     _socket.listen(
       _onData,
       onError: (e) {
