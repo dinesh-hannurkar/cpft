@@ -9,14 +9,20 @@ class RawSocketTuner {
     // Load the appropriate configuration for the current OS.
     final config = Config.socket;
 
+    // Platform-specific constants for raw socket options.
+    // SOL_SOCKET, SO_RCVBUF, SO_SNDBUF have different integer values on Windows.
+    final int solSocket = Platform.isWindows ? 0xFFFF : 1;
+    final int soRcvbuf = Platform.isWindows ? 0x1002 : 8;
+    final int soSndbuf = Platform.isWindows ? 0x1001 : 7;
+
     // Set SO_RCVBUF (Receive Buffer Size)
     // This is crucial for high-throughput receivers, allowing them to buffer
     // more data from the network before the application can read it.
     try {
       socket.setRawOption(
         RawSocketOption.fromInt(
-          1, // SOL_SOCKET
-          8, // SO_RCVBUF
+          solSocket,
+          soRcvbuf,
           config.soRcvbuf,
         ),
       );
@@ -30,8 +36,8 @@ class RawSocketTuner {
     try {
       socket.setRawOption(
         RawSocketOption.fromInt(
-          1, // SOL_SOCKET
-          7, // SO_SNDBUF
+          solSocket,
+          soSndbuf,
           config.soSndbuf,
         ),
       );
