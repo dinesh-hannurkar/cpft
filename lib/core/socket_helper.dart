@@ -15,8 +15,8 @@ class RawSocketTuner {
     try {
       socket.setRawOption(
         RawSocketOption.fromInt(
-          RawSocketOption.levelSocket,
-          RawSocketOption.soRcvbuf,
+          SocketOption.levelSocket,
+          SocketOption.soRcvbuf,
           config.soRcvbuf,
         ),
       );
@@ -30,8 +30,8 @@ class RawSocketTuner {
     try {
       socket.setRawOption(
         RawSocketOption.fromInt(
-          RawSocketOption.levelSocket,
-          RawSocketOption.soSndbuf,
+          SocketOption.levelSocket,
+          SocketOption.soSndbuf,
           config.soSndbuf,
         ),
       );
