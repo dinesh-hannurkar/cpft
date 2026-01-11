@@ -19,7 +19,7 @@ class DpftpSender {
   final int parallelConnections;
 
   final DpftpSocketManager _sockets = DpftpSocketManager();
-  RandomAccessFile? _raf;
+  final List<RandomAccessFile> _rafs = [];
   DpftpFileInfo? _serverInfo;
 
   // Transfer State
@@ -60,7 +60,10 @@ class DpftpSender {
   Future<void> start() async {
     try {
       final fileSize = await file.length();
-      _raf = await file.open(mode: FileMode.read);
+      // Open a file handle for each parallel connection for true parallel IO.
+      for (int i = 0; i < parallelConnections; i++) {
+        _rafs.add(await file.open(mode: FileMode.read));
+      }
       _ackedBytes = 0;
       _pushedBytes = 0;
 
@@ -279,10 +282,8 @@ class DpftpSender {
     }
   }
 
-  Future<void> _ioLock = Future.value();
-
   Future<void> _sendChunk(int id, int socketIndex) async {
-    if (_raf == null || _serverInfo == null) return;
+    if (_rafs.isEmpty || _serverInfo == null) return;
 
     final offset = id * _serverInfo!.chunkSize;
 
@@ -298,21 +299,14 @@ class DpftpSender {
 
     final buffer = Uint8List(size);
 
-    // Atomic Read
-    final myLock = Completer<void>();
-    final prevLock = _ioLock;
-    _ioLock = myLock.future;
-
+    // Read using the dedicated file handle for this socket.
+    final raf = _rafs[socketIndex];
     try {
-      await prevLock;
-      if (_raf == null) return;
-      await _raf!.setPosition(offset);
-      await _raf!.readInto(buffer);
+      await raf.setPosition(offset);
+      await raf.readInto(buffer);
     } catch (e) {
       debugPrint('[DPFTP] Read error: $e');
       rethrow;
-    } finally {
-      myLock.complete();
     }
 
     // Send Data
@@ -334,6 +328,9 @@ class DpftpSender {
 
   void stop() {
     _sockets.dispose();
-    _raf?.close();
+    for (var raf in _rafs) {
+      raf.close();
+    }
+    _rafs.clear();
   }
 }
