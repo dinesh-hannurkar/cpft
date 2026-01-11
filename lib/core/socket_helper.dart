@@ -13,7 +13,6 @@ class RawSocketTuner {
     // This is crucial for high-throughput receivers, allowing them to buffer
     // more data from the network before the application can read it.
     try {
-      socket.setOption(SocketOption.prefersIPv4, true);
       socket.setOption(
         RawSocketOption.fromInt(
           RawSocketOption.levelSocket,
