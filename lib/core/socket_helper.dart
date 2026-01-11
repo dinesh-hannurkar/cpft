@@ -15,7 +15,7 @@ class RawSocketTuner {
     try {
       socket.setRawOption(
         RawSocketOption.fromInt(
-          SocketOption.SOL_SOCKET,
+          1, // SOL_SOCKET
           SocketOption.soRcvbuf,
           config.soRcvbuf,
         ),
@@ -30,7 +30,7 @@ class RawSocketTuner {
     try {
       socket.setRawOption(
         RawSocketOption.fromInt(
-          SocketOption.SOL_SOCKET,
+          1, // SOL_SOCKET
           SocketOption.soSndbuf,
           config.soSndbuf,
         ),
@@ -54,8 +54,10 @@ class RawSocketTuner {
     // reducing round-trip times for certain communication patterns.
     if (Platform.isLinux && config.quickAck) {
       try {
-        // TCP_QUICKACK is not a standard Dart SocketOption, so we use raw values.
-        // IPPROTO_TCP = 6, TCP_QUICKACK = 12
+        // TCP_QUICKACK is not a standard Dart SocketOption.
+        // We use raw values from the Linux headers:
+        // level 6 = IPPROTO_TCP from netinet/in.h
+        // option 12 = TCP_QUICKACK from linux/tcp.h
         socket.setRawOption(
           RawSocketOption.fromInt(6, 12, 1),
         );
