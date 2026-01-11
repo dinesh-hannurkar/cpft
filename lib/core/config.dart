@@ -77,8 +77,8 @@ class SocketConfig {
   // Their Wi-Fi stacks are often highly optimized, and large buffers
   // may not provide a significant benefit.
   factory SocketConfig.defaultMobile() => SocketConfig(
-        soRcvbuf: 1 * 1024 * 1024, // 1 MB
-        soSndbuf: 1 * 1024 * 1024, // 1 MB
+        soRcvbuf: 4 * 1024 * 1024, // 4 MB
+        soSndbuf: 4 * 1024 * 1024, // 4 MB
         tcpNoDelay: true,
       );
 }
