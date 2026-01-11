@@ -662,13 +662,22 @@ class MainActivity : FlutterActivity() {
 
                             android.util.Log.d("Hotspot", "Started - SSID: $ssid, Password: $password, Security: $securityType")
 
+                            val gatewayIp = wifiManager.dhcpInfo?.gateway?.let { intIp ->
+                                String.format(
+                                    Locale.US,
+                                    "%d.%d.%d.%d",
+                                    intIp and 0xff,
+                                    intIp shr 8 and 0xff,
+                                    intIp shr 16 and 0xff,
+                                    intIp shr 24 and 0xff
+                                )
+                            } ?: "192.168.49.1"
+
                             result.success(
                                 mapOf(
-                                    "success" to true,
                                     "ssid" to ssid,
                                     "password" to password,
-                                    "securityType" to securityType,
-                                    "message" to "Hotspot started successfully"
+                                    "gateway" to gatewayIp
                                 )
                             )
                         } catch (e: Exception) {

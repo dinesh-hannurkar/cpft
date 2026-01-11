@@ -198,6 +198,19 @@ class WiFiDirectService {
     }
   }
 
+  Future<Map<String, String>?> startLocalOnlyHotspot() async {
+    if (!_isSupported) return null;
+    try {
+      final result = await _channel.invokeMethod('startLocalOnlyHotspot');
+      if (result is Map) {
+        return Map<String, String>.from(result);
+      }
+    } catch (e) {
+      debugPrint('[WiFiDirect] Error starting hotspot: $e');
+    }
+    return null;
+  }
+
   void dispose() {
     _peerController.close();
     _connectionController.close();
