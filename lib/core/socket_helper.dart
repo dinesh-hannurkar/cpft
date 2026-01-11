@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import '../../core/config.dart';
+import 'config.dart';
 
 // Provides a standardized way to apply performance-critical socket options.
 class RawSocketTuner {
