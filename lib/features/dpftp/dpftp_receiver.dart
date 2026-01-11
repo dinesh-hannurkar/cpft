@@ -60,9 +60,6 @@ class DpftpReceiver {
       );
     }
 
-    // Optimize socket buffers for high-speed transfer
-    _optimizeSocketBuffers(socket);
-
     _sessions[ip]!.addSocket(socket);
   }
 
@@ -70,28 +67,6 @@ class DpftpReceiver {
     await _server?.close();
     for (var s in _sessions.values) s.dispose();
     _sessions.clear();
-  }
-
-  /// Optimize socket buffers for high-speed transfer
-  void _optimizeSocketBuffers(Socket socket) {
-    if (kIsWeb) return;
-
-    try {
-      // Platform-specific constants
-      final solSocket = Platform.isWindows ? 0xFFFF : 1;
-      final soRcvbuf = Platform.isWindows ? 0x1002 : 8;
-      final soSndbuf = Platform.isWindows ? 0x1001 : 7;
-      const bufferSize = 2 * 1024 * 1024; // 2MB
-
-      final bufferBytes = ByteData(4);
-      bufferBytes.setInt32(0, bufferSize, Endian.host);
-      final bufferValue = bufferBytes.buffer.asUint8List();
-
-      socket.setRawOption(RawSocketOption(solSocket, soRcvbuf, bufferValue));
-      socket.setRawOption(RawSocketOption(solSocket, soSndbuf, bufferValue));
-    } catch (e) {
-      debugPrint('[DPFTP] Failed to optimize socket buffers: $e');
-    }
   }
 }
 
