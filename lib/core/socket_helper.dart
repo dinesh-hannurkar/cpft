@@ -13,12 +13,12 @@ class RawSocketTuner {
     // This is crucial for high-throughput receivers, allowing them to buffer
     // more data from the network before the application can read it.
     try {
-      socket.setOption(
+      socket.setRawOption(
         RawSocketOption.fromInt(
           RawSocketOption.levelSocket,
           RawSocketOption.soRcvbuf,
+          config.soRcvbuf,
         ),
-        config.soRcvbuf,
       );
     } catch (e) {
       debugPrint('[SocketTuner] Failed to set SO_RCVBUF: $e');
@@ -28,12 +28,12 @@ class RawSocketTuner {
     // Critical for high-throughput senders, allowing them to write more data
     // to the socket buffer without blocking.
     try {
-      socket.setOption(
+      socket.setRawOption(
         RawSocketOption.fromInt(
           RawSocketOption.levelSocket,
           RawSocketOption.soSndbuf,
+          config.soSndbuf,
         ),
-        config.soSndbuf,
       );
     } catch (e) {
       debugPrint('[SocketTuner] Failed to set SO_SNDBUF: $e');
@@ -56,9 +56,8 @@ class RawSocketTuner {
       try {
         // TCP_QUICKACK is not a standard Dart SocketOption, so we use raw values.
         // IPPROTO_TCP = 6, TCP_QUICKACK = 12
-        socket.setOption(
-          RawSocketOption.fromInt(6, 12),
-          1, // Enable
+        socket.setRawOption(
+          RawSocketOption.fromInt(6, 12, 1),
         );
       } catch (e) {
         debugPrint('[SocketTuner] Failed to set TCP_QUICKACK: $e');
