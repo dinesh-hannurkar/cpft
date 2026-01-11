@@ -16,7 +16,7 @@ class RawSocketTuner {
       socket.setRawOption(
         RawSocketOption.fromInt(
           1, // SOL_SOCKET
-          SocketOption.soRcvbuf,
+          8, // SO_RCVBUF
           config.soRcvbuf,
         ),
       );
@@ -31,7 +31,7 @@ class RawSocketTuner {
       socket.setRawOption(
         RawSocketOption.fromInt(
           1, // SOL_SOCKET
-          SocketOption.soSndbuf,
+          7, // SO_SNDBUF
           config.soSndbuf,
         ),
       );
