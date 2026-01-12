@@ -21,7 +21,7 @@ class LinuxSocket implements NativeSocket {
 
   @override
   Future<void> bind(SocketAddress address) async {
-    await Isolate.run(() {
+    await Isolate.run((int fd) {
       final hints = calloc<ffi.AddrInfo>();
       hints.ref.ai_family = ffi.AF_INET;
       hints.ref.ai_socktype = ffi.SOCK_STREAM;
@@ -39,7 +39,7 @@ class LinuxSocket implements NativeSocket {
       }
 
       final result = resultPointer.value;
-      final bindResult = ffi.bind(_socketFd, result.ref.ai_addr, result.ref.ai_addrlen);
+      final bindResult = ffi.bind(fd, result.ref.ai_addr, result.ref.ai_addrlen);
 
       ffi.freeaddrinfo(result);
       calloc.free(hints);
@@ -50,26 +50,26 @@ class LinuxSocket implements NativeSocket {
         final errno = ffi.get_errno();
         throw 'Failed to bind socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
       }
-    });
+    }, _socketFd);
   }
 
   @override
   Future<void> listen(int backlog) async {
-    await Isolate.run(() {
-      final result = ffi.listen(_socketFd, backlog);
+    await Isolate.run((int fd) {
+      final result = ffi.listen(fd, backlog);
       if (result < 0) {
         final errno = ffi.get_errno();
         throw 'Failed to listen on socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
       }
-    });
+    }, _socketFd);
   }
 
   @override
   Future<NativeSocket> accept() async {
-    return await Isolate.run(() {
+    return await Isolate.run((int fd) {
       final sockaddr = calloc<ffi.SockAddrIn>();
       final addrlen = calloc<Int32>()..value = sizeOf<ffi.SockAddrIn>();
-      final clientFd = ffi.accept(_socketFd, sockaddr, addrlen);
+      final clientFd = ffi.accept(fd, sockaddr, addrlen);
       calloc.free(sockaddr);
       calloc.free(addrlen);
       if (clientFd < 0) {
@@ -77,12 +77,12 @@ class LinuxSocket implements NativeSocket {
         throw 'Failed to accept connection: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
       }
       return LinuxSocket._fromFd(clientFd);
-    });
+    }, _socketFd);
   }
 
   @override
   Future<void> connect(SocketAddress address) async {
-    await Isolate.run(() {
+    await Isolate.run((int fd) {
       final hints = calloc<ffi.AddrInfo>();
       hints.ref.ai_family = ffi.AF_INET;
       hints.ref.ai_socktype = ffi.SOCK_STREAM;
@@ -101,7 +101,7 @@ class LinuxSocket implements NativeSocket {
       }
 
       final result = resultPointer.value;
-      final connectResult = ffi.connect(_socketFd, result.ref.ai_addr, result.ref.ai_addrlen);
+      final connectResult = ffi.connect(fd, result.ref.ai_addr, result.ref.ai_addrlen);
 
       ffi.freeaddrinfo(result);
       calloc.free(hints);
@@ -113,25 +113,25 @@ class LinuxSocket implements NativeSocket {
         final errno = ffi.get_errno();
         throw 'Failed to connect to socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
       }
-    });
+    }, _socketFd);
   }
 
   @override
   Future<int> write(List<int> data) async {
-    return await Isolate.run(() {
+    return await Isolate.run((int fd) {
       final buffer = calloc<Uint8>(data.length);
       buffer.asTypedList(data.length).setAll(0, data);
-      final result = ffi.send(_socketFd, buffer.cast(), data.length, 0);
+      final result = ffi.send(fd, buffer.cast(), data.length, 0);
       calloc.free(buffer);
       return result;
-    });
+    }, _socketFd);
   }
 
   @override
   Future<List<int>> read(int length) async {
-    return await Isolate.run(() {
+    return await Isolate.run((int fd) {
       final buffer = calloc<Uint8>(length);
-      final result = ffi.recv(_socketFd, buffer.cast(), length, 0);
+      final result = ffi.recv(fd, buffer.cast(), length, 0);
       if (result < 0) {
         calloc.free(buffer);
         final errno = ffi.get_errno();
@@ -140,17 +140,17 @@ class LinuxSocket implements NativeSocket {
       final data = buffer.asTypedList(result).toList();
       calloc.free(buffer);
       return data;
-    });
+    }, _socketFd);
   }
 
   @override
   Future<void> close() async {
-    await Isolate.run(() => ffi.close(_socketFd));
+    await Isolate.run((int fd) => ffi.close(fd), _socketFd);
   }
 
   @override
   Future<void> sendFile(File file, {void Function(int bytesSent)? onProgress}) async {
-    await Isolate.run(() async {
+    await Isolate.run((int fd) async {
       final fileAccess = await file.open(mode: FileMode.read);
       final fileFd = (fileAccess as dynamic).fd;
       final fileSize = await file.length();
@@ -159,7 +159,7 @@ class LinuxSocket implements NativeSocket {
       try {
         offset.value = 0;
         while (offset.value < fileSize) {
-          final result = ffi.sendfile(_socketFd, fileFd, offset, fileSize - offset.value);
+          final result = ffi.sendfile(fd, fileFd, offset, fileSize - offset.value);
           if (result < 0) {
             final errno = ffi.get_errno();
             throw 'Failed to send file: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
@@ -170,6 +170,6 @@ class LinuxSocket implements NativeSocket {
         calloc.free(offset);
         await fileAccess.close();
       }
-    });
+    }, _socketFd);
   }
 }
