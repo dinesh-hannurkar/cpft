@@ -14,7 +14,6 @@ import 'multicast_platform_helper.dart';
 import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import '../../features/chat/services/connection_manager.dart';
-import 'package:fylooo/features/dpftp/dpftp_service.dart';
 import 'background_service.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 
@@ -760,7 +759,7 @@ class DiscoveryService {
     _healthCheckTimer?.cancel();
     _connectivityCheckTimer?.cancel();
     _multicastService?.dispose();
-    DpftpService().stop(); // Release port 61234
+    // DpftpService().stop(); // Release port 61234
 
     _wifiDirectPeersSub?.cancel();
     if (_isWifiDirectDiscoveryActive) {

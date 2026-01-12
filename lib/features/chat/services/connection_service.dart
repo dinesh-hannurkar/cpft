@@ -85,7 +85,7 @@ class ConnectionService {
   final Map<String, FileOffer> _pendingOffers = {};
   final Map<String, String> _outgoingFiles = {};
   // Flow control: limit by bytes in-flight (instead of chunk count). Default 256MB.
-  static const int _maxPendingBytes = 256 * 1024 * 1024; // 256MB
+  // No longer used with NetcatService
   // Keep old chunk-count constant for safety/backwards-compat but not used.
   static const int _maxPendingChunks = 4000;
   Future<void> _sendChain = Future.value();
@@ -156,11 +156,14 @@ class ConnectionService {
   static const int _BUFFER_SIZE =
       16 * 1024 * 1024; // 2MB (kernel may double to 4MB)
 
-
-  Future<void> _sendFile(String remoteIp, String path, String transferId) async {
+  Future<void> _sendFile(
+    String remoteIp,
+    String path,
+    String transferId,
+  ) async {
     final file = File(path);
     if (!await file.exists()) {
-      _sendTextMessage(remoteIp, 'File not found: $path');
+      sendText('File not found: $path');
       return;
     }
     try {
@@ -187,7 +190,7 @@ class ConnectionService {
         ),
       );
     } catch (e) {
-      _sendTextMessage(remoteIp, 'Failed to send file: $e');
+      sendText('Failed to send file: $e');
     } finally {
       _outgoingFiles.remove(transferId);
     }
@@ -352,7 +355,6 @@ class ConnectionService {
     await _enqueueFrame(0, payload, forceFlush: true);
   }
 
-
   /// Send ACK for file transfer
   Future<void> _sendAck(
     String transferId,
@@ -375,21 +377,10 @@ class ConnectionService {
     );
   }
 
-
   ConnectionService({required this.deviceName}) {
     debugPrint(
       '[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName ($hashCode)',
     );
-
-    // Set up native receiver progress channel for Android
-    if (Platform.isAndroid) {
-      const nativeReceiverProgressChannel = MethodChannel(
-        'com.omnity.fylooo/native_receiver_progress',
-      );
-      nativeReceiverProgressChannel.setMethodCallHandler(
-        _handleNativeReceiverProgress,
-      );
-    }
 
     if (Platform.isAndroid) {
       cleanupOldReceivedFiles().catchError((e) {
@@ -1524,238 +1515,16 @@ class ConnectionService {
       return;
     }
 
-    if (message.type == 'file_ack') {
-      try {
-        final ack = FileAck.fromJson(jsonDecode(message.content));
-        final outgoing = _outgoingTransfers[ack.transferId];
-        if (outgoing != null) {
-          outgoing.initialAckReceived = true;
-          final oldIndex = outgoing.lastAckIndex;
-          final newIndex = ack.nextExpectedIndex - 1;
-
-          debugPrint(
-            '[ConnectionService] 📬 Sender received ACK: transferId=${ack.transferId}, oldIndex=$oldIndex, newIndex=$newIndex, sentBytes=${outgoing.sentBytes}',
-          );
-
-          for (int i = oldIndex + 1; i <= newIndex; i++) {
-            final s = outgoing.chunkSizes[i] ?? 0;
-            outgoing.sentBytes += s;
-            outgoing.pendingBytes = (outgoing.pendingBytes - s).clamp(
-              0,
-              outgoing.totalSize,
-            );
-          }
-          outgoing.lastAckIndex = newIndex;
-          outgoing.resetWatchdog();
-
-          if (outgoing.chunkPermit != null &&
-              !outgoing.chunkPermit!.isCompleted) {
-            outgoing.chunkPermit!.complete();
-            outgoing.chunkPermit = null;
-          }
-
-          _notifyMessageListeners(
-            DeviceMessage(
-              type: 'file_progress',
-              content: outgoing.fileName,
-              senderName: deviceName,
-              timestamp: DateTime.now(),
-              metadata: {
-                'transferId': ack.transferId,
-                'bytes': outgoing.sentBytes,
-                'total': outgoing.totalSize,
-                'outgoing': true,
-              },
-            ),
-          );
-
-          if (ack.completed) {
-            debugPrint(
-              '[Sender-Debug] ✅ Completion COMPLETED signal (file_ack) received for ${ack.transferId}',
-            );
-            outgoing.watchdogTimer?.cancel();
-            outgoing.completer?.complete();
-            _outgoingTransfers.remove(ack.transferId);
-            _notifyMessageListeners(
-              DeviceMessage(
-                type: 'file_complete',
-                content: outgoing.fileName,
-                senderName: deviceName,
-                timestamp: DateTime.now(),
-                metadata: {
-                  'transferId': ack.transferId,
-                  'outgoing': true,
-                  'size': outgoing.totalSize,
-                  if (outgoing.mime != null) 'mime': outgoing.mime,
-                  if (outgoing.path != null) 'path': outgoing.path,
-                },
-              ),
-            );
-
-            NotificationService().showNotification(
-              type: NotificationType.fileTransferCompleted,
-              title: 'File Sent',
-              body: 'Successfully sent ${outgoing.fileName}',
-            );
-          } else {
-            outgoing.chunkPermit?.complete();
-          }
-        }
-      } catch (e) {
-        debugPrint('[ConnectionService] ⚠️ Failed to parse file_ack: $e');
-      }
-      return;
-    }
-
     if (message.type == 'file_offer') {
       try {
-        final offer = FileOffer.fromJson(
-          (message.metadata?['payload'] as Map?)?.cast<String, dynamic>() ?? {},
-        );
-        _pendingOffers[offer.transferId] = offer;
-
-        NotificationService().showFileTransferNotification(
-          senderDisplayName: deviceName,
-          fileName: offer.fileName,
-          fileSize: offer.fileSize,
-          transferId: offer.transferId,
-          deviceName: deviceName,
-        );
-
-        _notifyMessageListeners(
-          DeviceMessage(
-            type: 'file_offer',
-            content: offer.fileName,
-            senderName: message.senderName,
-            timestamp: DateTime.now(),
-            metadata: {
-              'transferId': offer.transferId,
-              'size': offer.fileSize,
-              'mime': offer.mimeType,
-            },
-          ),
-        );
+        final payload = message.metadata?['payload'];
+        if (payload != null) {
+          final offer = FileOffer.fromJson(payload as Map<String, dynamic>);
+          _pendingOffers[offer.transferId] = offer;
+          _notifyMessageListeners(message);
+        }
       } catch (e) {
         debugPrint('[ConnectionService] ⚠️ Failed to parse file_offer: $e');
-      }
-      return;
-    }
-
-    if (message.type == 'file_resume_request') {
-      try {
-        final transferId = message.content;
-        final inc = _incomingFiles[transferId];
-        if (inc != null) {
-          final ack = FileAck(
-            transferId: transferId,
-            nextExpectedIndex: inc.nextIndex,
-            completed: false,
-          );
-          await sendMessage(
-            DeviceMessage(
-              type: 'file_ack',
-              content: jsonEncode(ack.toJson()),
-              senderName: deviceName,
-            ),
-          );
-          debugPrint(
-            '[ConnectionService] 🔁 Resume-request: resent ACK for $transferId at ${inc.nextIndex}',
-          );
-        } else {
-          debugPrint(
-            '[ConnectionService] ⚠️ Resume-request: no incoming state for $transferId',
-          );
-        }
-      } catch (e) {
-        debugPrint(
-          '[ConnectionService] ⚠️ Failed to handle resume request: $e',
-        );
-      }
-      return;
-    }
-
-    if (message.type == 'file_offer_request') {
-      try {
-        final reqTransferId = message.content;
-        final ot = _outgoingTransfers[reqTransferId];
-        if (ot != null) {
-          final offer = FileOffer(
-            transferId: reqTransferId,
-            fileName: ot.fileName,
-            fileSize: ot.totalSize,
-            mimeType: ot.mime ?? 'application/octet-stream',
-            sha256: null,
-          );
-          await sendMessage(
-            DeviceMessage(
-              type: 'file_offer',
-              content: ot.fileName,
-              senderName: deviceName,
-              metadata: {'payload': offer.toJson(), 'name': ot.fileName},
-            ),
-          );
-          debugPrint(
-            '[ConnectionService] 🔄 Resent file_offer for $reqTransferId',
-          );
-        } else {
-          debugPrint(
-            '[ConnectionService] ⚠️ Offer request: no outgoing state for $reqTransferId',
-          );
-        }
-      } catch (e) {
-        debugPrint(
-          '[ConnectionService] ⚠️ Failed to handle file_offer_request: $e',
-        );
-      }
-      return;
-    }
-
-    if (message.type == 'request_ack') {
-      try {
-        final reqTransferId = message.content;
-        final inc = _incomingFiles[reqTransferId];
-        if (inc != null) {
-          final ack = FileAck(
-            transferId: reqTransferId,
-            nextExpectedIndex: inc.nextIndex,
-            completed: false,
-          );
-          await sendMessage(
-            DeviceMessage(
-              type: 'file_ack',
-              content: jsonEncode(ack.toJson()),
-              senderName: deviceName,
-            ),
-          );
-          debugPrint(
-            '[ConnectionService] 🔄 Resent ACK for $reqTransferId at index ${inc.nextIndex}',
-          );
-        }
-      } catch (e) {
-        debugPrint('[ConnectionService] ⚠️ Failed to resend ACK: $e');
-      }
-      return;
-    }
-
-    if (message.type == 'file_cancel') {
-      try {
-        final cancel = FileCancel.fromJson(jsonDecode(message.content));
-        final inc = _incomingFiles.remove(cancel.transferId);
-        if (inc != null) {
-          await inc.sink?.close();
-        }
-        _pendingOffers.remove(cancel.transferId);
-        _outgoingTransfers.remove(cancel.transferId);
-        _notifyMessageListeners(
-          DeviceMessage(
-            type: 'text',
-            content: 'Transfer cancelled: ${cancel.reason}',
-            senderName: message.senderName,
-            timestamp: DateTime.now(),
-          ),
-        );
-      } catch (e) {
-        debugPrint('[ConnectionService] ⚠️ Failed to parse file_cancel: $e');
       }
       return;
     }
@@ -1770,7 +1539,6 @@ class ConnectionService {
       sendMessage(pong);
       return;
     }
-
 
     if (message.type == 'pong') {
       debugPrint('[ConnectionService] 🏓 Received pong (connection alive)');
@@ -1828,126 +1596,7 @@ class ConnectionService {
         ),
       );
 
-      // Stream chunk size
-      // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
-      // Android uses 16MB to balance memory usage on diverse hardware.
-      final int chunkSize = (Platform.isAndroid)
-          ? 16 *
-                1024 *
-                1024 // 16MB Android
-          : 32 * 1024 * 1024; // 32MB iOS/Desktop
-      int index = 0;
-
-      // Register outgoing transfer BEFORE waiting for ACK/streaming
-      _outgoingTransfers[transferId] = _OutgoingTransfer(
-        fileName: name,
-        lastAckIndex: -1,
-        totalSize: size,
-        mime: mime,
-        path: file.path,
-      );
-
-      // Emit initial progress event to render UI tile
-      _notifyMessageListeners(
-        DeviceMessage(
-          type: 'file_progress',
-          content: name,
-          senderName: deviceName,
-          timestamp: DateTime.now(),
-          metadata: {
-            'transferId': transferId,
-            'bytes': 0,
-            'total': size,
-            'mime': mime,
-            'outgoing': true,
-          },
-        ),
-      );
-
-      // Wait for initial ACK (nextExpectedIndex = 0) which is sent after receiver accepts
-      final starter = _outgoingTransfers[transferId];
-      if (starter != null) {
-        const maxInitialAckWait = Duration(minutes: 2);
-        const stepTimeout = Duration(seconds: 10);
-        final startedAt = DateTime.now();
-        int attempts = 0;
-
-        debugPrint(
-          '[ConnectionService] ⏳ Waiting for initial ACK for transfer $transferId',
-        );
-
-        try {
-          while (true) {
-            final current = _outgoingTransfers[transferId];
-            if (current == null) {
-              throw StateError('Transfer cancelled');
-            }
-            if (current.initialAckReceived) break;
-
-            final elapsed = DateTime.now().difference(startedAt);
-            if (elapsed >= maxInitialAckWait) {
-              throw TimeoutException('No initial ACK received');
-            }
-            final remaining = maxInitialAckWait - elapsed;
-            final waitFor = remaining < stepTimeout ? remaining : stepTimeout;
-
-            final permit = current.chunkPermit ??= Completer<void>();
-            try {
-              await permit.future.timeout(waitFor);
-            } on TimeoutException {
-              attempts++;
-              debugPrint(
-                '[ConnectionService] ⚠️ Initial ACK still not received for $transferId (attempt $attempts), requesting ACK resend',
-              );
-              // Ask receiver to resend its current ACK if it already accepted.
-              try {
-                await sendMessage(
-                  DeviceMessage(
-                    type: 'file_resume_request',
-                    content: transferId,
-                    senderName: deviceName,
-                  ),
-                );
-              } catch (_) {}
-
-              // If the offer was lost, periodically resend it to re-trigger UI.
-              if (attempts % 3 == 0) {
-                try {
-                  await sendMessage(
-                    DeviceMessage(
-                      type: 'file_offer',
-                      content: name,
-                      senderName: deviceName,
-                      metadata: {'payload': offer.toJson(), 'name': name},
-                    ),
-                  );
-                  debugPrint(
-                    '[ConnectionService] 🔄 Resent file_offer for $transferId (no initial ACK yet)',
-                  );
-                } catch (_) {}
-              }
-            }
-          }
-
-          if (_usingWifiDirect && _wifiDirectDataSocket != null) {
-            debugPrint(
-              '[ConnectionService] 🚀 WiFi Direct active - using direct socket transfer (bypassing DPFTP)',
-            );
-          }
-
-          debugPrint(
-            '[ConnectionService] ✅ Initial ACK received, starting chunk stream for $transferId',
-          );
-          // Start watchdog for sender side
-          _startOutgoingWatchdog(transferId);
-        } catch (e) {
-          debugPrint('[ConnectionService] ❌ Initial ACK error: $e');
-          _outgoingTransfers.remove(transferId);
-          // Continue to next file if this one fails
-          continue;
-        }
-      }
-
+      // Use netcat-style transfer
       if (file.path != null) {
         _outgoingFiles[transferId] = file.path!;
         await _sendFile(_currentConnection!.ipAddress, file.path!, transferId);
@@ -2033,178 +1682,9 @@ class ConnectionService {
         ),
       );
 
-      // Stream chunks
-      // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
-      // Android uses 16MB to balance memory usage on diverse hardware.
-      final int chunkSize = (Platform.isAndroid)
-          ? 16 *
-                1024 *
-                1024 // 16MB Android
-          : 32 * 1024 * 1024; // 32MB iOS/Desktop
-      int index = 0;
-      // Stream the file with controlled chunk size using RandomAccessFile to avoid tiny default chunks
-      final raf = await file.open(mode: FileMode.read);
-
-      // Register outgoing transfer
-      _outgoingTransfers[transferId] = _OutgoingTransfer(
-        fileName: name,
-        lastAckIndex: -1,
-        totalSize: size,
-        mime: mime,
-        path: filePath,
-      );
-
-      // Emit initial progress event
-      _notifyMessageListeners(
-        DeviceMessage(
-          type: 'file_progress',
-          content: name,
-          senderName: deviceName,
-          timestamp: DateTime.now(),
-          metadata: {
-            'transferId': transferId,
-            'bytes': 0,
-            'total': size,
-            'mime': mime,
-            'outgoing': true,
-          },
-        ),
-      );
-
-      // Wait for initial ACK
-      final starter = _outgoingTransfers[transferId];
-      if (starter != null) {
-        const maxInitialAckWait = Duration(minutes: 2);
-        const stepTimeout = Duration(seconds: 10);
-        final startedAt = DateTime.now();
-        int attempts = 0;
-
-        debugPrint(
-          '[ConnectionService] ⏳ Waiting for initial ACK for shared transfer $transferId',
-        );
-
-        try {
-          while (true) {
-            final current = _outgoingTransfers[transferId];
-            if (current == null) {
-              throw StateError('Transfer cancelled');
-            }
-            if (current.initialAckReceived) break;
-
-            final elapsed = DateTime.now().difference(startedAt);
-            if (elapsed >= maxInitialAckWait) {
-              throw TimeoutException('No initial ACK received');
-            }
-            final remaining = maxInitialAckWait - elapsed;
-            final waitFor = remaining < stepTimeout ? remaining : stepTimeout;
-
-            final permit = current.chunkPermit ??= Completer<void>();
-            try {
-              await permit.future.timeout(waitFor);
-            } on TimeoutException {
-              attempts++;
-              debugPrint(
-                '[ConnectionService] ⚠️ Initial ACK still not received for shared $transferId (attempt $attempts), requesting ACK resend',
-              );
-              try {
-                await sendMessage(
-                  DeviceMessage(
-                    type: 'file_resume_request',
-                    content: transferId,
-                    senderName: deviceName,
-                  ),
-                );
-              } catch (_) {}
-
-              if (attempts % 3 == 0) {
-                try {
-                  await sendMessage(
-                    DeviceMessage(
-                      type: 'file_offer',
-                      content: name,
-                      senderName: deviceName,
-                      metadata: {'payload': offer.toJson(), 'name': name},
-                    ),
-                  );
-                  debugPrint(
-                    '[ConnectionService] 🔄 Resent file_offer for shared $transferId (no initial ACK yet)',
-                  );
-                } catch (_) {}
-              }
-            }
-          }
-
-          debugPrint(
-            '[ConnectionService] ✅ Initial ACK received, starting chunk stream for shared $transferId',
-          );
-          _startOutgoingWatchdog(transferId);
-        } catch (e) {
-          debugPrint('[ConnectionService] ❌ Initial ACK error: $e');
-          _outgoingTransfers.remove(transferId);
-          continue;
-        }
-      }
-
-      try {
-        while (true) {
-          final chunk = await raf.read(chunkSize);
-          if (chunk.isEmpty) break;
-
-          final ot = _outgoingTransfers[transferId];
-          if (ot == null) break;
-
-          if (ot.pendingBytes >= ConnectionService._maxPendingBytes) {
-            ot.chunkPermit = Completer<void>();
-            debugPrint(
-              '[ConnectionService] ⏳ Flow control: waiting at chunk $index (pendingBytes=${ot.pendingBytes})',
-            );
-            await ot.chunkPermit!.future;
-          }
-
-          ot.chunkSizes[index] = chunk.length;
-
-          await _sendBinaryChunk(
-            transferId: transferId,
-            index: index++,
-            isLast: false,
-            bytes: Uint8List.fromList(chunk),
-            flush: (index % 8 == 0),
-          );
-          // Track in-flight bytes
-          ot.pendingBytes += chunk.length;
-
-          ot.resetWatchdog();
-
-          if (index % 128 == 0) {
-            await Future.microtask(() {});
-          }
-        }
-      } finally {
-        await raf.close();
-      }
-
-      // Final marker
-      final otFinal = _outgoingTransfers[transferId];
-      if (otFinal != null) {
-        if (otFinal.pendingBytes >= ConnectionService._maxPendingBytes) {
-          otFinal.chunkPermit = Completer<void>();
-          debugPrint(
-            '[ConnectionService] ⏳ Final: waiting for ACK (pendingBytes=${otFinal.pendingBytes})',
-          );
-          await otFinal.chunkPermit!.future;
-        }
-
-        // Send final marker as binary chunk
-        otFinal.completer = Completer<void>();
-        await _sendBinaryChunk(
-          transferId: transferId,
-          index: index,
-          isLast: true,
-          bytes: Uint8List(0),
-          flush: true,
-        );
-        await otFinal.completer!.future;
-      }
+      // Use netcat-style transfer
+      _outgoingFiles[transferId] = filePath;
+      await _sendFile(_currentConnection!.ipAddress, filePath, transferId);
     }
   }
 
@@ -2269,86 +1749,6 @@ class ConnectionService {
         senderName: deviceName,
       ),
     );
-  }
-
-  Future<void> cancelTransfer(
-    String transferId, {
-    String reason = 'Cancelled by user',
-  }) async {
-    // Notify remote
-    final cancel = FileCancel(transferId: transferId, reason: reason);
-    await sendMessage(
-      DeviceMessage(
-        type: 'file_cancel',
-        content: jsonEncode(cancel.toJson()),
-        senderName: deviceName,
-      ),
-    );
-    // Clean local state
-    final inc = _incomingFiles.remove(transferId);
-    if (inc != null) {
-      inc.watchdogTimer?.cancel(); // Stop watchdog
-      try {
-        await inc.sink?.close();
-      } catch (_) {}
-    }
-    final out = _outgoingTransfers.remove(transferId);
-    if (out != null) {
-      out.watchdogTimer?.cancel(); // Stop watchdog
-    }
-    _pendingOffers.remove(transferId);
-
-    // Clean up native receiver socket for this transfer
-    try {
-      _nativeReceiverSockets[transferId]?.close();
-    } catch (_) {}
-    _nativeReceiverSockets.remove(transferId);
-    _nativeReceiverLastFlush.remove(transferId);
-  }
-
-  /// Ask the peer (receiver) to resend its last ACK for a stuck outgoing transfer
-  Future<void> requestResume(String transferId) async {
-    try {
-      final msg = DeviceMessage(
-        type: 'file_resume_request',
-        content: transferId,
-        senderName: deviceName,
-      );
-      await sendMessage(msg);
-      debugPrint('[ConnectionService] ▶️ Sent resume request for $transferId');
-    } catch (e) {
-      debugPrint('[ConnectionService] ⚠️ Failed to send resume request: $e');
-    }
-  }
-
-  /// For an incoming transfer, resend the last ACK to nudge the sender
-  Future<void> resumeIncoming(String transferId) async {
-    try {
-      final inc = _incomingFiles[transferId];
-      if (inc == null) {
-        debugPrint(
-          '[ConnectionService] No incoming state to resume for $transferId',
-        );
-        return;
-      }
-      final ack = FileAck(
-        transferId: transferId,
-        nextExpectedIndex: inc.nextIndex,
-        completed: false,
-      );
-      await sendMessage(
-        DeviceMessage(
-          type: 'file_ack',
-          content: jsonEncode(ack.toJson()),
-          senderName: deviceName,
-        ),
-      );
-      debugPrint(
-        '[ConnectionService] 🔁 Resent ACK for $transferId at index ${inc.nextIndex}',
-      );
-    } catch (e) {
-      debugPrint('[ConnectionService] ⚠️ Failed to resume incoming: $e');
-    }
   }
 
   /// Handle connection error
@@ -2508,13 +1908,8 @@ class ConnectionService {
       '[ConnectionService] 🛑 Keep-alive timer cancelled and nullified',
     );
 
-    // Stop all watchdog timers
-    for (final transfer in _incomingFiles.values) {
-      transfer.watchdogTimer?.cancel();
-    }
-    for (final transfer in _outgoingTransfers.values) {
-      transfer.watchdogTimer?.cancel();
-    }
+    // Clean up pending offers
+    _pendingOffers.clear();
 
     for (final socket in _sockets) {
       try {
@@ -2575,8 +1970,6 @@ class ConnectionService {
       }
     });
   }
-
-
 
   /// Clean up old received files on Android to prevent storage bloat
   /// Removes files older than specified days from Documents directory
@@ -2732,8 +2125,6 @@ class ConnectionService {
     );
   }
 
-
-
   /// Normalize IP address to handle IPv6 mapped IPv4 addresses
   String _normalizeIp(String ip) {
     if (ip.startsWith('::ffff:')) {
@@ -2743,6 +2134,212 @@ class ConnectionService {
   }
 }
 
+// Frame parser for handling incoming binary protocol frames
+class _FrameParser {
+  Uint8List _buf = Uint8List(0);
+  int _start = 0;
+  int _end = 0;
 
+  void reset() {
+    _buf = Uint8List(0);
+    _start = 0;
+    _end = 0;
+  }
 
+  Future<void> process(Uint8List data, ConnectionService svc) async {
+    if (data.isEmpty) return;
+    _append(data);
 
+    while (true) {
+      final available = _end - _start;
+      if (available < 9) return; // need [MAGIC(4)] + [len(4)] + [type(1)]
+
+      // Check magic byte
+      final magic = _readInt32(_buf, _start);
+      if (magic != ConnectionService._frameMagic) {
+        // Fast scan to find next magic byte
+        final found = _scanForMagic();
+        if (!found) return; // wait for more data to find magic
+        // If found, _start is updated to point to magic
+        continue;
+      }
+
+      final payloadLen = _readInt32(_buf, _start + 4);
+      if (payloadLen <= 0 ||
+          payloadLen > ConnectionService._maxFramePayloadBytes) {
+        // If this looks like an HTTP request accidentally hitting the P2P port,
+        // close the connection to avoid endless garbage parsing.
+        if (_looksLikeHttp(_buf, _start, _end)) {
+          debugPrint(
+            '[FrameParser] ⚠️ Detected HTTP on P2P socket; disconnecting',
+          );
+          reset();
+          await svc.disconnect();
+          return;
+        }
+
+        debugPrint(
+          '[FrameParser] ⚠️ Invalid payloadLen=$payloadLen, skipping current magic and rescanning.',
+        );
+        _start += 1; // Advance past this valid magic to look for another one
+        continue;
+      }
+
+      final frameLen = 4 + 4 + payloadLen; // MAGIC + LEN + PAYLOAD
+      if (available < frameLen) return; // wait for more
+
+      final type = _buf[_start + 8];
+
+      // Validate frame type before extracting payload
+      if (type != 0 && type != 1) {
+        debugPrint(
+          '[FrameParser] ⚠️ Unknown frame type=$type at offset $_start. Skipping current magic.',
+        );
+        _start += 1;
+        continue;
+      }
+
+      // Additional validation: JSON control messages (type 0) should be reasonably small
+      if (type == 0 && payloadLen > 1024 * 1024) {
+        debugPrint(
+          '[FrameParser] ⚠️ Suspiciously large control message: $payloadLen bytes. Skipping.',
+        );
+        _start += 1;
+        continue;
+      }
+
+      final payloadStart = _start + 9; // MAGIC(4) + LEN(4) + TYPE(1)
+      final payloadEnd = _start + frameLen;
+      final payload = Uint8List.sublistView(_buf, payloadStart, payloadEnd);
+
+      try {
+        if (type == 0) {
+          final jsonStr = utf8.decode(payload, allowMalformed: false);
+          final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final message = DeviceMessage.fromJson(json);
+          await svc._handleIncomingMessage(message);
+        } else if (type == 1) {
+          // Binary chunks are no longer used with netcat-style transfers
+          // Just skip them
+          debugPrint(
+            '[FrameParser] ⚠️ Received binary chunk (type 1) but netcat-style transfers are in use. Skipping.',
+          );
+        }
+      } catch (e) {
+        debugPrint('[FrameParser] ❌ Frame parse error: $e');
+        // If parsing fails despite magic byte, it might be a collision or corruption
+        _start += 1;
+        continue;
+      }
+
+      _start += frameLen;
+      if (_start == _end) {
+        // fully consumed
+        _start = 0;
+        _end = 0;
+        return;
+      }
+
+      // Compact occasionally to avoid unbounded growth.
+      if (_start > 0 && _start > (_buf.length ~/ 2)) {
+        _compact();
+      }
+    }
+  }
+
+  bool _scanForMagic() {
+    // efficient byte-by-byte scan for magic
+    final magicBytes = [0xAC, 0xDC, 0x12, 0x34];
+
+    // We start at _start to see if we need to advance
+    // But since we already checked that _start isn't magic (in the caller),
+    // we should start scanning from _start + 1
+
+    for (int i = _start + 1; i <= _end - 4; i++) {
+      if (_buf[i] == magicBytes[0] &&
+          _buf[i + 1] == magicBytes[1] &&
+          _buf[i + 2] == magicBytes[2] &&
+          _buf[i + 3] == magicBytes[3]) {
+        _start = i;
+        return true;
+      }
+    }
+
+    // If not found, discard everything except the last 3 bytes
+    // (which might be the start of a magic sequence arriving later)
+    if (_end > _start + 3) {
+      _start = _end - 3;
+    }
+    return false;
+  }
+
+  bool _looksLikeHttp(Uint8List buf, int start, int end) {
+    final available = end - start;
+    if (available < 4) return false;
+
+    final b0 = buf[start];
+    final b1 = buf[start + 1];
+    final b2 = buf[start + 2];
+    final b3 = buf[start + 3];
+
+    // "GET ", "POST", "HEAD", "PUT ", "HTTP"
+    final isGet = b0 == 0x47 && b1 == 0x45 && b2 == 0x54 && b3 == 0x20;
+    final isPost = b0 == 0x50 && b1 == 0x4F && b2 == 0x53 && b3 == 0x54;
+    final isHead = b0 == 0x48 && b1 == 0x45 && b2 == 0x41 && b3 == 0x44;
+    final isPut = b0 == 0x50 && b1 == 0x55 && b2 == 0x54 && b3 == 0x20;
+    final isHttp = b0 == 0x48 && b1 == 0x54 && b2 == 0x54 && b3 == 0x50;
+
+    return isGet || isPost || isHead || isPut || isHttp;
+  }
+
+  void _append(Uint8List data) {
+    final needed = (_end - _start) + data.length;
+    if (_buf.isEmpty) {
+      _buf = Uint8List(needed);
+      _buf.setRange(0, data.length, data);
+      _start = 0;
+      _end = data.length;
+      return;
+    }
+
+    // Ensure capacity.
+    if (_buf.length < needed) {
+      final newCap = _nextPow2(needed);
+      final newBuf = Uint8List(newCap);
+      final remaining = _end - _start;
+      if (remaining > 0) {
+        // Create a copy to avoid concurrent modification error
+        final oldData = Uint8List.fromList(_buf.sublist(_start, _end));
+        newBuf.setRange(0, remaining, oldData);
+      }
+      _buf = newBuf;
+      _start = 0;
+      _end = remaining;
+    } else if (_start > 0 && (_buf.length - _end) < data.length) {
+      _compact();
+    }
+
+    _buf.setRange(_end, _end + data.length, data);
+    _end += data.length;
+  }
+
+  void _compact() {
+    final remaining = _end - _start;
+    if (remaining <= 0) {
+      _start = 0;
+      _end = 0;
+      return;
+    }
+    _buf.setRange(0, remaining, _buf, _start);
+    _start = 0;
+    _end = remaining;
+  }
+
+  int _nextPow2(int v) {
+    int n = 1;
+    while (n < v) {
+      n <<= 1;
+    }
+    return n;
+  }
+}
