@@ -21,6 +21,7 @@ import 'features/webshare/presentation/web_room_entry_screen.dart';
 import 'features/settings/presentation/privacy_policy_screen.dart';
 import 'features/settings/presentation/terms_of_use_screen.dart';
 import 'package:fylooo/core/logging/app_logger.dart';
+import 'core/sockets/windows_socket_manager.dart';
 import 'services/firebase_initializer.dart';
 import 'services/share_intent_service.dart';
 import 'services/update_service_simple.dart';
@@ -40,6 +41,16 @@ const bool _kUseNativeReceiver = bool.fromEnvironment(
   defaultValue: false,
 );
 
+class _MyWindowListener extends WindowListener {
+  @override
+  void onWindowClose() {
+    if (Platform.isWindows) {
+      WindowsSocketManager().cleanup();
+    }
+    super.onWindowClose();
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -53,7 +64,11 @@ void main() async {
 
   // Initialize WindowManager for desktop
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    if (Platform.isWindows) {
+      WindowsSocketManager();
+    }
     await windowManager.ensureInitialized();
+    windowManager.addListener(_MyWindowListener());
 
     WindowOptions windowOptions = const WindowOptions(
       size: Size(450, 800),
