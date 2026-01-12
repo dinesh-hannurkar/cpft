@@ -405,7 +405,14 @@ class _Session {
     final id = Dpftp.readInt32(payload, 0);
     final hashBytes = payload.sublist(4, 36);
 
-    // 1. Check if we have data (from Data Channel)
+    // CRITICAL: Don't process CHUNK_DONE if we already sent ACK immediately
+    // This prevents duplicate ACKs that cause sender to re-send chunks
+    if (_fileInfo!.bitmap.hasChunk(id)) {
+      // Already processed and ACKed when data arrived - skip
+      return;
+    }
+
+    // Legacy path: Only if data hasn't arrived yet (shouldn't happen with immediate ACKs)
     if (_calculatedHashes.containsKey(id)) {
       _verifyChunk(id, _calculatedHashes[id]!, hashBytes);
     } else {
