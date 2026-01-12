@@ -11,8 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:fylooo/services/notification_service.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:flutter/services.dart';
+import 'package:fylooo/features/netcat/netcat_service.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
-import 'package:fylooo/features/dpftp/dpftp_service.dart';
 
 // 🔬 PERF: Global profiling state
 class _PerfMetrics {
@@ -82,14 +82,8 @@ class ConnectionService {
   int _consecutiveErrors = 0;
   static const int _maxConsecutiveErrors = 3;
   Timer? _errorResetTimer;
-  final Map<String, _IncomingFile> _incomingFiles = {};
   final Map<String, FileOffer> _pendingOffers = {};
-  final Map<String, _OutgoingTransfer> _outgoingTransfers = {};
-  final Map<String, List<_PendingBinaryChunk>> _pendingBinary = {};
-  final Map<String, Socket> _nativeReceiverSockets =
-      {}; // Socket pool for native receiver per transfer
-  final Map<String, int> _nativeReceiverLastFlush =
-      {}; // Track last flush chunk index per transfer
+  final Map<String, String> _outgoingFiles = {};
   // Flow control: limit by bytes in-flight (instead of chunk count). Default 256MB.
   static const int _maxPendingBytes = 256 * 1024 * 1024; // 256MB
   // Keep old chunk-count constant for safety/backwards-compat but not used.
@@ -162,16 +156,41 @@ class ConnectionService {
   static const int _BUFFER_SIZE =
       16 * 1024 * 1024; // 2MB (kernel may double to 4MB)
 
-  // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
-  // For macOS connections, use false (standard socket transfer)
-  // For all other platforms, use true (DPFTP)
-  bool get useDpftp {
-    // When connecting to macOS, disable DPFTP
-    if (_remotePlatform == 'macos') {
-      return true;
+
+  Future<void> _sendFile(String remoteIp, String path, String transferId) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      _sendTextMessage(remoteIp, 'File not found: $path');
+      return;
     }
-    // For all other platforms (android, ios, windows, linux), use DPFTP
-    return true;
+    try {
+      final ip = (_usingWifiDirect && _wifiDirectIpAddress != null)
+          ? _wifiDirectIpAddress!
+          : remoteIp;
+      await NetcatService().sendFile(
+        ip: ip,
+        file: file,
+        transferId: transferId,
+      );
+      _notifyMessageListeners(
+        DeviceMessage(
+          type: 'file_complete',
+          content: transferId,
+          senderName: deviceName,
+          timestamp: DateTime.now(),
+          metadata: {
+            'transferId': transferId,
+            'path': file.path,
+            'size': await file.length(),
+            'outgoing': true,
+          },
+        ),
+      );
+    } catch (e) {
+      _sendTextMessage(remoteIp, 'Failed to send file: $e');
+    } finally {
+      _outgoingFiles.remove(transferId);
+    }
   }
 
   /// Optimize socket buffers for high-speed transfer (all platforms)
@@ -333,79 +352,6 @@ class ConnectionService {
     await _enqueueFrame(0, payload, forceFlush: true);
   }
 
-  /// Send binary file chunk without JSON/base64 overhead
-  /// Chunks are written directly without serialization (receiver re-orders by index)
-  Future<void> _sendBinaryChunk({
-    required String transferId,
-    required int index,
-    required bool isLast,
-    required Uint8List bytes,
-    bool flush = false,
-  }) async {
-    final targetSocket = _getTransferSocket(chunkIndex: index);
-    if (targetSocket == null) return;
-
-    // Find the actual index of targetSocket in _sockets list
-    // This is critical for using the correct send chain
-    int socketIndex = 0;
-    if (!identical(targetSocket, _wifiDirectDataSocket)) {
-      socketIndex = _sockets.indexOf(targetSocket);
-      if (socketIndex == -1) {
-        debugPrint(
-          '[ConnectionService] ❌ targetSocket not found in _sockets list!',
-        );
-        return;
-      }
-    }
-
-    final tid = utf8.encode(transferId);
-
-    if (tid.length > _maxTransferIdBytes) {
-      throw StateError('transferId too long (${tid.length} bytes)');
-    }
-
-    // Frame structure: [MAGIC:4][payloadLen:4][type:1][tidLen:1][tid:N][index:4][isLast:1][bytes:M]
-    final payloadLen = 1 + 1 + tid.length + 4 + 1 + bytes.length;
-    final tidLen = tid.length;
-
-    final headerSize =
-        4 + 4 + 1 + 1 + tidLen + 4 + 1; // Added 4 bytes for magic
-    final header = Uint8List(headerSize);
-    final bd = ByteData.view(header.buffer);
-
-    int offset = 0;
-    bd.setInt32(offset, _frameMagic, Endian.big);
-    offset += 4;
-    bd.setInt32(offset, payloadLen, Endian.big);
-    offset += 4;
-    header[offset++] = 1;
-    header[offset++] = tidLen;
-    header.setRange(offset, offset + tidLen, tid);
-    offset += tidLen;
-    bd.setInt32(offset, index, Endian.big);
-    offset += 4;
-    header[offset++] = isLast ? 1 : 0;
-
-    Future<void> write() async {
-      // Combine header and bytes into a single buffer for atomic write
-      // This prevents interleaving issues when multiple chunks are sent in parallel
-      final combined = BytesBuilder(copy: false);
-      combined.add(header);
-      combined.add(bytes);
-      targetSocket.add(combined.takeBytes());
-      if (flush) {
-        await targetSocket.flush();
-      }
-    }
-
-    if (identical(targetSocket, _wifiDirectDataSocket)) {
-      _wifiDirectSendChain = _wifiDirectSendChain.then((_) => write());
-      if (flush) await _wifiDirectSendChain;
-    } else {
-      _sendChains[socketIndex] = _sendChains[socketIndex].then((_) => write());
-      if (flush) await _sendChains[socketIndex];
-    }
-  }
 
   /// Send ACK for file transfer
   Future<void> _sendAck(
@@ -429,86 +375,6 @@ class ConnectionService {
     );
   }
 
-  /// Forward binary chunk to native Android receiver
-  Future<void> _forwardToNativeReceiver(
-    String transferId,
-    int index,
-    bool isLast,
-    Uint8List bytes,
-  ) async {
-    // Verify transfer is registered before forwarding
-    if (!_incomingFiles.containsKey(transferId)) {
-      debugPrint(
-        '[ConnectionService] ⚠️ Cannot forward chunk $index: transfer $transferId not registered yet',
-      );
-      throw StateError('Transfer not registered in _incomingFiles');
-    }
-
-    try {
-      // Reuse existing socket for this transfer, or create a new one
-      Socket? socket = _nativeReceiverSockets[transferId];
-      if (socket == null) {
-        socket = await Socket.connect('127.0.0.1', dataPort);
-        socket.setOption(SocketOption.tcpNoDelay, true);
-        _nativeReceiverSockets[transferId] = socket;
-        _nativeReceiverLastFlush[transferId] = -1;
-      }
-
-      // 🚀 PERF: Write frame directly without BytesBuilder allocations
-      final tid = utf8.encode(transferId);
-      final tidLen = tid.length;
-      final payloadLen = 1 + tidLen + 4 + 1 + bytes.length;
-
-      // Write frame: [payloadLen:4][tidLen:1][tid][index:4][isLast:1][bytes]
-      // Combine header into one buffer
-      final headerSize = 4 + 1 + tidLen + 4 + 1;
-      final header = Uint8List(headerSize);
-      final bd = ByteData.view(header.buffer);
-
-      int offset = 0;
-      bd.setInt32(offset, payloadLen, Endian.big);
-      offset += 4;
-      header[offset++] = tidLen;
-      header.setRange(offset, offset + tidLen, tid);
-      offset += tidLen;
-      bd.setInt32(offset, index, Endian.big);
-      offset += 4;
-      header[offset++] = isLast ? 1 : 0;
-
-      socket.add(header);
-      socket.add(bytes);
-
-      // Batch flushes to reduce syscall overhead on localhost
-      final lastFlush = _nativeReceiverLastFlush[transferId] ?? -1;
-      if (isLast ||
-          (index - lastFlush >=
-              ConnectionService._nativeReceiverFlushEveryChunks)) {
-        await socket.flush();
-        _nativeReceiverLastFlush[transferId] = index;
-      }
-
-      // Close socket only if this is the last chunk
-      if (isLast) {
-        try {
-          await socket.close();
-        } catch (e) {
-          debugPrint('[ConnectionService] ⚠️ Error closing native socket: $e');
-        }
-        _nativeReceiverSockets.remove(transferId);
-        _nativeReceiverLastFlush.remove(transferId);
-      }
-    } catch (e) {
-      debugPrint(
-        '[ConnectionService] ❌ Failed to forward chunk to native receiver: $e',
-      );
-      // Clean up socket on error
-      try {
-        _nativeReceiverSockets[transferId]?.close();
-      } catch (_) {}
-      _nativeReceiverSockets.remove(transferId);
-      rethrow;
-    }
-  }
 
   ConnectionService({required this.deviceName}) {
     debugPrint(
@@ -531,12 +397,10 @@ class ConnectionService {
       });
     }
 
-    if (useDpftp) {
-      _initDpftp();
-    }
+    _initNetcat();
   }
 
-  Future<void> _initDpftp() async {
+  Future<void> _initNetcat() async {
     try {
       Directory? dir;
       if (Platform.isAndroid || Platform.isIOS) {
@@ -545,60 +409,72 @@ class ConnectionService {
         dir = await getDownloadsDirectory();
         dir ??= await getApplicationDocumentsDirectory();
       }
-      await DpftpService().startReceiver(saveDirectory: dir.path);
+      if (dir != null) {
+        await NetcatService().startReceiver(saveDirectory: dir.path);
+      }
 
-      // Listen to progress
-      DpftpService().progress.listen((p) {
+      NetcatService().incomingProgress.listen((progressData) {
+        final transferId = progressData['transferId'];
+        final totalSize = progressData['totalSize'];
+        final progress = progressData['progress'];
+        final path = progressData['path'];
         _notifyMessageListeners(
           DeviceMessage(
             type: 'file_progress',
-            content: p.transferId,
+            content: transferId,
             senderName: deviceName,
             timestamp: DateTime.now(),
             metadata: {
-              'transferId': p.transferId,
-              'bytes': (p.bytesTransferred > p.totalBytes)
-                  ? p.totalBytes
-                  : p.bytesTransferred,
-              'total': p.totalBytes,
-              'outgoing': p.isOutgoing,
-              'path': p.filePath,
+              'transferId': transferId,
+              'bytes': (progress * totalSize).toInt(),
+              'total': totalSize,
+              'outgoing': false,
+              'path': path,
             },
           ),
         );
-
-        // If complete, signal legacy UI completion
-        // If complete, signal legacy UI completion
-        if (p.isComplete) {
-          debugPrint(
-            '[ConnectionService] 🏁 DPFTP Transfer ${p.transferId} Complete. Signaling UI.',
-          );
-
-          // Get file name from legacy offer if available
-          final name =
-              _incomingFiles[p.transferId]?.offer.fileName ??
-              p.filePath?.split(Platform.pathSeparator).last ??
-              'Unknown File';
-
-          _notifyMessageListeners(
-            DeviceMessage(
-              type: 'file_complete',
-              content: name,
-              senderName: deviceName,
-              timestamp: DateTime.now(),
-              metadata: {
-                'transferId': p.transferId,
-                'path': p.filePath,
-                'size': p.totalBytes,
-                'outgoing': p.isOutgoing,
-                'durationMs': p.durationMs, // Pass accurate duration to UI
-              },
-            ),
-          );
-        }
+      });
+      NetcatService().completion.listen((completionData) {
+        final transferId = completionData['transferId'];
+        final path = completionData['path'];
+        final size = completionData['size'];
+        _notifyMessageListeners(
+          DeviceMessage(
+            type: 'file_complete',
+            content: transferId,
+            senderName: deviceName,
+            timestamp: DateTime.now(),
+            metadata: {
+              'transferId': transferId,
+              'path': path,
+              'size': size,
+              'outgoing': false,
+            },
+          ),
+        );
+      });
+      NetcatService().outgoingProgress.listen((progressData) {
+        final transferId = progressData['transferId'];
+        final totalSize = progressData['totalSize'];
+        final progress = progressData['progress'];
+        _notifyMessageListeners(
+          DeviceMessage(
+            type: 'file_progress',
+            content: transferId,
+            senderName: deviceName,
+            timestamp: DateTime.now(),
+            metadata: {
+              'transferId': transferId,
+              'bytes': (progress * totalSize).toInt(),
+              'total': totalSize,
+              'outgoing': true,
+              'path': _outgoingFiles[transferId],
+            },
+          ),
+        );
       });
     } catch (e) {
-      debugPrint('[ConnectionService] ⚠️ Failed to init DPFTP: $e');
+      debugPrint('[ConnectionService] ⚠️ Failed to init Netcat: $e');
     }
   }
 
@@ -1895,65 +1771,6 @@ class ConnectionService {
       return;
     }
 
-    if (message.type == 'dpftp_start') {
-      try {
-        final transferId = message.content;
-        final ot = _outgoingTransfers[transferId];
-        if (ot != null) {
-          // Use WiFi Direct IP if available/active, otherwise fallback to connection IP
-          final ip = (_usingWifiDirect && _wifiDirectIpAddress != null)
-              ? _wifiDirectIpAddress
-              : _currentConnection?.ipAddress;
-
-          if (ip != null && ot.path != null) {
-            debugPrint(
-              '[ConnectionService] 🚀 Starting DPFTP Transfer for $transferId to $ip (WiFi Direct: $_usingWifiDirect)',
-            );
-
-            // Cancel legacy watchdog to prevent "Initial ACK not received"
-            ot.watchdogTimer?.cancel();
-            ot.initialAckReceived = true;
-            if (ot.chunkPermit != null && !ot.chunkPermit!.isCompleted) {
-              ot.chunkPermit!.complete();
-            }
-
-            // Optimize DPFTP parameters based on remote platform
-            // Windows systems have more resources, so use aggressive settings
-            final bool isRemoteWindows = _remotePlatform == 'windows';
-            final int parallelConns = isRemoteWindows ? 8 : 4;
-            final int chunkSizeMB = isRemoteWindows
-                ? (8 * 1024 * 1024)
-                : (4 * 1024 * 1024);
-            final int windowMB = isRemoteWindows
-                ? (64 * 1024 * 1024)
-                : (16 * 1024 * 1024);
-
-            debugPrint(
-              '[ConnectionService] 🚀 DPFTP Config: ${isRemoteWindows ? "Windows-optimized" : "Standard"} (conns=$parallelConns, chunk=${chunkSizeMB ~/ (1024 * 1024)}MB, window=${windowMB ~/ (1024 * 1024)}MB)',
-            );
-
-            // Start DPFTP transfer
-            unawaited(
-              DpftpService().sendFile(
-                ip: ip,
-                file: File(ot.path!),
-                transferId: transferId,
-                parallelConnections: parallelConns,
-                chunkSize: chunkSizeMB,
-                maxInFlightBytes: windowMB,
-              ),
-            );
-          } else {
-            debugPrint(
-              '[ConnectionService] ❌ DPFTP Start Failed: IP($ip) or Path(${ot.path}) null',
-            );
-          }
-        }
-      } catch (e) {
-        debugPrint('[ConnectionService] ❌ DPFTP Start Error: $e');
-      }
-      return;
-    }
 
     if (message.type == 'pong') {
       debugPrint('[ConnectionService] 🏓 Received pong (connection alive)');
@@ -2112,15 +1929,6 @@ class ConnectionService {
             }
           }
 
-          // Use DPFTP only when WiFi Direct is NOT active
-          // When WiFi Direct is connected, use legacy transfer which routes through WiFi Direct socket
-          if (useDpftp && !_usingWifiDirect) {
-            debugPrint(
-              '[ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.',
-            );
-            continue; // Skip to next file (or finish if last)
-          }
-
           if (_usingWifiDirect && _wifiDirectDataSocket != null) {
             debugPrint(
               '[ConnectionService] 🚀 WiFi Direct active - using direct socket transfer (bypassing DPFTP)',
@@ -2140,159 +1948,9 @@ class ConnectionService {
         }
       }
 
-      // Stream chunks AFTER initial ACK
       if (file.path != null) {
-        // 🚀 WiFi Direct: When P2P is established, transfers automatically use the direct connection
-        // This provides faster speeds without router bottleneck
-        if (_usingWifiDirect) {
-          debugPrint(
-            '[ConnectionService] 🚀 Using WiFi Direct P2P for file transfer',
-          );
-        }
-
-        final f = File(file.path!);
-        final raf = await f.open(mode: FileMode.read);
-        try {
-          // 🚀 PERF: Preallocate read buffer to avoid per-chunk allocations
-          final readBuffer = Uint8List(chunkSize);
-          int flowControlWaits = 0;
-          int totalChunks = 0;
-          final sendStartTime = DateTime.now();
-
-          while (true) {
-            // Read into preallocated buffer
-            final bytesRead = await raf.readInto(readBuffer);
-            if (bytesRead == 0) break;
-
-            final ot = _outgoingTransfers[transferId];
-            if (ot == null) break;
-            // Flow-control based on in-flight bytes (pendingBytes)
-            if (ot.pendingBytes >= ConnectionService._maxPendingBytes) {
-              flowControlWaits++;
-              ot.chunkPermit = Completer<void>();
-              debugPrint(
-                '[ConnectionService] ⏳ Flow control: waiting at chunk $index (pendingBytes=${ot.pendingBytes}, lastAck=${ot.lastAckIndex}, waits=$flowControlWaits)',
-              );
-              await ot.chunkPermit!.future;
-              debugPrint(
-                '[ConnectionService] ✅ Flow control released at chunk $index',
-              );
-            }
-
-            // Create view into buffer (avoids copy if bytesRead == chunkSize)
-            final chunkData = bytesRead == chunkSize
-                ? readBuffer
-                : Uint8List.sublistView(readBuffer, 0, bytesRead);
-
-            ot.chunkSizes[index] = bytesRead;
-
-            // Record size & send
-            ot.chunkSizes[index] = bytesRead;
-            // 🚀 PERF: Send all chunks, only await flush every 8 chunks to maximize throughput (64MB buffer for 8MB chunks)
-            final shouldAwaitFlush = (index % 8 == 0);
-            await _sendBinaryChunk(
-              transferId: transferId,
-              index: index++,
-              isLast: false,
-              bytes: chunkData,
-              flush: shouldAwaitFlush,
-            );
-            // Track in-flight bytes
-            ot.pendingBytes += bytesRead;
-            totalChunks++;
-            ot.resetWatchdog();
-            if (index % 128 == 0) {
-              final elapsed = DateTime.now()
-                  .difference(sendStartTime)
-                  .inSeconds;
-              final mbps =
-                  (totalChunks *
-                      chunkSize *
-                      8.0 /
-                      (elapsed > 0 ? elapsed : 1)) /
-                  1000000;
-              debugPrint(
-                '[SENDER-PERF] Chunk $index: ${mbps.toStringAsFixed(1)} Mbps, flowControlWaits=$flowControlWaits',
-              );
-              await Future.microtask(() {});
-            }
-          }
-        } finally {
-          await raf.close();
-        }
-      } else {
-        final stream = file.readStream;
-        if (stream != null) {
-          await for (final data in stream) {
-            int offset = 0;
-            while (offset < data.length) {
-              final end = (offset + chunkSize).clamp(0, data.length).toInt();
-              final slice = data.sublist(offset, end);
-              final ot = _outgoingTransfers[transferId];
-              if (ot == null) break; // Cancelled
-
-              // Flow-control based on pending bytes
-              if (ot.pendingBytes >= ConnectionService._maxPendingBytes) {
-                ot.chunkPermit = Completer<void>();
-                debugPrint(
-                  '[ConnectionService] ⏳ Flow control: waiting at chunk $index (pendingBytes=${ot.pendingBytes}, lastAck=${ot.lastAckIndex})',
-                );
-                await ot.chunkPermit!.future;
-                debugPrint(
-                  '[ConnectionService] ✅ Flow control released at chunk $index',
-                );
-              }
-
-              ot.chunkSizes[index] = slice.length;
-
-              await _sendBinaryChunk(
-                transferId: transferId,
-                index: index++,
-                isLast: false,
-                bytes: Uint8List.fromList(slice),
-                flush: (index % 8 == 0),
-              );
-              // Track in-flight bytes
-              ot.pendingBytes += slice.length;
-              ot.resetWatchdog();
-
-              if (index % 128 == 0) {
-                await Future.microtask(() {});
-              }
-
-              offset = end;
-            }
-          }
-        }
-      }
-      // Final marker
-      final otFinal = _outgoingTransfers[transferId];
-      if (otFinal != null) {
-        if (otFinal.pendingBytes >= ConnectionService._maxPendingBytes) {
-          otFinal.chunkPermit = Completer<void>();
-          debugPrint(
-            '[ConnectionService] ⏳ Final: waiting for flow control (pendingBytes=${otFinal.pendingBytes})',
-          );
-          await otFinal.chunkPermit!.future;
-        }
-
-        // Send final marker as binary chunk
-        otFinal.completer = Completer<void>();
-        debugPrint(
-          '[Sender-Debug] 📤 Sending final marker for $transferId at index $index',
-        );
-        await _sendBinaryChunk(
-          transferId: transferId,
-          index: index,
-          isLast: true,
-          bytes: Uint8List(0),
-          flush: true,
-        );
-        debugPrint(
-          '[Sender-Debug] ⏳ Sent final marker, waiting for Final ACK...',
-        );
-        await otFinal.completer!.future; // Wait for final ack
-        debugPrint('[Sender-Debug] ✅ Final ACK received for $transferId');
+        _outgoingFiles[transferId] = file.path!;
+        await _sendFile(_currentConnection!.ipAddress, file.path!, transferId);
       }
     }
   }
@@ -2558,28 +2216,8 @@ class ConnectionService {
       return;
     }
 
-    // Use DPFTP only when WiFi Direct is NOT active
-    // When WiFi Direct is connected, use legacy receive which routes through WiFi Direct socket
-    if (useDpftp && !_usingWifiDirect) {
-      debugPrint('[ConnectionService] 🚀 Accepting with DPFTP for $transferId');
-      await sendMessage(
-        DeviceMessage(
-          type: 'dpftp_start',
-          content: transferId,
-          senderName: deviceName,
-        ),
-      );
-      return;
-    }
-
-    if (_usingWifiDirect && _wifiDirectDataSocket != null) {
-      debugPrint(
-        '[ConnectionService] 🚀 WiFi Direct active - using direct socket receive (bypassing DPFTP)',
-      );
-    }
-
     // Choose directory: Downloads on desktop, Documents on mobile
-    Directory dir;
+    Directory? dir;
     if (saveDir != null && saveDir.isNotEmpty) {
       dir = Directory(saveDir);
       if (!await dir.exists()) {
@@ -2591,6 +2229,12 @@ class ConnectionService {
     } else {
       dir = await getApplicationDocumentsDirectory();
     }
+
+    if (dir == null) {
+      debugPrint('[ConnectionService] Could not get a save directory');
+      return;
+    }
+
     final safeName = offer.fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
     String path = '${dir.path}/$safeName';
     // Collision handling
@@ -2607,99 +2251,7 @@ class ConnectionService {
       dup++;
     }
 
-    RandomAccessFile? raf;
-    if (Platform.isAndroid && useNativeReceiver) {
-      // Native receiver writes the file on Android; just ensure the file exists.
-      await File(path).create(recursive: true);
-    } else {
-      raf = await File(path).open(mode: FileMode.write);
-    }
-
-    _incomingFiles[offer.transferId] = _IncomingFile(
-      offer: offer,
-      path: path,
-      sink: raf,
-      receivedBytes: 0,
-      nextIndex: 0,
-    );
-    // Inform UI about chosen path
-    _notifyMessageListeners(
-      DeviceMessage(
-        type: 'file_progress',
-        content: offer.fileName,
-        senderName: deviceName,
-        timestamp: DateTime.now(),
-        metadata: {
-          'transferId': offer.transferId,
-          'bytes': 0,
-          'total': offer.fileSize,
-          'outgoing': false,
-          'path': path,
-        },
-      ),
-    );
-    // On Android, start the native receiver and register the file BEFORE sending initial ACK.
-    if (Platform.isAndroid && useNativeReceiver) {
-      try {
-        const nativeReceiverChannel = MethodChannel(
-          'com.omnity.fylooo/native_receiver_method',
-        );
-        await nativeReceiverChannel.invokeMethod('startReceiver');
-        await nativeReceiverChannel.invokeMethod('registerIncoming', {
-          'transferId': offer.transferId,
-          'path': path,
-        });
-        debugPrint(
-          '[ConnectionService] 📱 Android native receiver started and registered for $transferId',
-        );
-      } catch (e) {
-        debugPrint(
-          '[ConnectionService] ❌ Failed to start/register native receiver: $e',
-        );
-      }
-    }
-
-    // Send initial ack to let sender start
-    final ack = FileAck(
-      transferId: offer.transferId,
-      nextExpectedIndex: 0,
-      completed: false,
-    );
-    await sendMessage(
-      DeviceMessage(
-        type: 'file_ack',
-        content: jsonEncode(ack.toJson()),
-        senderName: deviceName,
-      ),
-    );
-    debugPrint(
-      '[ConnectionService] 📤 Initial ACK sent for transfer ${offer.transferId}',
-    );
-
-    // Flush any buffered binary chunks that arrived early
-    final pending = _pendingBinary.remove(offer.transferId);
-    if (pending != null && pending.isNotEmpty) {
-      debugPrint(
-        '[ConnectionService] 📦 Flushing ${pending.length} buffered chunks for ${offer.transferId}',
-      );
-      for (final p in pending) {
-        await _handleBinaryChunk(
-          transferId: offer.transferId,
-          index: p.index,
-          isLast: p.isLast,
-          bytes: p.data,
-        );
-      }
-
-      // CRITICAL: ensure sender is unblocked after flushing early chunks.
-      final inc = _incomingFiles[offer.transferId];
-      if (inc != null) {
-        await _sendAck(offer.transferId, inc.nextIndex);
-      }
-    }
-
-    // Start watchdog for receiver side
-    _startIncomingWatchdog(offer.transferId);
+    NetcatService().acceptFile(transferId, path, offer.fileSize);
   }
 
   /// Decline a pending incoming file offer
@@ -3024,97 +2576,7 @@ class ConnectionService {
     });
   }
 
-  /// Start watchdog for outgoing transfer - auto-resume if stalled
-  void _startOutgoingWatchdog(String transferId) {
-    final transfer = _outgoingTransfers[transferId];
-    if (transfer == null) return;
 
-    transfer.watchdogTimer?.cancel();
-    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (
-      timer,
-    ) async {
-      final ot = _outgoingTransfers[transferId];
-      if (ot == null) {
-        timer.cancel();
-        return;
-      }
-
-      final timeSinceActivity = DateTime.now()
-          .difference(ot.lastActivity)
-          .inSeconds;
-      if (timeSinceActivity > 5 &&
-          ot.chunkPermit != null &&
-          !ot.chunkPermit!.isCompleted) {
-        // Transfer appears stalled - auto-resume
-        ot.resumeAttempts++;
-        if (ot.resumeAttempts <= 3) {
-          debugPrint(
-            '[ConnectionService] 🔄 Auto-resuming stalled outgoing transfer $transferId (attempt ${ot.resumeAttempts})',
-          );
-          // Request receiver to resend ACK for current state
-          await sendMessage(
-            DeviceMessage(
-              type: 'request_ack',
-              content: transferId,
-              senderName: deviceName,
-            ),
-          );
-          // Release permit to allow progress
-          if (ot.chunkPermit != null && !ot.chunkPermit!.isCompleted) {
-            ot.chunkPermit!.complete();
-            ot.chunkPermit = null;
-          }
-          ot.resetWatchdog();
-        } else {
-          debugPrint(
-            '[ConnectionService] ❌ Outgoing transfer $transferId failed after ${ot.resumeAttempts} resume attempts',
-          );
-          timer.cancel();
-        }
-      }
-    });
-  }
-
-  /// Start watchdog for incoming transfer - request resend if stalled
-  void _startIncomingWatchdog(String transferId) {
-    final transfer = _incomingFiles[transferId];
-    if (transfer == null) return;
-
-    transfer.watchdogTimer?.cancel();
-    transfer.watchdogTimer = Timer.periodic(const Duration(seconds: 3), (
-      timer,
-    ) async {
-      final inc = _incomingFiles[transferId];
-      if (inc == null) {
-        timer.cancel();
-        return;
-      }
-
-      final timeSinceActivity = DateTime.now()
-          .difference(inc.lastActivity)
-          .inSeconds;
-      if (timeSinceActivity > 5) {
-        // No chunks received recently - request sender to resume
-        debugPrint(
-          '[ConnectionService] 🔄 Auto-resuming stalled incoming transfer $transferId',
-        );
-        // Send ACK with current nextIndex to tell sender where to resume
-        final ack = FileAck(
-          transferId: transferId,
-          nextExpectedIndex: inc.nextIndex,
-          completed: false,
-        );
-        await sendMessage(
-          DeviceMessage(
-            type: 'file_ack',
-            content: jsonEncode(ack.toJson()),
-            senderName: deviceName,
-          ),
-        );
-        inc.resetWatchdog();
-      }
-    });
-  }
 
   /// Clean up old received files on Android to prevent storage bloat
   /// Removes files older than specified days from Documents directory
@@ -3270,282 +2732,7 @@ class ConnectionService {
     );
   }
 
-  Future<void> _handleBinaryChunk({
-    required String transferId,
-    required int index,
-    required bool isLast,
-    required Uint8List bytes,
-  }) async {
-    // Check if transfer is accepted (file path registered)
-    final inc = _incomingFiles[transferId];
-    if (inc == null) {
-      // Buffer chunks that arrive before acceptFileOffer is called
-      _pendingBinary
-          .putIfAbsent(transferId, () => [])
-          .add(_PendingBinaryChunk(index, Uint8List.fromList(bytes), isLast));
-      return;
-    }
 
-    // On Android, forward to native receiver (fast path)
-    if (Platform.isAndroid && useNativeReceiver) {
-      try {
-        final t1 = DateTime.now();
-        await _forwardToNativeReceiver(transferId, index, isLast, bytes);
-        final t2 = DateTime.now();
-        if (_enablePerfLogs && index % 256 == 0) {
-          debugPrint(
-            '[PERF] Forward to native: ${t2.difference(t1).inMilliseconds}ms for chunk $index (${bytes.length} bytes)',
-          );
-        }
-      } catch (e) {
-        debugPrint(
-          '[ConnectionService] ❌ Failed to forward to native receiver: $e',
-        );
-      }
-      return;
-    }
-
-    if (isLast) {
-      inc.markFinal(index);
-    }
-
-    final t1 = DateTime.now();
-    // Ensure bytes are stable beyond this call for the non-native path.
-    await inc.processBinary(index, Uint8List.fromList(bytes));
-    final t2 = DateTime.now();
-
-    // 🔬 PERF: Always report progress to UI, even if buffering
-    // (UI uses this to calculate speed, so accuracy matters)
-    _notifyMessageListeners(
-      DeviceMessage(
-        type: 'file_progress',
-        content: inc.offer.fileName,
-        senderName: deviceName,
-        timestamp: DateTime.now(),
-        metadata: {
-          'transferId': transferId,
-          'bytes': inc.receivedBytes,
-          'total': inc.offer.fileSize,
-          'mime': inc.offer.mimeType,
-          'outgoing': false,
-        },
-      ),
-    );
-
-    // ACK regularly and under buffer pressure
-    // 🚀 PERF: ACK every chunk (8MB/16MB) to ensure sender progress bar is in sync with receiver
-    if (inc.nextIndex % 1 == 0 ||
-        inc._chunkBuffer.length > (ConnectionService._maxPendingChunks ~/ 3)) {
-      final t3 = DateTime.now();
-      // 🚀 PERF: Don't force flush to disk on every ACK. Let processBinary handle it based on buffer size.
-      // await inc._flushWrites();
-      await _sendAck(transferId, inc.nextIndex);
-      final t4 = DateTime.now();
-      if (_enablePerfLogs && index % 256 == 0) {
-        debugPrint(
-          '[PERF] processBinary: ${t2.difference(t1).inMilliseconds}ms, ACK: ${t4.difference(t3).inMilliseconds}ms @ index $index',
-        );
-      }
-    } else if (_enablePerfLogs && index % 256 == 0) {
-      debugPrint(
-        '[PERF] processBinary: ${t2.difference(t1).inMilliseconds}ms @ index $index (no ACK)',
-      );
-    }
-
-    // Completion requires final marker AND all chunks up to it processed
-    if (inc.isComplete()) {
-      await inc.finish();
-
-      if (inc.offer.sha256 != null) {
-        // Stream hash to avoid loading whole file into memory.
-        final digest = await sha256.bind(File(inc.path).openRead()).first;
-        final calc = digest.toString();
-        if (calc != inc.offer.sha256) {
-          _notifyMessageListeners(
-            DeviceMessage(
-              type: 'text',
-              content: 'File verification failed: ${inc.offer.fileName}',
-              senderName: deviceName,
-              timestamp: DateTime.now(),
-            ),
-          );
-        }
-      }
-
-      _notifyMessageListeners(
-        DeviceMessage(
-          type: 'file_complete',
-          content: inc.offer.fileName,
-          senderName: deviceName,
-          timestamp: DateTime.now(),
-          metadata: {
-            'transferId': transferId,
-            'size': inc.offer.fileSize,
-            'mime': inc.offer.mimeType,
-            'path': inc.path,
-            'outgoing': false,
-          },
-        ),
-      );
-
-      inc.watchdogTimer?.cancel();
-      _incomingFiles.remove(transferId);
-
-      NotificationService().showNotification(
-        type: NotificationType.fileTransferCompleted,
-        title: 'File Received',
-        body: 'Successfully received ${inc.offer.fileName}',
-      );
-
-      await _sendAck(transferId, inc.nextIndex, completed: true);
-    }
-  }
-
-  /// Handle progress updates from native Android receiver
-  Future<void> _handleNativeReceiverProgress(MethodCall call) async {
-    try {
-      if (call.method != 'onProgress' && call.method != 'onAck') return;
-
-      final args = Map<String, dynamic>.from(call.arguments as Map);
-      final transferId = (args['transferId'] ?? '') as String;
-      if (transferId.isEmpty) return;
-
-      final inc = _incomingFiles[transferId];
-
-      if (call.method == 'onAck') {
-        final nextExpectedIndex = (args['nextExpectedIndex'] ?? 0) as int;
-        final bytesReceived = (args['bytesReceived'] ?? 0) as int;
-        final completed = (args['completed'] ?? false) as bool;
-
-        debugPrint(
-          '[ConnectionService] 📨 Native ACK received: transferId=$transferId, nextExpectedIndex=$nextExpectedIndex, bytes=$bytesReceived',
-        );
-
-        if (inc != null) {
-          inc.resetWatchdog();
-          inc.receivedBytes = bytesReceived;
-        }
-
-        final ack = FileAck(
-          transferId: transferId,
-          nextExpectedIndex: nextExpectedIndex,
-          completed: completed,
-        );
-
-        await _sendControlMessage(
-          DeviceMessage(
-            type: 'file_ack',
-            content: jsonEncode(ack.toJson()),
-            senderName: deviceName,
-          ),
-          // If WiFi Direct is up, keep the ACK path on the same fast link.
-          preferWifiDirect: _usingWifiDirect,
-        );
-
-        debugPrint(
-          '[ConnectionService] 📤 Forwarded ACK to sender: nextExpectedIndex=$nextExpectedIndex',
-        );
-
-        return;
-      }
-
-      // call.method == 'onProgress'
-      final bytes = (args['bytes'] ?? 0) as int;
-      final isLast = (args['isLast'] ?? false) as bool;
-      final filePath = args['filePath'] as String?;
-
-      if (_enablePerfLogs || isLast) {
-        debugPrint(
-          '[ConnectionService] 📊 Native receiver progress: $transferId, bytes=$bytes, isLast=$isLast, filePath=$filePath',
-        );
-      }
-
-      if (inc != null) {
-        inc.resetWatchdog();
-        inc.receivedBytes = bytes;
-      }
-
-      _notifyMessageListeners(
-        DeviceMessage(
-          type: 'file_progress',
-          content: inc?.offer.fileName ?? 'Unknown file',
-          senderName: deviceName,
-          timestamp: DateTime.now(),
-          metadata: {
-            'transferId': transferId,
-            'bytes': bytes,
-            'total': inc?.offer.fileSize ?? 0,
-            'mime': inc?.offer.mimeType,
-            'outgoing': false,
-          },
-        ),
-      );
-
-      if (isLast && filePath != null && filePath.isNotEmpty) {
-        final completedInc = _incomingFiles.remove(transferId);
-        completedInc?.watchdogTimer?.cancel();
-
-        if (completedInc != null) {
-          // Notify sender of success
-          await sendMessage(
-            DeviceMessage(
-              type: 'file_status',
-              content: completedInc.offer.fileName,
-              senderName: deviceName,
-              timestamp: DateTime.now(),
-              metadata: {
-                'transferId': transferId,
-                'status': 'success',
-                'path': filePath,
-              },
-            ),
-          );
-
-          // Force send final ACK to ensure sender unblocks
-          await _sendControlMessage(
-            DeviceMessage(
-              type: 'file_ack',
-              senderName: deviceName,
-              content: jsonEncode(
-                FileAck(
-                  transferId: transferId,
-                  nextExpectedIndex: completedInc
-                      .offer
-                      .fileSize, // Use size as index proxy or just assume completed handles it
-                  completed: true,
-                ).toJson(),
-              ),
-            ),
-          );
-
-          _notifyMessageListeners(
-            DeviceMessage(
-              type: 'file_complete',
-              content: completedInc.offer.fileName,
-              senderName: deviceName,
-              timestamp: DateTime.now(),
-              metadata: {
-                'transferId': transferId,
-                'size': completedInc.offer.fileSize,
-                'mime': completedInc.offer.mimeType,
-                'path': filePath,
-                'outgoing': false,
-              },
-            ),
-          );
-
-          NotificationService().showNotification(
-            type: NotificationType.fileTransferCompleted,
-            title: 'File Received',
-            body: 'Successfully received ${completedInc.offer.fileName}',
-          );
-        }
-      }
-    } catch (e, st) {
-      debugPrint('[ConnectionService] ❌ Native receiver handler error: $e');
-      debugPrint('$st');
-    }
-  }
 
   /// Normalize IP address to handle IPv6 mapped IPv4 addresses
   String _normalizeIp(String ip) {
@@ -3556,465 +2743,6 @@ class ConnectionService {
   }
 }
 
-class _IncomingFile {
-  final FileOffer offer;
-  final String path;
-  final RandomAccessFile? sink;
-  int receivedBytes;
-  int nextIndex;
-  final Map<int, Uint8List> _chunkBuffer = {}; // Buffer for out-of-order chunks
 
-  // 🚀 PERF: Buffer writes in memory to reduce disk syscalls
-  final BytesBuilder _writeBuffer = BytesBuilder();
-  int _writeBufferBytes = 0;
-  static const int _writeBufferLimit =
-      64 * 1024 * 1024; // 64MB write buffer for maximum batching
 
-  bool _finalSeen = false;
-  int? _finalIndex;
 
-  Timer? watchdogTimer;
-  DateTime lastActivity = DateTime.now();
-
-  _IncomingFile({
-    required this.offer,
-    required this.path,
-    required this.sink,
-    required this.receivedBytes,
-    required this.nextIndex,
-  }) {
-    _startWatchdog();
-  }
-
-  void _startWatchdog() {
-    watchdogTimer?.cancel();
-    watchdogTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      final elapsed = DateTime.now().difference(lastActivity);
-      if (elapsed.inSeconds >= 5) {
-        debugPrint(
-          '[ConnectionService] ⚠️ Transfer stalled? Waiting for chunk $nextIndex (buffered: ${_chunkBuffer.length}) for ${elapsed.inSeconds}s',
-        );
-      }
-    });
-  }
-
-  void resetWatchdog() {
-    lastActivity = DateTime.now();
-  }
-
-  void cancelWatchdog() {
-    watchdogTimer?.cancel();
-    watchdogTimer = null;
-  }
-
-  void markFinal(int index) {
-    _finalSeen = true;
-    _finalIndex = index;
-  }
-
-  /// Flush accumulated writes to disk
-  Future<void> _flushWrites() async {
-    if (_writeBufferBytes == 0) return;
-
-    final s = sink;
-    if (s == null) return;
-
-    final data = _writeBuffer.takeBytes();
-    await s.writeFrom(data);
-    _writeBufferBytes = 0;
-    debugPrint('[PERF] Flushed ${data.length ~/ (1024 * 1024)}MB to disk');
-  }
-
-  // Process a binary chunk (new method for binary protocol)
-  Future<void> processBinary(int index, Uint8List bytes) async {
-    resetWatchdog();
-
-    final s = sink;
-    if (s == null) {
-      throw StateError('Incoming sink is null (native receiver path)');
-    }
-
-    if (index == nextIndex) {
-      // Buffer the chunk instead of writing immediately
-      _writeBuffer.add(bytes);
-      _writeBufferBytes += bytes.length;
-      receivedBytes += bytes.length;
-      nextIndex++;
-
-      // Write any buffered chunks that are now in sequence
-      while (_chunkBuffer.containsKey(nextIndex)) {
-        final bufferedBytes = _chunkBuffer.remove(nextIndex)!;
-        _writeBuffer.add(bufferedBytes);
-        _writeBufferBytes += bufferedBytes.length;
-        receivedBytes += bufferedBytes.length;
-        nextIndex++;
-      }
-
-      // Flush if buffer is full OR every 32MB of buffered data
-      // This ensures we don't report stale progress from old buffered data
-      if (_writeBufferBytes >= _writeBufferLimit) {
-        await _flushWrites();
-      }
-
-      debugPrint(
-        '[ConnectionService] ✅ Processed binary chunk $index, next expected: $nextIndex, buffered: ${_chunkBuffer.length}, writeBuffer: ${_writeBufferBytes ~/ (1024 * 1024)}MB',
-      );
-    } else if (index > nextIndex) {
-      // Future chunk, buffer it
-      _chunkBuffer[index] = bytes;
-      debugPrint(
-        '[ConnectionService] 📦 Buffered binary chunk $index (expecting $nextIndex), buffer size: ${_chunkBuffer.length}',
-      );
-    } else {
-      // Duplicate or past chunk, ignore
-      debugPrint(
-        '[ConnectionService] ⚠️ Ignoring duplicate/past binary chunk $index (expecting $nextIndex)',
-      );
-    }
-  }
-
-  // Process a chunk, handling out-of-order arrival (legacy JSON method)
-  Future<void> processChunk(FileChunk chunk) async {
-    final bytes = base64Decode(chunk.dataBase64);
-    resetWatchdog(); // Reset on any chunk receive
-
-    final s = sink;
-    if (s == null) {
-      throw StateError('Incoming sink is null (native receiver path)');
-    }
-
-    if (chunk.index == nextIndex) {
-      // This is the expected chunk, write it immediately
-      await s.writeFrom(bytes);
-      receivedBytes += bytes.length;
-      nextIndex++;
-
-      // Write any buffered chunks that are now in sequence
-      while (_chunkBuffer.containsKey(nextIndex)) {
-        final bufferedBytes = _chunkBuffer.remove(nextIndex)!;
-        await s.writeFrom(bufferedBytes);
-        receivedBytes += bufferedBytes.length;
-        nextIndex++;
-      }
-      debugPrint(
-        '[ConnectionService] ✅ Processed chunk ${chunk.index}, next expected: $nextIndex, buffered: ${_chunkBuffer.length}',
-      );
-    } else if (chunk.index > nextIndex) {
-      // Future chunk, buffer it
-      _chunkBuffer[chunk.index] = bytes;
-      debugPrint(
-        '[ConnectionService] 📦 Buffered chunk ${chunk.index} for transfer (expecting $nextIndex), buffer size: ${_chunkBuffer.length}',
-      );
-    } else {
-      // Duplicate or past chunk, ignore
-      debugPrint(
-        '[ConnectionService] ⚠️ Ignoring duplicate/past chunk ${chunk.index} (expecting $nextIndex)',
-      );
-    }
-  }
-
-  // Finish transfer and verify
-  Future<void> finish() async {
-    // 🚀 Flush remaining writes before closing
-    await _flushWrites();
-    await sink?.flush();
-    await sink?.close();
-    debugPrint('[ConnectionService] ✅ Transfer complete and file closed');
-  }
-
-  // Check if transfer is complete (all chunks received up to the final marker)
-  bool isComplete() {
-    if (!_finalSeen || _finalIndex == null) return false;
-    return _chunkBuffer.isEmpty && nextIndex == _finalIndex! + 1;
-  }
-}
-
-class _OutgoingTransfer {
-  final String fileName;
-  int lastAckIndex; // last index confirmed by receiver
-  final int totalSize; // total bytes
-  final Map<int, int> chunkSizes = {}; // index -> bytes
-  int pendingBytes = 0; // bytes sent but not yet ACKed
-  int sentBytes = 0; // bytes confirmed by ACKs
-  bool initialAckReceived = false;
-  Completer<void>? chunkPermit; // completed when next chunk may be sent
-  Completer<void>? completer; // completed when transfer fully done
-  Timer? watchdogTimer;
-  DateTime lastActivity = DateTime.now();
-  int resumeAttempts = 0;
-
-  // Optional metadata for better UI on sender side
-  final String? mime;
-  final String? path;
-
-  void resetWatchdog() {
-    lastActivity = DateTime.now();
-  }
-
-  _OutgoingTransfer({
-    required this.fileName,
-    required this.lastAckIndex,
-    required this.totalSize,
-    this.mime,
-    this.path,
-  });
-}
-
-/// Binary frame parser for file chunks
-class _FrameParser {
-  Uint8List _buf = Uint8List(0);
-  int _start = 0;
-  int _end = 0;
-
-  void reset() {
-    _buf = Uint8List(0);
-    _start = 0;
-    _end = 0;
-  }
-
-  Future<void> process(Uint8List data, ConnectionService svc) async {
-    if (data.isEmpty) return;
-    _append(data);
-
-    while (true) {
-      final available = _end - _start;
-      if (available < 9) return; // need [MAGIC(4)] + [len(4)] + [type(1)]
-
-      // Check magic byte
-      final magic = _readInt32(_buf, _start);
-      if (magic != ConnectionService._frameMagic) {
-        // Fast scan to find next magic byte
-        final found = _scanForMagic();
-        if (!found) return; // wait for more data to find magic
-        // If found, _start is updated to point to magic
-        continue;
-      }
-
-      final payloadLen = _readInt32(_buf, _start + 4);
-      if (payloadLen <= 0 ||
-          payloadLen > ConnectionService._maxFramePayloadBytes) {
-        // If this looks like an HTTP request accidentally hitting the P2P port,
-        // close the connection to avoid endless garbage parsing.
-        if (_looksLikeHttp(_buf, _start, _end)) {
-          debugPrint(
-            '[FrameParser] ⚠️ Detected HTTP on P2P socket; disconnecting',
-          );
-          reset();
-          await svc.disconnect();
-          return;
-        }
-
-        debugPrint(
-          '[FrameParser] ⚠️ Invalid payloadLen=$payloadLen, skipping current magic and rescanning.',
-        );
-        _start += 1; // Advance past this valid magic to look for another one
-        continue;
-      }
-
-      final frameLen = 4 + 4 + payloadLen; // MAGIC + LEN + PAYLOAD
-      if (available < frameLen) return; // wait for more
-
-      final type = _buf[_start + 8];
-
-      // Validate frame type before extracting payload
-      if (type != 0 && type != 1) {
-        debugPrint(
-          '[FrameParser] ⚠️ Unknown frame type=$type at offset $_start. Skipping current magic.',
-        );
-        _start += 1;
-        continue;
-      }
-
-      // Additional validation: JSON control messages (type 0) should be reasonably small
-      if (type == 0 && payloadLen > 1024 * 1024) {
-        debugPrint(
-          '[FrameParser] ⚠️ Suspiciously large control message: $payloadLen bytes. Skipping.',
-        );
-        _start += 1;
-        continue;
-      }
-
-      final payloadStart = _start + 9; // MAGIC(4) + LEN(4) + TYPE(1)
-      final payloadEnd = _start + frameLen;
-      final payload = Uint8List.sublistView(_buf, payloadStart, payloadEnd);
-
-      try {
-        if (type == 0) {
-          final jsonStr = utf8.decode(payload, allowMalformed: false);
-          final json = jsonDecode(jsonStr) as Map<String, dynamic>;
-          final message = DeviceMessage.fromJson(json);
-          await svc._handleIncomingMessage(message);
-        } else if (type == 1) {
-          await _parseBinaryChunkPayload(payload, svc);
-        }
-      } catch (e) {
-        debugPrint('[FrameParser] ❌ Frame parse error: $e');
-        // If parsing fails despite magic byte, it might be a collision or corruption
-        _start += 1;
-        continue;
-      }
-
-      _start += frameLen;
-      if (_start == _end) {
-        // fully consumed
-        _start = 0;
-        _end = 0;
-        return;
-      }
-
-      // Compact occasionally to avoid unbounded growth.
-      if (_start > 0 && _start > (_buf.length ~/ 2)) {
-        _compact();
-      }
-    }
-  }
-
-  bool _scanForMagic() {
-    // efficient byte-by-byte scan for magic
-    final magicBytes = [0xAC, 0xDC, 0x12, 0x34];
-
-    // We start at _start to see if we need to advance
-    // But since we already checked that _start isn't magic (in the caller),
-    // we should start scanning from _start + 1
-
-    for (int i = _start + 1; i <= _end - 4; i++) {
-      if (_buf[i] == magicBytes[0] &&
-          _buf[i + 1] == magicBytes[1] &&
-          _buf[i + 2] == magicBytes[2] &&
-          _buf[i + 3] == magicBytes[3]) {
-        _start = i;
-        return true;
-      }
-    }
-
-    // If not found, discard everything except the last 3 bytes
-    // (which might be the start of a magic sequence arriving later)
-    if (_end > _start + 3) {
-      _start = _end - 3;
-    }
-    return false;
-  }
-
-  bool _looksLikeHttp(Uint8List buf, int start, int end) {
-    final available = end - start;
-    if (available < 4) return false;
-
-    final b0 = buf[start];
-    final b1 = buf[start + 1];
-    final b2 = buf[start + 2];
-    final b3 = buf[start + 3];
-
-    // "GET ", "POST", "HEAD", "PUT ", "HTTP"
-    final isGet = b0 == 0x47 && b1 == 0x45 && b2 == 0x54 && b3 == 0x20;
-    final isPost = b0 == 0x50 && b1 == 0x4F && b2 == 0x53 && b3 == 0x54;
-    final isHead = b0 == 0x48 && b1 == 0x45 && b2 == 0x41 && b3 == 0x44;
-    final isPut = b0 == 0x50 && b1 == 0x55 && b2 == 0x54 && b3 == 0x20;
-    final isHttp = b0 == 0x48 && b1 == 0x54 && b2 == 0x54 && b3 == 0x50;
-
-    return isGet || isPost || isHead || isPut || isHttp;
-  }
-
-  Future<void> _parseBinaryChunkPayload(
-    Uint8List payload,
-    ConnectionService svc,
-  ) async {
-    // payload = [tidLen(1)][tid][index(4)][isLast(1)][bytes...]
-    if (payload.isEmpty) return;
-    int offset = 0;
-
-    final tidLen = payload[offset++];
-    if (tidLen <= 0 || tidLen > ConnectionService._maxTransferIdBytes) {
-      throw StateError('Invalid transferId length: $tidLen');
-    }
-    if (payload.length < 1 + tidLen + 4 + 1) {
-      throw StateError('Truncated binary chunk header');
-    }
-
-    final transferId = utf8.decode(payload.sublist(offset, offset + tidLen));
-    offset += tidLen;
-
-    final index = _readInt32(payload, offset);
-    offset += 4;
-    if (index < 0) {
-      throw StateError('Invalid chunk index: $index');
-    }
-
-    final isLast = payload[offset++] == 1;
-    // Avoid copying here; copy only when we must retain bytes.
-    final bytes = Uint8List.sublistView(payload, offset);
-
-    if (ConnectionService._enableBinaryChunkLogs &&
-        (isLast || (index % ConnectionService._binaryChunkLogEveryN == 0))) {
-      debugPrint(
-        '[FrameParser] 📥 Binary chunk: transferId=$transferId, index=$index, isLast=$isLast, bytes=${bytes.length}',
-      );
-    }
-
-    await svc._handleBinaryChunk(
-      transferId: transferId,
-      index: index,
-      isLast: isLast,
-      bytes: bytes,
-    );
-  }
-
-  void _append(Uint8List data) {
-    final needed = (_end - _start) + data.length;
-    if (_buf.isEmpty) {
-      _buf = Uint8List(needed);
-      _buf.setRange(0, data.length, data);
-      _start = 0;
-      _end = data.length;
-      return;
-    }
-
-    // Ensure capacity.
-    if (_buf.length < needed) {
-      final newCap = _nextPow2(needed);
-      final newBuf = Uint8List(newCap);
-      final remaining = _end - _start;
-      if (remaining > 0) {
-        // Create a copy to avoid concurrent modification error
-        final oldData = Uint8List.fromList(_buf.sublist(_start, _end));
-        newBuf.setRange(0, remaining, oldData);
-      }
-      _buf = newBuf;
-      _start = 0;
-      _end = remaining;
-    } else if (_start > 0 && (_buf.length - _end) < data.length) {
-      _compact();
-    }
-
-    _buf.setRange(_end, _end + data.length, data);
-    _end += data.length;
-  }
-
-  void _compact() {
-    final remaining = _end - _start;
-    if (remaining <= 0) {
-      _start = 0;
-      _end = 0;
-      return;
-    }
-    _buf.setRange(0, remaining, _buf, _start);
-    _start = 0;
-    _end = remaining;
-  }
-
-  int _nextPow2(int v) {
-    int n = 1;
-    while (n < v) {
-      n <<= 1;
-    }
-    return n;
-  }
-}
-
-/// Pending binary chunk that arrived before file was accepted
-class _PendingBinaryChunk {
-  final int index;
-  final Uint8List data;
-  final bool isLast;
-
-  _PendingBinaryChunk(this.index, this.data, this.isLast);
-}
