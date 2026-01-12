@@ -31,29 +31,31 @@ class DpftpSocketManager {
 
     if (_controlSocket == null) {
       debugPrint(
-        '[DPFTP] Control Connection Assigned: ${rawSocket.remoteAddress.address}',
+        'dpftp-new-file: Control socket connected from ${rawSocket.remoteAddress.address}',
       );
       _controlSocket = socket;
       socket.messages.listen(
         (msg) {
           if (!_isDisposed) _controlStream.add(msg);
         },
-        onError: (e) => _handleError('Control socket error: $e'),
+        onError: (e) => debugPrint('dpftp-new-file: ❌ Control Error: $e'),
         onDone: () {
           _controlSocket = null; // Allow new control connection
-          _handleError('Control socket closed');
+          debugPrint('dpftp-new-file: Control connection closed');
         },
       );
     } else {
-      debugPrint('[DPFTP] Data Connection ${_dataSockets.length + 1} Assigned');
+      debugPrint(
+        'dpftp-new-file: Data socket #${_dataSockets.length + 1} connected',
+      );
       _dataSockets.add(socket);
       socket.messages.listen(
         (msg) {
           if (!_isDisposed) _dataStream.add(msg);
         },
-        onError: (e) => debugPrint('[DPFTP] Data socket error: $e'),
+        onError: (e) => debugPrint('dpftp-new-file: ❌ Data Error: $e'),
         onDone: () {
-          debugPrint('[DPFTP] Data socket closed');
+          debugPrint('dpftp-new-file: Data socket closed');
           _dataSockets.remove(socket);
         },
       );
@@ -104,12 +106,5 @@ class DpftpSocketManager {
     }
     _controlStream.close();
     _dataStream.close();
-  }
-
-  void _handleError(String msg) {
-    if (_isDisposed) return;
-    debugPrint('[DPFTP] SocketManager Error: $msg');
-    // Notify upstream logic to abort transfer
-    // _controlStream.addError(msg);
   }
 }

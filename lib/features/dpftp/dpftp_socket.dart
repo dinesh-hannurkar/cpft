@@ -16,8 +16,8 @@ class DpftpSocket {
 
   // Buffering
   final Uint8List _buf = Uint8List(
-    12 * 1024 * 1024,
-  ); // 10MB buffer is sufficient for 8MB chunk + header
+    20 * 1024 * 1024,
+  ); // 20MB buffer for 8MB chunks + overhead
   int _start = 0;
   int _end = 0;
 

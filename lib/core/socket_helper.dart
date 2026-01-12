@@ -9,6 +9,10 @@ class RawSocketTuner {
     // Load the appropriate configuration for the current OS.
     final config = Config.socket;
 
+    // debugPrint(
+    //   'dpftp-new-file: 🔧 Tuning socket → Send: ${config.soSndbuf ~/ (1024 * 1024)}MB, Recv: ${config.soRcvbuf ~/ (1024 * 1024)}MB, NoDelay: ${config.tcpNoDelay}',
+    // );
+
     // Platform-specific constants for raw socket options.
     // SOL_SOCKET, SO_RCVBUF, SO_SNDBUF have different integer values on Windows.
     final int solSocket = Platform.isWindows ? 0xFFFF : 1;
@@ -20,12 +24,11 @@ class RawSocketTuner {
     // more data from the network before the application can read it.
     try {
       socket.setRawOption(
-        RawSocketOption.fromInt(
-          solSocket,
-          soRcvbuf,
-          config.soRcvbuf,
-        ),
+        RawSocketOption.fromInt(solSocket, soRcvbuf, config.soRcvbuf),
       );
+      // debugPrint(
+      //   'dpftp-new-file: ✅ SO_RCVBUF set to ${config.soRcvbuf ~/ (1024 * 1024)}MB',
+      // );
     } catch (e) {
       debugPrint('[SocketTuner] Failed to set SO_RCVBUF: $e');
     }
@@ -35,12 +38,11 @@ class RawSocketTuner {
     // to the socket buffer without blocking.
     try {
       socket.setRawOption(
-        RawSocketOption.fromInt(
-          solSocket,
-          soSndbuf,
-          config.soSndbuf,
-        ),
+        RawSocketOption.fromInt(solSocket, soSndbuf, config.soSndbuf),
       );
+      // debugPrint(
+      //   'dpftp-new-file: ✅ SO_SNDBUF set to ${config.soSndbuf ~/ (1024 * 1024)}MB',
+      // );
     } catch (e) {
       debugPrint('[SocketTuner] Failed to set SO_SNDBUF: $e');
     }
@@ -64,9 +66,7 @@ class RawSocketTuner {
         // We use raw values from the Linux headers:
         // level 6 = IPPROTO_TCP from netinet/in.h
         // option 12 = TCP_QUICKACK from linux/tcp.h
-        socket.setRawOption(
-          RawSocketOption.fromInt(6, 12, 1),
-        );
+        socket.setRawOption(RawSocketOption.fromInt(6, 12, 1));
       } catch (e) {
         debugPrint('[SocketTuner] Failed to set TCP_QUICKACK: $e');
       }

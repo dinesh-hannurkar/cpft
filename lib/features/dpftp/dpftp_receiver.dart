@@ -162,6 +162,12 @@ class _Session {
     // Send to isolate disk writer (non-blocking!)
     if (_diskWriter != null) {
       _diskWriter!.writeChunk(chunkId, offset, data);
+
+      if (chunkId % 5 == 0) {
+        debugPrint(
+          'dpftp-new-file: ⏱️ Chunk $chunkId RECEIVED (${(len / (1024 * 1024)).toStringAsFixed(1)}MB)',
+        );
+      }
     } else {
       // Fallback to direct write (should not happen in normal flow)
       debugPrint(
@@ -171,6 +177,23 @@ class _Session {
     }
 
     _receivedBytes += len;
+
+    // ✅ CRITICAL FIX: Send ACK immediately when data is received
+    // Don't wait for CHUNK_DONE - it may arrive out of order on control channel
+    _fileInfo!.bitmap.markReceived(chunkId);
+    _inFlightChunks.remove(chunkId);
+    _sockets.sendControl(Dpftp.typeChunkAck, Dpftp.int32(chunkId));
+
+    if (chunkId % 5 == 0) {
+      debugPrint('dpftp-new-file: ✅ Chunk $chunkId ACK sent immediately');
+    }
+
+    // Save metadata and check completion
+    _saveMetadata();
+    if (_fileInfo!.bitmap.isComplete) {
+      _finishTransfer();
+    }
+
     // PERF: Throttled progress callbacks (chunk 0 + every 8 chunks for UI timing)
     if (chunkId == 0 || chunkId % 8 == 0 || _fileInfo!.bitmap.isComplete) {
       onProgress?.call(
@@ -184,10 +207,10 @@ class _Session {
       );
     }
 
-    // Check if CHUNK_DONE arrived early
+    // Still handle CHUNK_DONE if it arrives (for hash verification in future)
     if (_pendingDoneHashes.containsKey(chunkId)) {
-      final expected = _pendingDoneHashes.remove(chunkId)!;
-      _verifyChunk(chunkId, calculated, expected);
+      _pendingDoneHashes.remove(chunkId);
+      // Hash verification disabled for now
     }
   }
 

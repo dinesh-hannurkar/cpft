@@ -1918,18 +1918,36 @@ class ConnectionService {
             }
 
             // Optimize DPFTP parameters based on remote platform
-            // Windows systems have more resources, so use aggressive settings
+            // Desktop→Mobile and Mobile→Desktop transfers benefit from aggressive settings
             final bool isRemoteWindows = _remotePlatform == 'windows';
-            final int parallelConns = isRemoteWindows ? 8 : 4;
-            final int chunkSizeMB = isRemoteWindows
-                ? (8 * 1024 * 1024)
-                : (4 * 1024 * 1024);
+            final bool isRemoteLinux = _remotePlatform == 'linux';
+            final bool isRemoteAndroid = _remotePlatform == 'android';
+
+            // Parallel connections: Optimize for each platform's capabilities
+            final int parallelConns = isRemoteWindows
+                ? 8 // Windows handles many connections well
+                : (isRemoteLinux || isRemoteAndroid
+                      ? 6
+                      : 4); // Linux/Android: 6 connections
+
+            // Use 4MB chunks for all platforms (faster ACKs, better flow control)
+            final int chunkSizeMB = 4 * 1024 * 1024;
+
+            // Window size: Larger for Windows, moderate for Linux/Android
             final int windowMB = isRemoteWindows
-                ? (64 * 1024 * 1024)
-                : (16 * 1024 * 1024);
+                ? (64 * 1024 * 1024) // 64MB for Windows
+                : (isRemoteLinux || isRemoteAndroid
+                      ? (48 * 1024 * 1024) // 48MB for Linux/Android
+                      : (32 * 1024 * 1024)); // 32MB for others
 
             debugPrint(
-              '[ConnectionService] 🚀 DPFTP Config: ${isRemoteWindows ? "Windows-optimized" : "Standard"} (conns=$parallelConns, chunk=${chunkSizeMB ~/ (1024 * 1024)}MB, window=${windowMB ~/ (1024 * 1024)}MB)',
+              'dpftp-new-file: Config → ${isRemoteWindows
+                  ? "Windows"
+                  : isRemoteLinux
+                  ? "Linux"
+                  : isRemoteAndroid
+                  ? "Android"
+                  : "Standard"} | Connections: $parallelConns | Chunk: ${chunkSizeMB ~/ (1024 * 1024)}MB | Window: ${windowMB ~/ (1024 * 1024)}MB)',
             );
 
             // Start DPFTP transfer

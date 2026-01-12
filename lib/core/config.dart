@@ -48,37 +48,36 @@ class SocketConfig {
   // Large buffers are essential for overcoming the default small buffer sizes
   // that severely limit LAN transfer speeds.
   factory SocketConfig.windows() => SocketConfig(
-        soRcvbuf: 8 * 1024 * 1024, // 8 MB
-        soSndbuf: 8 * 1024 * 1024, // 8 MB
-        tcpNoDelay: true,
-      );
+    soRcvbuf: 8 * 1024 * 1024, // 8 MB
+    soSndbuf: 8 * 1024 * 1024, // 8 MB
+    tcpNoDelay: true,
+  );
 
   // Configuration for Linux Desktop.
   // Similar to Windows, larger buffers are beneficial.
   // TCP_QUICKACK can also help reduce latency for ACK packets.
   factory SocketConfig.linux() => SocketConfig(
-        soRcvbuf: 4 * 1024 * 1024, // 4 MB
-        soSndbuf: 4 * 1024 * 1024, // 4 MB
-        tcpNoDelay: true,
-        quickAck: true,
-      );
+    soRcvbuf: 4 * 1024 * 1024, // 4 MB
+    soSndbuf: 4 * 1024 * 1024, // 4 MB
+    tcpNoDelay: true,
+    quickAck: true,
+  );
 
   // Configuration for macOS.
-  // macOS has a more modern TCP stack and generally requires less tuning
-  // than Windows/Linux for good performance.
+  // macOS has excellent TCP stack but needs large send buffers for high-throughput transfers.
+  // Larger send buffer is critical for macOS→Android/Windows/Linux transfers.
   factory SocketConfig.macOS() => SocketConfig(
-        soRcvbuf: 4 * 1024 * 1024, // 4 MB
-        soSndbuf: 4 * 1024 * 1024, // 4 MB
-        tcpNoDelay: true,
-      );
+    soRcvbuf: 8 * 1024 * 1024, // 8 MB
+    soSndbuf: 16 * 1024 * 1024, // 16 MB - Large buffer for sender role
+    tcpNoDelay: true,
+  );
 
   // Default configuration for mobile platforms (Android/iOS).
-  // These platforms are more sensitive to memory usage, so we use smaller buffers.
-  // Their Wi-Fi stacks are often highly optimized, and large buffers
-  // may not provide a significant benefit.
+  // Modern Android devices (Pixel 7a+) have sufficient RAM for larger buffers.
+  // Balanced send/receive buffers for both sending and receiving roles.
   factory SocketConfig.defaultMobile() => SocketConfig(
-        soRcvbuf: 4 * 1024 * 1024, // 4 MB
-        soSndbuf: 4 * 1024 * 1024, // 4 MB
-        tcpNoDelay: true,
-      );
+    soRcvbuf: 8 * 1024 * 1024, // 8 MB - Increased for receiving from desktop
+    soSndbuf: 8 * 1024 * 1024, // 8 MB - Good for sending to desktop
+    tcpNoDelay: true,
+  );
 }

@@ -52,9 +52,11 @@ class DpftpSender {
     int? maxInFlightBytes,
     this.onProgress,
   }) : chunkSize = chunkSize ?? Dpftp.defaultChunkSize,
-       maxInFlightBytes = maxInFlightBytes ?? (16 * 1024 * 1024),
+       maxInFlightBytes =
+           maxInFlightBytes ??
+           (64 * 1024 * 1024), // 64MB window for high-bandwidth WiFi
        requestChunkCount =
-           (maxInFlightBytes ?? (16 * 1024 * 1024)) ~/
+           (maxInFlightBytes ?? (64 * 1024 * 1024)) ~/
            (chunkSize ?? Dpftp.defaultChunkSize);
 
   Future<void> start() async {
@@ -90,14 +92,16 @@ class DpftpSender {
 
       await _sockets.sendControl(Dpftp.typeHello, b.takeBytes());
 
-      // Now wait for FILE_INFO
+      debugPrint(
+        '📂 dpftp-new-file: ${file.uri.pathSegments.last} (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB) → $ip:$port | ID: $transferId',
+      );
     } catch (e) {
       debugPrint('[DPFTP] Sender Start Error: $e');
     }
   }
 
   Future<void> _connectSocket() async {
-    debugPrint('[DPFTP] Connecting socket to $ip:$port...');
+    // debugPrint('dpftp-new-file: Connecting to $ip:$port...');
     final socket = await Socket.connect(ip, port);
     _sockets.addSocket(socket);
   }
@@ -128,7 +132,7 @@ class DpftpSender {
   Future<void> _handleFileInfo(Uint8List payload) async {
     _serverInfo = DpftpFileInfo.fromBytes(payload);
     debugPrint(
-      '[DPFTP] Got FILE_INFO. Server has ${_serverInfo!.totalChunks} chunks active.',
+      'dpftp-new-file: Starting ${_serverInfo!.totalChunks} chunks (${(_serverInfo!.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)',
     );
 
     // Establish Parallel Data Connections
@@ -145,11 +149,16 @@ class DpftpSender {
   }
 
   void _handleChunkAck(Uint8List payload) {
+    final ackTime = DateTime.now();
     final id = Dpftp.readInt32(payload, 0);
     // Flow Control Update
     if (_inflightSizes.containsKey(id)) {
       final size = _inflightSizes.remove(id)!;
       _ackedBytes += size;
+
+      if (id % 5 == 0) {
+        debugPrint('dpftp-new-file: ⏱️ Chunk $id ACK received');
+      }
 
       // Update Progress on ACK
       // Throttling isn't strictly necessary for ACKs as they are somewhat spaced out,
@@ -178,11 +187,19 @@ class DpftpSender {
   }
 
   void _handleTransferComplete() {
-    debugPrint('[DPFTP] Transfer Complete! ✅');
-
     final duration = _startTime != null
         ? DateTime.now().difference(_startTime!)
         : Duration.zero;
+
+    final speedMbps = _serverInfo != null && duration.inSeconds > 0
+        ? (_serverInfo!.fileSize * 8.0 / duration.inSeconds / 1000000)
+        : 0;
+    final speedMBps = _serverInfo != null && duration.inSeconds > 0
+        ? (_serverInfo!.fileSize / duration.inSeconds / (1024 * 1024))
+        : 0;
+    debugPrint(
+      'dpftp-new-file: ✅ COMPLETE! Speed: ${speedMbps.toStringAsFixed(1)} Mbps (${speedMBps.toStringAsFixed(1)} MB/s)',
+    );
 
     // Ensure 100%
     onProgress?.call(
@@ -221,6 +238,17 @@ class DpftpSender {
         // Cycle through available sockets (0, 1, 2, 3, 0, 1, 2, 3...)
         await _sendChunk(id, _socketIdx++ % parallelConnections);
 
+        // 📊 Real-time speed monitoring every 10 chunks
+        if (id > 0 && id % 10 == 0 && _startTime != null) {
+          final elapsed = DateTime.now().difference(_startTime!).inSeconds;
+          if (elapsed > 0) {
+            final speedMBps = _ackedBytes / elapsed / (1024 * 1024);
+            final progress = (_ackedBytes / (_serverInfo?.fileSize ?? 1) * 100);
+            debugPrint(
+              'dpftp-new-file: ${speedMBps.toStringAsFixed(1)} MB/s | Progress: ${progress.toStringAsFixed(0)}% | Chunk: $id/${_serverInfo?.totalChunks ?? 0}',
+            );
+          }
+        }
       }
     } catch (e) {
       debugPrint('[DPFTP] Pump Error: $e');
@@ -259,7 +287,15 @@ class DpftpSender {
     // Send Data
     // [ChunkId:4][Len:4][Payload]
     // Note: sendDataChunk is async (flushes to socket buffer)
+    final sendTime = DateTime.now();
     await _sockets.sendDataChunk(socketIndex, id, size, buffer);
+    final sendDuration = DateTime.now().difference(sendTime).inMilliseconds;
+
+    if (id % 5 == 0) {
+      debugPrint(
+        'dpftp-new-file: ⏱️ Chunk $id SENT in ${sendDuration}ms (${(size / (1024 * 1024)).toStringAsFixed(1)}MB)',
+      );
+    }
 
     if (_startTime == null) _startTime = DateTime.now();
 
