@@ -63,21 +63,19 @@ class SocketConfig {
     quickAck: true,
   );
 
-  // Configuration for macOS.
-  // macOS has excellent TCP stack but needs large send buffers for high-throughput transfers.
-  // Larger send buffer is critical for macOS→Android/Windows/Linux transfers.
+  // macOS - High-latency network optimization
+  // Doubled buffers to absorb latency spikes (50-200ms)
   factory SocketConfig.macOS() => SocketConfig(
-    soRcvbuf: 8 * 1024 * 1024, // 8 MB
-    soSndbuf: 16 * 1024 * 1024, // 16 MB - Large buffer for sender role
+    soRcvbuf: 16 * 1024 * 1024, // 16 MB (doubled)
+    soSndbuf: 32 * 1024 * 1024, // 32 MB (doubled)
     tcpNoDelay: true,
   );
 
-  // Default configuration for mobile platforms (Android/iOS).
-  // Modern Android devices (Pixel 7a+) have sufficient RAM for larger buffers.
-  // Balanced send/receive buffers for both sending and receiving roles.
+  // Mobile (Android/iOS) - High-latency network optimization
+  // Doubled buffers to absorb latency spikes (50-200ms)
   factory SocketConfig.defaultMobile() => SocketConfig(
-    soRcvbuf: 8 * 1024 * 1024, // 8 MB - Increased for receiving from desktop
-    soSndbuf: 8 * 1024 * 1024, // 8 MB - Good for sending to desktop
+    soRcvbuf: 16 * 1024 * 1024, // 16 MB (doubled)
+    soSndbuf: 16 * 1024 * 1024, // 16 MB (doubled)
     tcpNoDelay: true,
   );
 }

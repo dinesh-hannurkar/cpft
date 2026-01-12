@@ -54,9 +54,9 @@ class DpftpSender {
   }) : chunkSize = chunkSize ?? Dpftp.defaultChunkSize,
        maxInFlightBytes =
            maxInFlightBytes ??
-           (64 * 1024 * 1024), // 64MB window for high-bandwidth WiFi
+           (128 * 1024 * 1024), // 128MB window for high-latency networks
        requestChunkCount =
-           (maxInFlightBytes ?? (64 * 1024 * 1024)) ~/
+           (maxInFlightBytes ?? (128 * 1024 * 1024)) ~/
            (chunkSize ?? Dpftp.defaultChunkSize);
 
   Future<void> start() async {

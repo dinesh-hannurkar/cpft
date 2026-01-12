@@ -1923,22 +1923,24 @@ class ConnectionService {
             final bool isRemoteLinux = _remotePlatform == 'linux';
             final bool isRemoteAndroid = _remotePlatform == 'android';
 
-            // Parallel connections: Optimize for each platform's capabilities
+            // High-latency network optimization: More connections to keep data flowing
             final int parallelConns = isRemoteWindows
-                ? 8 // Windows handles many connections well
+                ? 10 // Windows: 10 connections
                 : (isRemoteLinux || isRemoteAndroid
-                      ? 6
-                      : 4); // Linux/Android: 6 connections
+                      ? 8 // Linux/Android: 8 connections
+                      : 6); // Others: 6 connections
 
-            // Use 4MB chunks for all platforms (faster ACKs, better flow control)
-            final int chunkSizeMB = 4 * 1024 * 1024;
+            // Use 2MB chunks for high-latency networks (faster ACK turnaround)
+            final int chunkSizeMB = 2 * 1024 * 1024;
 
-            // Window size: Larger for Windows, moderate for Linux/Android
+            // Large window for high-latency networks (128MB)
+            // Bandwidth-delay product: 300Mbps × 0.2s × 8 connections ≈ 60MB
+            // 128MB provides 2x safety margin for latency spikes
             final int windowMB = isRemoteWindows
-                ? (64 * 1024 * 1024) // 64MB for Windows
+                ? (128 * 1024 * 1024) // 128MB for Windows
                 : (isRemoteLinux || isRemoteAndroid
-                      ? (48 * 1024 * 1024) // 48MB for Linux/Android
-                      : (32 * 1024 * 1024)); // 32MB for others
+                      ? (128 * 1024 * 1024) // 128MB for Linux/Android
+                      : (64 * 1024 * 1024)); // 64MB for others
 
             debugPrint(
               'dpftp-new-file: Config → ${isRemoteWindows
