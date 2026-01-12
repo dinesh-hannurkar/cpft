@@ -5,9 +5,9 @@ class Dpftp {
   // --- Framing Constants ---
   static const int magicByte = 0xACDC1234;
 
-  // Standard chunk size (8 MB) - optimized for throughput
-  // Larger chunks reduce protocol overhead when network is stable
-  static const int defaultChunkSize = 8 * 1024 * 1024;
+  // Standard chunk size (2 MB) - optimized for high-latency networks
+  // Smaller chunks provide faster ACK turnaround
+  static const int defaultChunkSize = 2 * 1024 * 1024;
 
   // Max control payload (1 MB) prevents memory exhaustion
   static const int maxControlPayloadInfo = 1024 * 1024;

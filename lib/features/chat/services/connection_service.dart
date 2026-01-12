@@ -1930,8 +1930,8 @@ class ConnectionService {
                       ? 6
                       : 4); // Linux/Android: 6 connections
 
-            // Use 8MB chunks for all platforms (better throughput)
-            final int chunkSizeMB = 8 * 1024 * 1024;
+            // Use 2MB chunks for all platforms (faster ACK turnaround)
+            final int chunkSizeMB = 2 * 1024 * 1024;
 
             // Window size: Larger for Windows, moderate for Linux/Android
             final int windowMB = isRemoteWindows
