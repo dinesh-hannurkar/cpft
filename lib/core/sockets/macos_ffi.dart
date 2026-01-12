@@ -4,7 +4,10 @@ import 'package:ffi/ffi.dart';
 
 // sockaddr_in structure
 class SockAddrIn extends Struct {
-  @Int16()
+  @Uint8()
+  external int sin_len;
+
+  @Uint8()
   external int sin_family;
 
   @Uint16()
@@ -62,8 +65,8 @@ class AddrInfo extends Struct {
   external int ai_protocol;
   @Int32()
   external int ai_addrlen;
-  external Pointer<SockAddrIn> ai_addr;
   external Pointer<Utf8> ai_canonname;
+  external Pointer<SockAddrIn> ai_addr;
   external Pointer<AddrInfo> ai_next;
 }
 
