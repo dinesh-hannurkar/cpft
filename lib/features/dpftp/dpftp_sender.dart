@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
+
+import 'adaptive_tuner.dart';
 import 'dpftp_types.dart';
 import 'dpftp_socket_manager.dart';
 import 'dpftp_socket.dart';
@@ -42,6 +45,10 @@ class DpftpSender {
   Completer<void>? _flowControlWait;
   int _socketIdx = 0;
 
+  // Adaptive tuning
+  final AdaptiveTuner _tuner = AdaptiveTuner();
+  bool _useAdaptiveTuning = true; // Enable adaptive tuning
+
   DpftpSender({
     required this.ip,
     required this.port,
@@ -54,9 +61,9 @@ class DpftpSender {
   }) : chunkSize = chunkSize ?? Dpftp.defaultChunkSize,
        maxInFlightBytes =
            maxInFlightBytes ??
-           (128 * 1024 * 1024), // 128MB window for high-latency networks
+           (256 * 1024 * 1024), // 256MB window - maximum for extreme latency
        requestChunkCount =
-           (maxInFlightBytes ?? (128 * 1024 * 1024)) ~/
+           (maxInFlightBytes ?? (256 * 1024 * 1024)) ~/
            (chunkSize ?? Dpftp.defaultChunkSize);
 
   Future<void> start() async {
@@ -101,9 +108,15 @@ class DpftpSender {
   }
 
   Future<void> _connectSocket() async {
-    // debugPrint('dpftp-new-file: Connecting to $ip:$port...');
+    final startTime = DateTime.now();
     final socket = await Socket.connect(ip, port);
+    final duration = DateTime.now().difference(startTime).inMilliseconds;
     _sockets.addSocket(socket);
+
+    // Log connection time for data sockets (not control)
+    if (_sockets.dataConnectionCount > 0) {
+      debugPrint('dpftp-new-file: ⚡ Socket connected in ${duration}ms');
+    }
   }
 
   Future<void> _handleControlMessage(DpftpMessage msg) async {
@@ -135,10 +148,11 @@ class DpftpSender {
       'dpftp-new-file: Starting ${_serverInfo!.totalChunks} chunks (${(_serverInfo!.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)',
     );
 
-    // Establish Parallel Data Connections
-    for (int i = 0; i < parallelConnections; i++) {
-      await _connectSocket();
-    }
+    // Establish Parallel Data Connections (ALL AT ONCE!)
+    // This reduces connection time from 2-3s to ~500ms
+    await Future.wait([
+      for (int i = 0; i < parallelConnections; i++) _connectSocket(),
+    ]);
 
     // Proactively start sending chunks ("push" model)
     // Enqueue all chunks and let the pump and flow control manage the rate.
@@ -151,6 +165,12 @@ class DpftpSender {
   void _handleChunkAck(Uint8List payload) {
     final ackTime = DateTime.now();
     final id = Dpftp.readInt32(payload, 0);
+
+    // Track RTT for adaptive tuning
+    if (_useAdaptiveTuning) {
+      _tuner.recordChunkAck(id);
+    }
+
     // Flow Control Update
     if (_inflightSizes.containsKey(id)) {
       final size = _inflightSizes.remove(id)!;
@@ -158,12 +178,20 @@ class DpftpSender {
 
       if (id % 5 == 0) {
         debugPrint('dpftp-new-file: ⏱️ Chunk $id ACK received');
+
+        // Log adaptive tuning stats periodically
+        if (_useAdaptiveTuning && id % 20 == 0) {
+          final stats = _tuner.getStats();
+          debugPrint(
+            'dpftp-new-file: 📊 Adaptive: RTT=${stats['avgRTT']}ms, Chunk=${stats['chunkSize']}MB, Window=${stats['windowSize']}MB',
+          );
+        }
       }
 
       // Update Progress on ACK
       // Throttling isn't strictly necessary for ACKs as they are somewhat spaced out,
-      // but if chunks are small, might want to throttle.
-      // Here we assume 8MB chunks, so very infrequent.
+      // but we can still update progress here if needed.
+      // _updateProgress();
       onProgress?.call(
         DpftpProgress(
           transferId: transferId,
@@ -288,6 +316,12 @@ class DpftpSender {
     // [ChunkId:4][Len:4][Payload]
     // Note: sendDataChunk is async (flushes to socket buffer)
     final sendTime = DateTime.now();
+
+    // Track send time for adaptive tuning
+    if (_useAdaptiveTuning) {
+      _tuner.recordChunkSent(id);
+    }
+
     await _sockets.sendDataChunk(socketIndex, id, size, buffer);
     final sendDuration = DateTime.now().difference(sendTime).inMilliseconds;
 

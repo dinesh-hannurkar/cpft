@@ -1918,38 +1918,44 @@ class ConnectionService {
             }
 
             // Optimize DPFTP parameters based on remote platform
-            // Desktop→Mobile and Mobile→Desktop transfers benefit from aggressive settings
             final bool isRemoteWindows = _remotePlatform == 'windows';
             final bool isRemoteLinux = _remotePlatform == 'linux';
             final bool isRemoteAndroid = _remotePlatform == 'android';
+            final bool isRemoteMacOS = _remotePlatform == 'macos';
 
-            // High-latency network optimization: More connections to keep data flowing
+            // Moderate connection count for router compatibility
             final int parallelConns = isRemoteWindows
-                ? 10 // Windows: 10 connections
-                : (isRemoteLinux || isRemoteAndroid
-                      ? 8 // Linux/Android: 8 connections
+                ? 8 // Windows: 8 connections
+                : (isRemoteLinux || isRemoteAndroid || isRemoteMacOS
+                      ? 6 // Linux/Android/macOS: 6 connections
                       : 6); // Others: 6 connections
 
-            // Use 2MB chunks for high-latency networks (faster ACK turnaround)
-            final int chunkSizeMB = 2 * 1024 * 1024;
+            // Balanced 4MB chunks - reduces overhead vs 2MB
+            final int chunkSizeMB = 4 * 1024 * 1024;
 
-            // Large window for high-latency networks (128MB)
-            // Bandwidth-delay product: 300Mbps × 0.2s × 8 connections ≈ 60MB
-            // 128MB provides 2x safety margin for latency spikes
-            final int windowMB = isRemoteWindows
-                ? (128 * 1024 * 1024) // 128MB for Windows
+            // MAXIMUM window for best throughput (256MB)
+            // 64 chunks × 4MB = 256MB in-flight
+            // Can handle up to 1 second of latency
+            final int windowMB = isRemoteWindows || isRemoteMacOS
+                ? (256 * 1024 * 1024) // 256MB for Windows/macOS
                 : (isRemoteLinux || isRemoteAndroid
-                      ? (128 * 1024 * 1024) // 128MB for Linux/Android
-                      : (64 * 1024 * 1024)); // 64MB for others
+                      ? (256 * 1024 * 1024) // 256MB for Linux/Android
+                      : (128 * 1024 * 1024)); // 128MB for others
 
             debugPrint(
               'dpftp-new-file: Config → ${isRemoteWindows
                   ? "Windows"
-                  : isRemoteLinux
-                  ? "Linux"
                   : isRemoteAndroid
                   ? "Android"
+                  : isRemoteLinux
+                  ? "Linux"
+                  : isRemoteMacOS
+                  ? "macOS"
                   : "Standard"} | Connections: $parallelConns | Chunk: ${chunkSizeMB ~/ (1024 * 1024)}MB | Window: ${windowMB ~/ (1024 * 1024)}MB)',
+            );
+
+            debugPrint(
+              'dpftp-new-file: 🔍 Platform detection: _remotePlatform="$_remotePlatform", isWindows=$isRemoteWindows, isAndroid=$isRemoteAndroid, isLinux=$isRemoteLinux, isMacOS=$isRemoteMacOS',
             );
 
             // Start DPFTP transfer

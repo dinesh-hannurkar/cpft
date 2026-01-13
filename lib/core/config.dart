@@ -63,19 +63,19 @@ class SocketConfig {
     quickAck: true,
   );
 
-  // macOS - High-latency network optimization
-  // Doubled buffers to absorb latency spikes (50-200ms)
+  // macOS - Balanced configuration
+  // Large enough for high latency, not excessive
   factory SocketConfig.macOS() => SocketConfig(
-    soRcvbuf: 16 * 1024 * 1024, // 16 MB (doubled)
-    soSndbuf: 32 * 1024 * 1024, // 32 MB (doubled)
+    soRcvbuf: 16 * 1024 * 1024, // 16 MB
+    soSndbuf: 32 * 1024 * 1024, // 32 MB
     tcpNoDelay: true,
   );
 
-  // Mobile (Android/iOS) - High-latency network optimization
-  // Doubled buffers to absorb latency spikes (50-200ms)
+  // Mobile - Balanced configuration
+  // Large enough for high latency, not excessive
   factory SocketConfig.defaultMobile() => SocketConfig(
-    soRcvbuf: 16 * 1024 * 1024, // 16 MB (doubled)
-    soSndbuf: 16 * 1024 * 1024, // 16 MB (doubled)
+    soRcvbuf: 16 * 1024 * 1024, // 16 MB
+    soSndbuf: 16 * 1024 * 1024, // 16 MB
     tcpNoDelay: true,
   );
 }
