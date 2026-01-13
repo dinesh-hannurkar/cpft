@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:fylooo/services/notification_service.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:flutter/services.dart';
+import 'package:wifi_connector/wifi_connector.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/features/dpftp/dpftp_service.dart';
 
@@ -151,7 +152,7 @@ class ConnectionService {
   static bool useNativeReceiver = true;
   // 🚀 Enable parallel TCP streams for non-Android platforms to boost speed
   // MODIFIED: Enable for Android as well to boost Hotspot speeds
-  static bool get enableParallelTransfers => Platform.isAndroid || !kIsWeb;
+  static const bool enableParallelTransfers = false;
   static const int parallelSockets = 4; // Number of parallel sockets
 
   // 🚀 Socket buffer optimization - Platform-specific constants
@@ -160,7 +161,7 @@ class ConnectionService {
   static int get _SO_RCVBUF => Platform.isWindows ? 0x1002 : 8;
   static int get _SO_SNDBUF => Platform.isWindows ? 0x1001 : 7;
   static const int _BUFFER_SIZE =
-      16 * 1024 * 1024; // 2MB (kernel may double to 4MB)
+      8 * 1024 * 1024; // 8MB (kernel may double to 16MB)
 
   // 🚀 Use DPFTP (Dart Parallel File Transfer Protocol) v1
   // For macOS connections, use false (standard socket transfer)
@@ -874,6 +875,13 @@ class ConnectionService {
       _startKeepAlive();
       _attemptWiFiDirectUpgrade();
 
+      if (Platform.isAndroid) {
+        sendMessage(DeviceMessage(
+          type: 'hotspot_offer',
+          senderName: deviceName,
+        ));
+      }
+
       return true;
     } on SocketException catch (e) {
       await disconnect(); // Ensure cleanup on partial failure
@@ -1499,6 +1507,40 @@ class ConnectionService {
       return;
     }
 
+    if (message.type == 'hotspot_credentials') {
+      // The other device has sent us the hotspot credentials.
+      // We'll connect to the hotspot in the next step.
+      debugPrint('[ConnectionService] Hotspot credentials received: ${message.metadata}');
+      _connectToHotspot(message.metadata?['ssid'], message.metadata?['password'], gateway: message.metadata?['gateway'] as String?);
+      return;
+    }
+
+    if (message.type == 'hotspot_accept') {
+      // The other device has accepted our hotspot offer.
+      // Start the hotspot and send the credentials.
+      if (Platform.isAndroid) {
+        final hotspotDetails = await _wifiDirectService.startLocalOnlyHotspot();
+        if (hotspotDetails != null) {
+          await sendMessage(DeviceMessage(
+            type: 'hotspot_credentials',
+            senderName: deviceName,
+            metadata: hotspotDetails,
+          ));
+        }
+      }
+      return;
+    }
+
+    if (message.type == 'hotspot_offer') {
+      // The other device is offering to start a hotspot.
+      // For now, we'll just accept it.
+      await sendMessage(DeviceMessage(
+        type: 'hotspot_accept',
+        senderName: deviceName,
+      ));
+      return;
+    }
+
     if (message.type == 'parallel_request') {
       _expectedParallelStreams = int.tryParse(message.content) ?? 1;
       debugPrint(
@@ -2014,11 +2056,7 @@ class ConnectionService {
       // Stream chunk size
       // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
       // Android uses 16MB to balance memory usage on diverse hardware.
-      final int chunkSize = (Platform.isAndroid)
-          ? 16 *
-                1024 *
-                1024 // 16MB Android
-          : 32 * 1024 * 1024; // 32MB iOS/Desktop
+      final int chunkSize = 64 * 1024; // 64KB
       int index = 0;
 
       // Register outgoing transfer BEFORE waiting for ACK/streaming
@@ -2378,11 +2416,7 @@ class ConnectionService {
       // Stream chunks
       // 🚀 PERF: Use 32MB for iOS/Desktop to maximize throughput on high-bandwidth links.
       // Android uses 16MB to balance memory usage on diverse hardware.
-      final int chunkSize = (Platform.isAndroid)
-          ? 16 *
-                1024 *
-                1024 // 16MB Android
-          : 32 * 1024 * 1024; // 32MB iOS/Desktop
+      final int chunkSize = 64 * 1024; // 64KB
       int index = 0;
       // Stream the file with controlled chunk size using RandomAccessFile to avoid tiny default chunks
       final raf = await file.open(mode: FileMode.read);
@@ -3553,6 +3587,51 @@ class ConnectionService {
       return ip.substring(7);
     }
     return ip;
+  }
+
+  Future<void> _connectToHotspot(String? ssid, String? password, {String? gateway}) async {
+    if (ssid == null || password == null) {
+      debugPrint('[ConnectionService] Hotspot credentials are null');
+      return;
+    }
+
+    if (Platform.isWindows || Platform.isMacOS) {
+      final connected = await WifiConnector.connect(ssid, password);
+      if (connected) {
+        // Poll for network readiness
+        for (int i = 0; i < 10; i++) {
+          try {
+            await connect(deviceName, gateway ?? '192.168.49.1', _currentConnection!.port);
+            return;
+          } catch (e) {
+            await Future.delayed(const Duration(seconds: 1));
+          }
+        }
+        debugPrint('[ConnectionService] Failed to connect to hotspot after 10 attempts');
+      } else {
+        // Handle connection failure
+        debugPrint('[ConnectionService] Failed to connect to hotspot on ${Platform.operatingSystem}');
+      }
+    } else {
+      // Since we don't have a cross-platform plugin to connect to Wi-Fi,
+      // we'll show the credentials to the user and ask them to connect manually.
+      _notifyMessageListeners(DeviceMessage(
+        type: 'hotspot_credentials',
+        senderName: deviceName,
+        metadata: {
+          'ssid': ssid,
+          'password': password,
+        },
+      ));
+
+      // We'll need a way to know when the user has connected.
+      // For now, we'll just wait for a fixed amount of time.
+      await Future.delayed(const Duration(seconds: 15));
+
+      // Re-establish the connection over the new P2P link.
+      final gatewayIp = await NetworkInfo().getWifiGatewayIP();
+      await connect(deviceName, gatewayIp, _currentConnection!.port);
+    }
   }
 }
 
