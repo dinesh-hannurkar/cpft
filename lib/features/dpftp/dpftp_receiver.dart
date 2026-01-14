@@ -368,7 +368,9 @@ class _Session {
     }
 
     if (_raf == null && _diskWriter == null) {
-      _raf = await file.open(mode: FileMode.append); // Re-open for resume
+      // FIXED: Force overwrite for now (FileMode.append + setPosition is unreliable on Windows)
+      // This disables Resume capability but prevents File Duplication bug
+      _raf = await file.open(mode: FileMode.write); // Re-open (Overwrite)
 
       // Calc received bytes (approx)
       final missing = _fileInfo!.bitmap.getMissingChunks(

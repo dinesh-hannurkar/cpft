@@ -1925,19 +1925,14 @@ class ConnectionService {
 
             // Moderate connection count for router compatibility
             final int parallelConns = isRemoteWindows
-                ? 8 // Windows: 8 connections
+                ? 4 // Windows: Reduce contention (was 8) -> Fixes high RTT?
                 : (isRemoteLinux || isRemoteAndroid || isRemoteMacOS
                       ? 6 // Linux/Android/macOS: 6 connections
                       : 6); // Others: 6 connections
 
-            // Windows-specific: Larger chunks to compensate for smaller socket buffers
-            // Windows has smaller default buffers than macOS, so we use larger chunks
-            // to keep more data in flight and maintain throughput
-            final int chunkSizeMB = isRemoteWindows
-                ? (8 *
-                      1024 *
-                      1024) // 8MB chunks for Windows (vs 4MB for others)
-                : (4 * 1024 * 1024); // 4MB chunks for other platforms
+            // FIXED: Must use 4MB chunks to match Receiver's Dpftp.defaultChunkSize (hardcoded)
+            // Using 8MB causes file corruption because Receiver calculates offset = id * 4MB
+            final int chunkSizeMB = 4 * 1024 * 1024;
 
             // Windows-specific: Larger window to compensate for smaller socket buffers
             // This allows more data in-flight to maintain throughput despite RTT
