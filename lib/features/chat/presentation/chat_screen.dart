@@ -542,24 +542,34 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Future<String?> _chooseSaveDirEveryTime(BuildContext context) async {
-    String? chosen;
     try {
-      // Only ask for directory on desktop platforms
-      if (Theme.of(context).platform == TargetPlatform.macOS ||
-          Theme.of(context).platform == TargetPlatform.linux ||
-          Theme.of(context).platform == TargetPlatform.windows) {
-        final dir = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: 'Choose a folder for received files',
-        );
-        if (dir != null) chosen = dir;
+      // 1. Check Preference first
+      final prefs = await SharedPreferences.getInstance();
+      String? savedPath = prefs.getString('download_save_path');
+
+      if (savedPath != null) {
+        // Validate it exists
+        final dir = io.Directory(savedPath);
+        if (await dir.exists()) {
+          return savedPath;
+        }
       }
-    } catch (_) {}
-    // Fallback to default directories
-    if (chosen == null) {
+
+      // 2. If no preference or invalid, Default to Downloads (Don't ask!)
+      // The user explicitly requested to skip the file picker.
       final downloads = await getDownloadsDirectory();
-      chosen = (downloads ?? await getApplicationDocumentsDirectory()).path;
+      final defaultPath =
+          (downloads ?? await getApplicationDocumentsDirectory()).path;
+
+      // Save it for future consistent behavior
+      await prefs.setString('download_save_path', defaultPath);
+
+      return defaultPath;
+    } catch (_) {
+      // Fallback
+      final downloads = await getDownloadsDirectory();
+      return (downloads ?? await getApplicationDocumentsDirectory()).path;
     }
-    return chosen;
   }
 
   void _onStatusChanged(ConnectionInfo info) {
