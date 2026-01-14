@@ -1934,12 +1934,11 @@ class ConnectionService {
             // Matches Dpftp.defaultChunkSize
             final int chunkSizeMB = 1 * 1024 * 1024;
 
-            // Windows-specific: Larger window to compensate for smaller socket buffers
-            // This allows more data in-flight to maintain throughput despite RTT
+            // Windows-specific: Tighter window to consume data faster and reduce RTT
+            // 32MB is enough for 30+ MB/s even with high RTT.
+            // 512MB caused massive bufferbloat (RTT > 5s).
             final int windowMB = isRemoteWindows
-                ? (512 *
-                      1024 *
-                      1024) // 512MB for Windows (larger to compensate)
+                ? (32 * 1024 * 1024) // 32MB for Windows (Reduced to fix RTT)
                 : (isRemoteMacOS
                       ? (256 *
                             1024 *
