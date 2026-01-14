@@ -22,6 +22,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:fylooo/features/settings/presentation/feedback_screen.dart';
 import 'package:fylooo/features/chat/services/connection_service.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
@@ -124,8 +125,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadDownloadPath() async {
     final prefs = await SharedPreferences.getInstance();
     final path = prefs.getString('download_save_path');
-    if (path != null && mounted) {
-      setState(() => _downloadPath = path);
+
+    // Check if it matches default
+    String? defaultPath;
+    try {
+      final downloads = await getDownloadsDirectory();
+      defaultPath =
+          (downloads ?? await getApplicationDocumentsDirectory()).path;
+    } catch (_) {}
+
+    if (path == null || (defaultPath != null && path == defaultPath)) {
+      if (mounted) setState(() => _downloadPath = 'Downloads (Default)');
+    } else {
+      if (mounted) setState(() => _downloadPath = path);
     }
   }
 
