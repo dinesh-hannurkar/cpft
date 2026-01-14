@@ -94,11 +94,30 @@ void _diskWriterIsolate(_IsolateStartup startup) async {
             // Smart seek: only seek if the position is incorrect
             if (currentPosition != command.offset) {
               await raf.setPosition(command.offset);
+              // VERIFY SEEK for debugging
+              final actualPos = await raf.position();
+              if (actualPos != command.offset) {
+                debugPrint(
+                  '[DiskWriter] ❌ SEEK FAILED! Req: ${command.offset}, Act: $actualPos',
+                );
+              }
               currentPosition = command.offset;
             }
 
+            // DEBUG: Trace write
+            debugPrint(
+              '[DiskWriter] ✍️ Writing Chunk ${command.chunkId} at offset ${command.offset} (Len: ${command.data.length}). Pos: $currentPosition',
+            );
+
             await raf.writeFrom(command.data);
             currentPosition += command.data.length;
+
+            final postPos = await raf.position();
+            if (postPos != currentPosition) {
+              debugPrint(
+                '[DiskWriter] ⚠️ Position Mismatch after write! Expected: $currentPosition, Actual: $postPos',
+              );
+            }
             nextChunkToWrite++; // Move to the next chunk
 
             // Send completion acknowledgment
