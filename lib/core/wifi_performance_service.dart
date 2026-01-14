@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 /// Service to manage performance optimizations on Android
@@ -13,11 +14,29 @@ class WiFiPerformanceService {
   /// Acquire all performance optimizations for transfers
   /// This is the main method to call at the start of a transfer
   static Future<void> acquireAllOptimizations() async {
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid) {
+      debugPrint('[WiFiPerformance] Skipping optimizations - not Android');
+      return;
+    }
 
-    await acquireWifiLock();
-    await acquireWakeLock();
-    await enableSustainedPerformance();
+    debugPrint('[WiFiPerformance] 🔄 Acquiring all optimizations...');
+
+    final wifiResult = await acquireWifiLock();
+    debugPrint(
+      '[WiFiPerformance] WiFi lock: ${wifiResult ? "✅ Success" : "❌ Failed"}',
+    );
+
+    final wakeResult = await acquireWakeLock();
+    debugPrint(
+      '[WiFiPerformance] Wake lock: ${wakeResult ? "✅ Success" : "❌ Failed"}',
+    );
+
+    final perfResult = await enableSustainedPerformance();
+    debugPrint(
+      '[WiFiPerformance] Performance mode: ${perfResult ? "✅ Success" : "❌ Failed"}',
+    );
+
+    debugPrint('[WiFiPerformance] 🏁 All optimizations complete');
   }
 
   /// Release all performance optimizations

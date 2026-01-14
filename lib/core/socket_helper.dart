@@ -9,9 +9,9 @@ class RawSocketTuner {
     // Load the appropriate configuration for the current OS.
     final config = Config.socket;
 
-    // debugPrint(
-    //   'dpftp-new-file: 🔧 Tuning socket → Send: ${config.soSndbuf ~/ (1024 * 1024)}MB, Recv: ${config.soRcvbuf ~/ (1024 * 1024)}MB, NoDelay: ${config.tcpNoDelay}',
-    // );
+    debugPrint(
+      'dpftp-new-file: 🔧 Tuning socket → Send: ${config.soSndbuf ~/ (1024 * 1024)}MB, Recv: ${config.soRcvbuf ~/ (1024 * 1024)}MB, NoDelay: ${config.tcpNoDelay}',
+    );
 
     // Platform-specific constants for raw socket options.
     // SOL_SOCKET, SO_RCVBUF, SO_SNDBUF have different integer values on Windows.
@@ -26,9 +26,9 @@ class RawSocketTuner {
       socket.setRawOption(
         RawSocketOption.fromInt(solSocket, soRcvbuf, config.soRcvbuf),
       );
-      // debugPrint(
-      //   'dpftp-new-file: ✅ SO_RCVBUF set to ${config.soRcvbuf ~/ (1024 * 1024)}MB',
-      // );
+      debugPrint(
+        'dpftp-new-file: ✅ SO_RCVBUF set to ${config.soRcvbuf ~/ (1024 * 1024)}MB',
+      );
     } catch (e) {
       debugPrint('[SocketTuner] Failed to set SO_RCVBUF: $e');
     }
@@ -40,9 +40,9 @@ class RawSocketTuner {
       socket.setRawOption(
         RawSocketOption.fromInt(solSocket, soSndbuf, config.soSndbuf),
       );
-      // debugPrint(
-      //   'dpftp-new-file: ✅ SO_SNDBUF set to ${config.soSndbuf ~/ (1024 * 1024)}MB',
-      // );
+      debugPrint(
+        'dpftp-new-file: ✅ SO_SNDBUF set to ${config.soSndbuf ~/ (1024 * 1024)}MB',
+      );
     } catch (e) {
       debugPrint('[SocketTuner] Failed to set SO_SNDBUF: $e');
     }

@@ -347,8 +347,8 @@ class _Session {
         bitmap: ChunkBitmap(totalChunks),
       );
 
-      // Create file with proper mode (writeOnly creates if not exists)
-      _raf = await file.open(mode: FileMode.writeOnly);
+      // Create file with proper mode (write truncates existing file)
+      _raf = await file.open(mode: FileMode.write);
       // Pre-allocate space for large files (helps performance)
       try {
         await _raf!.truncate(fileSize);

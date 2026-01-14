@@ -68,7 +68,7 @@ void _diskWriterIsolate(_IsolateStartup startup) async {
   try {
     // Open file
     final file = File(startup.filePath);
-    raf = await file.open(mode: FileMode.writeOnly);
+    raf = await file.open(mode: FileMode.write);
 
     // Pre-allocate
     try {
@@ -104,7 +104,9 @@ void _diskWriterIsolate(_IsolateStartup startup) async {
             // Send completion acknowledgment
             startup.sendPort.send(_WriteResult(chunkId: command.chunkId));
           } catch (e) {
-            startup.sendPort.send(_Error('Write failed for chunk ${command.chunkId}: $e'));
+            startup.sendPort.send(
+              _Error('Write failed for chunk ${command.chunkId}: $e'),
+            );
             // Stop processing further to avoid corruption
             break;
           }
