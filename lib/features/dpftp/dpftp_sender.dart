@@ -64,7 +64,9 @@ class DpftpSender {
            (256 * 1024 * 1024), // 256MB window - maximum for extreme latency
        requestChunkCount =
            (maxInFlightBytes ?? (256 * 1024 * 1024)) ~/
-           (chunkSize ?? Dpftp.defaultChunkSize);
+           (chunkSize ?? Dpftp.defaultChunkSize) {
+    _tuner.configure(this.chunkSize, this.maxInFlightBytes);
+  }
 
   Future<void> start() async {
     try {

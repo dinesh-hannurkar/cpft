@@ -1931,8 +1931,10 @@ class ConnectionService {
                       : 6); // Others: 6 connections
 
             // FIXED: Use 2MB chunks for Windows to reduce CPU/Header overhead
-            // 1MB was safe but slow (5 MB/s). 2MB is a good balance.
-            final int chunkSizeMB = 2 * 1024 * 1024;
+            // 4MB for optimal throughput on other platforms
+            final int chunkSizeMB = isRemoteWindows
+                ? 2 * 1024 * 1024
+                : 4 * 1024 * 1024;
 
             // Windows-specific: Tighter window to consume data faster and reduce RTT
             // 32MB is enough for 30+ MB/s even with high RTT.

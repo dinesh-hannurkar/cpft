@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 /// DPFTP Protocol Constants and Types
@@ -5,10 +6,11 @@ class Dpftp {
   // --- Framing Constants ---
   static const int magicByte = 0xACDC1234;
 
-  // Optimized chunk size (2 MB) - Performance Balance
-  // 1 MB was stable (5 MB/s). 4 MB caused blocking.
-  // 2 MB is the new standard for high throughput.
-  static const int defaultChunkSize = 2 * 1024 * 1024;
+  // Optimized chunk size (Platform dependent)
+  // Windows: 2 MB (To prevent write blocking)
+  // Others: 4 MB (Standard high throughput)
+  static int get defaultChunkSize =>
+      Platform.isWindows ? 2 * 1024 * 1024 : 4 * 1024 * 1024;
 
   // Max control payload (1 MB) prevents memory exhaustion
   static const int maxControlPayloadInfo = 1024 * 1024;

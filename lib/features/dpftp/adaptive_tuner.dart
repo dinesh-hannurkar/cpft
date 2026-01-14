@@ -10,8 +10,18 @@ class AdaptiveTuner {
   final Map<int, DateTime> _chunkSentTimes = {};
 
   // Current settings
-  int _currentChunkSize = 2 * 1024 * 1024; // Start with 2 MB (Balanced)
-  int _currentWindowSize = 128 * 1024 * 1024; // Start with 128 MB (Aggressive)
+  int _currentChunkSize = 2 * 1024 * 1024;
+  int _currentWindowSize = 128 * 1024 * 1024;
+
+  // Configured Limits (from Sender)
+  int _configuredChunkSize = 2 * 1024 * 1024;
+  int _configuredWindowLimit = 512 * 1024 * 1024;
+
+  void configure(int chunkSize, int maxWindow) {
+    _configuredChunkSize = chunkSize;
+    _configuredWindowLimit = maxWindow;
+    reset(); // Apply immediately
+  }
 
   // Tuning parameters
   static const int _minWindowSize =
@@ -86,12 +96,16 @@ class AdaptiveTuner {
     // Window = Bandwidth × RTT × Safety Factor
     // Assume 300 Mbps = 37.5 MB/s, safety factor = 2
     final bdp = (37.5 * (p95RTT / 1000.0) * 2).toInt() * 1024 * 1024;
-    final newWindowSize = bdp.clamp(_minWindowSize, _maxWindowSize);
+    // Use configured limit instead of hardcoded max
+    final newWindowSize = bdp.clamp(_minWindowSize, _configuredWindowLimit);
 
     // Apply changes with hysteresis (only if significant change)
+    // FIXED: Disable Chunk Resizing (Protocol V1 requires static chunk size)
+    /*
     if ((newChunkSize - _currentChunkSize).abs() >= 1024 * 1024) {
       _currentChunkSize = newChunkSize;
     }
+    */
 
     if ((newWindowSize - _currentWindowSize).abs() >= 32 * 1024 * 1024) {
       _currentWindowSize = newWindowSize;
@@ -117,8 +131,8 @@ class AdaptiveTuner {
     _rttSamples.clear();
     _chunkSentTimes.clear();
     _adjustmentCounter = 0;
-    _currentChunkSize = 2 * 1024 * 1024;
-    _currentWindowSize = 128 * 1024 * 1024;
+    _currentChunkSize = _configuredChunkSize;
+    _currentWindowSize = _configuredWindowLimit ~/ 4; // Start at 25% capacity
   }
 
   /// Get tuning statistics for debugging
