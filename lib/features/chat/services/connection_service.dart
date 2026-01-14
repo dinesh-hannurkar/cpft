@@ -1925,7 +1925,7 @@ class ConnectionService {
 
             // Moderate connection count for router compatibility
             final int parallelConns = isRemoteWindows
-                ? 6 // Windows: 6 connections (Match macOS)
+                ? 10 // Windows: 10 connections (Aggressive Parallelism)
                 : (isRemoteLinux || isRemoteAndroid || isRemoteMacOS
                       ? 6 // Linux/Android/macOS: 6 connections
                       : 6); // Others: 6 connections
@@ -1937,8 +1937,10 @@ class ConnectionService {
             // Windows-specific: Tighter window to consume data faster and reduce RTT
             // 32MB is enough for 30+ MB/s even with high RTT.
             // 512MB caused massive bufferbloat (RTT > 5s).
+            // Windows-specific: Aggressive Window for 10 connections
+            // 128MB allows 12.8MB per connection.
             final int windowMB = isRemoteWindows
-                ? (64 * 1024 * 1024) // 64MB for Windows (Increased for speed)
+                ? (128 * 1024 * 1024) // 128MB for Windows
                 : (isRemoteMacOS
                       ? (256 *
                             1024 *

@@ -11,13 +11,9 @@ class AdaptiveTuner {
 
   // Current settings
   int _currentChunkSize = 2 * 1024 * 1024; // Start with 2 MB (Balanced)
-  int _currentWindowSize = 64 * 1024 * 1024; // Start with 64 MB (Balanced)
+  int _currentWindowSize = 128 * 1024 * 1024; // Start with 128 MB (Aggressive)
 
   // Tuning parameters
-  // Tuning parameters
-  static const int _minChunkSize =
-      1 * 1024 * 1024; // 1 MB (Allow smaller chunks)
-  static const int _maxChunkSize = 8 * 1024 * 1024; // 8 MB
   static const int _minWindowSize =
       16 * 1024 * 1024; // 16 MB (Allow tighter window)
   static const int _maxWindowSize = 512 * 1024 * 1024; // 512 MB
@@ -25,7 +21,6 @@ class AdaptiveTuner {
   // Adjustment thresholds (in milliseconds)
   static const int _lowLatencyThreshold = 50;
   static const int _mediumLatencyThreshold = 100;
-  // static const int _highLatencyThreshold = 200; // Unused
 
   // Hysteresis to prevent oscillation
   int _adjustmentCounter = 0;
@@ -123,7 +118,7 @@ class AdaptiveTuner {
     _chunkSentTimes.clear();
     _adjustmentCounter = 0;
     _currentChunkSize = 2 * 1024 * 1024;
-    _currentWindowSize = 64 * 1024 * 1024;
+    _currentWindowSize = 128 * 1024 * 1024;
   }
 
   /// Get tuning statistics for debugging

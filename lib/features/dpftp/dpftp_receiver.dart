@@ -165,9 +165,10 @@ class _Session {
       _diskWriter!.writeChunk(chunkId, offset, data);
 
       if (chunkId % 5 == 0) {
-        debugPrint(
-          'dpftp-new-file: ⏱️ Chunk $chunkId RECEIVED (${(len / (1024 * 1024)).toStringAsFixed(1)}MB)',
-        );
+        // PERF: Disable logging to speed up transfer
+        // debugPrint(
+        //   'dpftp-new-file: ⏱️ Chunk $chunkId RECEIVED (${(len / (1024 * 1024)).toStringAsFixed(1)}MB)',
+        // );
       }
     } else {
       // Fallback to direct write (should not happen in normal flow)
@@ -186,7 +187,8 @@ class _Session {
     _sockets.sendControl(Dpftp.typeChunkAck, Dpftp.int32(chunkId));
 
     if (chunkId % 5 == 0) {
-      debugPrint('dpftp-new-file: ✅ Chunk $chunkId ACK sent immediately');
+      // PERF: Disable logging
+      // debugPrint('dpftp-new-file: ✅ Chunk $chunkId ACK sent immediately');
     }
 
     // Save metadata and check completion
