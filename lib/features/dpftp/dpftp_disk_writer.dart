@@ -77,7 +77,9 @@ void _diskWriterIsolate(_IsolateStartup startup) async {
       debugPrint('[DiskWriter] Could not pre-allocate: $e');
     }
 
-    int currentPosition = 0;
+    // FIXED: Initialize to -1 to force SEEK on first chunk (Offset 0)
+    // Windows `truncate()` moves file ptr to end, so we MUST seek back to 0.
+    int currentPosition = -1;
     int nextChunkToWrite = 0;
     final chunkBuffer = <int, _WriteCommand>{};
 
