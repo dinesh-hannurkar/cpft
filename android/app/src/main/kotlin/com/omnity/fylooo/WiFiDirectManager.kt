@@ -304,9 +304,13 @@ class WiFiDirectManager(
             pendingConnectCallback?.invoke(false, null, null)
             pendingConnectCallback = null
 
-            // If we were creating a group but failed to form it properly
-            pendingCreateGroupResult?.error("GROUP_FORMATION_LOST", "Connection lost before group info", null)
-            pendingCreateGroupResult = null
+            // If we were creating a group, do NOT fail immediately on transient loss.
+            // Android often broadcasts DISCONNECTED before CONNECTED during group formation.
+            if (pendingCreateGroupResult != null) {
+                Log.d(TAG, "Ignored P2P Connection Lost event while creating group (waiting for formation)")
+            } else {
+                // Only clean up general connection logic if we weren't in specific createGroup flow
+            }
         }
     }
     
