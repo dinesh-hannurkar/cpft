@@ -1925,7 +1925,7 @@ class ConnectionService {
 
             // Moderate connection count for router compatibility
             final int parallelConns = isRemoteWindows
-                ? 4 // Windows: Reduce contention (was 8) -> Fixes high RTT?
+                ? 6 // Windows: 6 connections (Match macOS)
                 : (isRemoteLinux || isRemoteAndroid || isRemoteMacOS
                       ? 6 // Linux/Android/macOS: 6 connections
                       : 6); // Others: 6 connections
