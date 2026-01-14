@@ -347,17 +347,18 @@ class _Session {
         bitmap: ChunkBitmap(totalChunks),
       );
 
-      // Create file with proper mode (write truncates existing file)
+      // FIXED: Do NOT open/truncate file here if using Isolate DiskWriter
+      // Double opening file (Main + Isolate) causes locking issues on Windows
+      // The DiskWriter isolate handles open/truncate itself.
+
+      /* 
       _raf = await file.open(mode: FileMode.write);
-      // Pre-allocate space for large files (helps performance)
       try {
         await _raf!.truncate(fileSize);
-      } catch (e) {
-        debugPrint(
-          '[DPFTP] Warning: Could not pre-allocate $fileSize bytes: $e',
-        );
-        // Continue anyway - file will grow as chunks are written
-      }
+      } catch (e) { ... } 
+      */
+
+      // _raf = null; // Ensure main thread doesn't hold handle
       _saveMetadata();
       _receivedBytes = 0;
 
