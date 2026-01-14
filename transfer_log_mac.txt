@@ -1,0 +1,846 @@
+Launching lib/main.dart on macOS in debug mode...
+Building macOS application...                                   
+✓ Built build/macos/Build/Products/Debug/cpft.app
+2026-01-13 17:54:16.252 cpft[47849:348809] Running with merged UI and platform thread. Experimental.
+Syncing files to device macOS...                                
+flutter: [Main] CPFT_USE_NATIVE_RECEIVER=false
+Syncing files to device macOS...                                   129ms
+
+Flutter run key commands.
+r Hot reload. 🔥🔥🔥
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on macOS is available at: http://127.0.0.1:50808/i9RmjxGQ0Lo=/
+The Flutter DevTools debugger and profiler on macOS is available at: http://127.0.0.1:9102?uri=http://127.0.0.1:50808/i9RmjxGQ0Lo=/
+flutter: [SoundService] Could not load connection_failed.mp3: Unable to load asset: "assets/sounds/connection_failed.mp3".
+The asset does not exist or has empty data.
+flutter: [SoundService] Could not load transfer_complete.mp3: Unable to load asset: "assets/sounds/transfer_complete.mp3".
+The asset does not exist or has empty data.
+flutter: [SoundService] Could not load transfer_failed.mp3: Unable to load asset: "assets/sounds/transfer_failed.mp3".
+The asset does not exist or has empty data.
+flutter: [SoundService] Could not load disconnect.mp3: Unable to load asset: "assets/sounds/disconnect.mp3".
+The asset does not exist or has empty data.
+flutter: [SoundService] Could not load notification.mp3: Unable to load asset: "assets/sounds/notification.mp3".
+The asset does not exist or has empty data.
+flutter: [SoundService] Could not load message_sent.mp3: Unable to load asset: "assets/sounds/message_sent.mp3".
+The asset does not exist or has empty data.
+flutter: [ConnectionService] 🧹 Cleanup skipped - not Android
+flutter: [ConnectionService] 🧹 Starting temp cleanup: dir=/Users/dineshhannurkar/Library/Containers/com.omnity.fylooo/Data/Documents
+flutter: [ConnectionService] ✅ Temp cleanup complete: nothing to delete
+flutter: [NotificationService] ✅ Initialized
+flutter: ShareIntentService: Skipping mobile share intent setup on macos
+flutter: ShareIntentService initialized
+flutter: [PermissionWrapper] Setting up notification handler
+flutter: [PermissionWrapper] Notification handler setup complete
+flutter: [HomeScreen] 🎯 Setting up connection listener. Current connections: 0
+flutter: [HomeScreen] 🎯 Connection listener registered successfully
+flutter: SharedContentBanner: Setting up listener for shared files stream
+flutter: SharedContentBanner: Initial shared files: 0
+flutter: SharedContentBanner: Building with 0 files
+flutter: SharedContentBanner: No shared files, returning SizedBox.shrink()
+flutter: [IncomingConnection] Attempting to bind to port 53318...
+flutter: [IncomingConnection] ✅ Successfully bound to port 53318
+flutter: [MulticastService] Filtering interfaces for socket creation...
+flutter: [MulticastService] Creating socket for interface: en1
+flutter: [MulticastService] ✅ Socket created and joined multicast for en1
+flutter: [MulticastService] Created 1 multicast sockets
+flutter: [MulticastService] 👂 Setting up listener for en1
+flutter: [MulticastService] Listening on 224.0.0.167:53317
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [BonjourService] Constructor called
+flutter: [BonjourService] Alias: Mac Mini
+flutter: [BonjourService] Port: 53317
+flutter: [BonjourService] Added discovery listener, total: 1
+flutter: [BonjourService] ✅ Bonjour service started (async)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [BonjourService] ✅ Service registered successfully
+flutter: [BonjourService] Discovery listener triggered
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🆕 New device discovered: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [IncomingConnection] 📞 Incoming connection from 192.168.1.188
+flutter: [IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)
+flutter: [NotificationService] 📱 Notification shown: Incoming Connection - Connection request from 192.168.1.188
+flutter: [ConnectionService] 🧹 Starting temp cleanup: dir=/Users/dineshhannurkar/Library/Containers/com.omnity.fylooo/Data/Documents
+flutter: [ConnectionService] ✅ Temp cleanup complete: nothing to delete
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [ConnectionService] 🆕 NEW ConnectionService instance created for device: Mac Mini (229708316)
+flutter: [ConnectionService] 📞 Accepting incoming connection from Dinesh
+flutter: [ConnectionService] 🔍 Socket info: 192.168.1.188:59274
+flutter: [ConnectionService] ⚠️ Failed to optimize socket buffers: OS Error: Invalid argument, errno = 22
+flutter: [ConnectionService] ✅ Socket options configured (tcpNoDelay)
+flutter: [ConnectionService] 🎧 Setting up socket listener...
+flutter: [ConnectionService] ✅ Socket listener attached successfully
+flutter: [ConnectionService] 📤 Sent message: handshake to Mac Mini
+flutter: [ConnectionService] 📤 Sent handshake to initiator
+flutter: [ConnectionService] ✅ Accepted connection from Dinesh
+flutter: [HomeScreen] 🔔 Connection listener fired: Dinesh, isIncoming: true, isConnected: false
+flutter: [ConnectionService] 📥 Received message: handshake from Dinesh
+flutter: [ConnectionService] 🖥️ Remote platform detected: android
+flutter: [ConnectionService] 🤝 Handshake received from Dinesh.
+flutter: [ConnectionService] 📤 Sent message: handshake to Mac Mini
+flutter: [HomeScreen] 🔔 Connection listener fired: Dinesh, isIncoming: true, isConnected: true
+flutter: [HomeScreen] 📲 Auto-navigating to chat for INCOMING connection from Dinesh
+flutter: [ConnectionService] ✅ Handshake complete, connection established with Dinesh
+flutter: [ConnectionService] 📥 Received message: parallel_request from Mac Mini
+flutter: [ConnectionService] 🤝 Received parallel_request for 4 streams
+flutter: [ConnectionService] 📤 Sent message: parallel_ack to Mac Mini
+flutter: [DPFTP] Starting Receiver Service on port 61234
+flutter: [DPFTP] Receiver listening on 61234
+flutter: [NotificationService] 📱 Notification shown: Connected - Successfully connected to Dinesh
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [ConnectionService] 📥 Received message: handshake from Dinesh
+flutter: [ConnectionService] 🖥️ Remote platform detected: android
+flutter: [ConnectionService] 🤝 Received handshake (already connected), ignoring
+flutter: [IncomingConnection] 📞 Incoming connection from 192.168.1.188
+flutter: [IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)
+flutter: [ConnectionService] 📞 Accepting incoming connection from Dinesh
+flutter: [ConnectionService] 🔍 Socket info: 192.168.1.188:59284
+flutter: [ConnectionService] 📞 Accepting parallel stream from Dinesh
+flutter: [ConnectionService] ⚠️ Failed to optimize socket buffers: OS Error: Invalid argument, errno = 22
+flutter: [ConnectionService] ✅ Socket options configured (tcpNoDelay)
+flutter: [ConnectionService] 🎧 Setting up socket listener...
+flutter: [ConnectionService] ✅ Socket listener attached successfully
+flutter: [ConnectionService] 📤 Sent message: handshake to Mac Mini
+flutter: [ConnectionService] 📤 Sent handshake to initiator
+flutter: [ConnectionService] ✅ Accepted connection from Dinesh
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:33.730572  0:00:00.004632 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:33.737992  0:00:00.000434 POST    [200] /register
+flutter: [NotificationService] 📱 Notification shown: Incoming Connection - Connection request from 192.168.1.188
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [IncomingConnection] 📞 Incoming connection from 192.168.1.188
+flutter: [IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)
+flutter: [ConnectionService] 📞 Accepting incoming connection from Dinesh
+flutter: [ConnectionService] 🔍 Socket info: 192.168.1.188:59292
+flutter: [ConnectionService] 📞 Accepting parallel stream from Dinesh
+flutter: [ConnectionService] ⚠️ Failed to optimize socket buffers: OS Error: Invalid argument, errno = 22
+flutter: [ConnectionService] ✅ Socket options configured (tcpNoDelay)
+flutter: [ConnectionService] 🎧 Setting up socket listener...
+flutter: [ConnectionService] ✅ Socket listener attached successfully
+flutter: [ConnectionService] 📤 Sent message: handshake to Mac Mini
+flutter: [ConnectionService] 📤 Sent handshake to initiator
+flutter: [ConnectionService] ✅ Accepted connection from Dinesh
+flutter: [NotificationService] 📱 Notification shown: Incoming Connection - Connection request from 192.168.1.188
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [IncomingConnection] 📞 Incoming connection from 192.168.1.188
+flutter: [IncomingConnection] 🎯 Notifying listeners with socket (no broadcast needed)
+flutter: [ConnectionService] 📞 Accepting incoming connection from Dinesh
+flutter: [ConnectionService] 🔍 Socket info: 192.168.1.188:59306
+flutter: [ConnectionService] 📞 Accepting parallel stream from Dinesh
+flutter: [ConnectionService] ⚠️ Failed to optimize socket buffers: OS Error: Invalid argument, errno = 22
+flutter: [ConnectionService] ✅ Socket options configured (tcpNoDelay)
+flutter: [ConnectionService] 🎧 Setting up socket listener...
+flutter: [ConnectionService] ✅ Socket listener attached successfully
+flutter: [ConnectionService] 📤 Sent message: handshake to Mac Mini
+flutter: [ConnectionService] 📤 Sent handshake to initiator
+flutter: [ConnectionService] ✅ Accepted connection from Dinesh
+flutter: [NotificationService] 📱 Notification shown: Incoming Connection - Connection request from 192.168.1.188
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [ConnectionService] 📥 Received message: parallel_ready from Mac Mini
+flutter: [ConnectionService] 🤝 Received parallel_ready
+flutter: [ConnectionService] 🤝 Parallel ready (already connected, skipping status update)
+flutter: [ConnectionService] 📡 WiFi Direct: Not Android, skipping
+flutter: [ConnectionService] ✅ All parallel sockets connected
+flutter: [ConnectionService] 📥 Received message: wifi_direct_offer from Dinesh
+flutter: [ConnectionService] 📡 Received WiFi Direct offer from Dinesh
+flutter: [ConnectionService] 📡 WiFi Direct: remote p2pId=02:00:00:00:00:00, p2pName=Android_C2c4
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [ConnectionService] 📥 Received message: file_offer from Dinesh
+flutter: [NotificationService] 📱 File transfer notification shown: Incoming File from Mac Mini
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:38.615607  0:00:00.000730 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:38.616929  0:00:00.001755 POST    [200] /register
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [ConnectionService] 🚀 Accepting with DPFTP for 1768307077256963
+flutter: [ConnectionService] 📤 Sent message: dpftp_start to Mac Mini
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Control socket connected from 192.168.1.188
+flutter: [WiFiPerformance] Failed to acquire lock: MissingPluginException(No implementation found for method acquireWifiLock on channel com.omnity.fylooo/wifi_performance)
+flutter: dpftp-new-file: 🔒 WiFi performance lock acquired (receiver)
+flutter: [DPFTP] Hello: app-release(2).apk (116711608 bytes) from 192.168.1.188 (ID: 1768307077256963)
+flutter: [DPFTP] File exists, using unique name: app-release(2) (5).apk
+flutter: [DPFTP] Creating new transfer: 28 chunks, 111.3 MB
+flutter: [DPFTP] Disk writer isolate started
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #1 connected
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #2 connected
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #3 connected
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #4 connected
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #5 connected
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #6 connected
+flutter: dpftp-new-file: ⏱️ Chunk 0 RECEIVED (4.0MB)
+flutter: dpftp-new-file: ✅ Chunk 0 ACK sent immediately
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:44.590862  0:00:00.000682 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:44.592273  0:00:00.000261 POST    [200] /register
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [HttpServer] GET /info from 192.168.1.179
+flutter: [HttpServer] Responding to /info request
+flutter: 2026-01-13T17:54:45.447140  0:00:00.000727 GET     [200] /info?fingerprint=18d718ad6f2319bd
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 5 RECEIVED (4.0MB)
+flutter: dpftp-new-file: ✅ Chunk 5 ACK sent immediately
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 10 RECEIVED (4.0MB)
+flutter: dpftp-new-file: ✅ Chunk 10 ACK sent immediately
+flutter: dpftp-new-file: ⏱️ Chunk 15 RECEIVED (4.0MB)
+flutter: dpftp-new-file: ✅ Chunk 15 ACK sent immediately
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:50.531175  0:00:00.000447 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:50.534898  0:00:00.000251 POST    [200] /register
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:54.369172  0:00:00.000907 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:54.415689  0:00:00.000471 POST    [200] /register
+flutter: dpftp-new-file: ⏱️ Chunk 20 RECEIVED (4.0MB)
+flutter: dpftp-new-file: ✅ Chunk 20 ACK sent immediately
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 25 RECEIVED (4.0MB)
+flutter: dpftp-new-file: ✅ Chunk 25 ACK sent immediately
+flutter: [DPFTP] Transfer Complete!
+flutter: [DPFTP] Actual transfer time: 13s
+flutter: [ConnectionService] 🏁 DPFTP Transfer 1768307077256963 Complete. Signaling UI.
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [DPFTP] Transfer complete for 192.168.1.188, ready for next file
+flutter: [DPFTP] Session reset, ready for next transfer
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Control connection closed
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:58.607763  0:00:00.000409 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:54:58.609009  0:00:00.000292 POST    [200] /register
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [HttpServer] GET /info from 192.168.1.179
+flutter: [HttpServer] Responding to /info request
+flutter: 2026-01-13T17:54:59.278110  0:00:00.000181 GET     [200] /info?fingerprint=18d718ad6f2319bd
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [ConnectionService] 📤 Sent message: file_offer to Mac Mini
+flutter: [ConnectionService] ⏳ Waiting for initial ACK for transfer 1768307101609150
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [ConnectionService] 📥 Received message: dpftp_start from Dinesh
+flutter: [ConnectionService] 🚀 Starting DPFTP Transfer for 1768307101609150 to 192.168.1.188 (WiFi Direct: false)
+flutter: dpftp-new-file: Config → Android | Connections: 6 | Chunk: 4MB | Window: 256MB)
+flutter: dpftp-new-file: 🔍 Platform detection: _remotePlatform="android", isWindows=false, isAndroid=true, isLinux=false, isMacOS=false
+flutter: [DPFTP] Processing queue item: 1768307101609150 (/Users/dineshhannurkar/Downloads/app-release(1) (1).apk)
+flutter: [ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.
+flutter: [WiFiPerformance] Failed to acquire lock: MissingPluginException(No implementation found for method acquireWifiLock on channel com.omnity.fylooo/wifi_performance)
+flutter: dpftp-new-file: 🔒 WiFi performance lock acquired
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Control socket connected from 192.168.1.188
+flutter: 📂 dpftp-new-file: app-release(1) (1).apk (111.6 MB) → 192.168.1.188:61234 | ID: 1768307101609150
+flutter: dpftp-new-file: Starting 28 chunks (111.6 MB)
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #1 connected
+flutter: dpftp-new-file: ⚡ Socket connected in 11ms
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #2 connected
+flutter: dpftp-new-file: ⚡ Socket connected in 11ms
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #3 connected
+flutter: dpftp-new-file: ⚡ Socket connected in 12ms
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #4 connected
+flutter: dpftp-new-file: ⚡ Socket connected in 15ms
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #5 connected
+flutter: dpftp-new-file: ⚡ Socket connected in 27ms
+flutter: [SocketTuner] Failed to set SO_RCVBUF: OS Error: Invalid argument, errno = 22
+flutter: [SocketTuner] Failed to set SO_SNDBUF: OS Error: Invalid argument, errno = 22
+flutter: dpftp-new-file: Data socket #6 connected
+flutter: dpftp-new-file: ⚡ Socket connected in 27ms
+flutter: dpftp-new-file: ⏱️ Chunk 0 SENT in 1ms (4.0MB)
+flutter: dpftp-new-file: ⏱️ Chunk 5 SENT in 0ms (4.0MB)
+flutter: dpftp-new-file: ⏱️ Chunk 10 SENT in 1ms (4.0MB)
+flutter: dpftp-new-file: ⏱️ Chunk 15 SENT in 2ms (4.0MB)
+flutter: dpftp-new-file: ⏱️ Chunk 20 SENT in 2ms (4.0MB)
+flutter: dpftp-new-file: ⏱️ Chunk 25 SENT in 3ms (4.0MB)
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:04.452799  0:00:00.000690 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:04.487280  0:00:00.004000 POST    [200] /register
+flutter: [ConnectionService] 📥 Received message: ping from Dinesh
+flutter: [ConnectionService] 🏓 Received ping, sending pong
+flutter: [ConnectionService] 📤 Sent message: pong to Mac Mini
+flutter: [ConnectionService] 📤 Sent message: ping to Mac Mini
+flutter: [ConnectionService] ✅ Keep-alive ping sent successfully
+flutter: [ConnectionService] 📥 Received message: pong from Dinesh
+flutter: [ConnectionService] 🏓 Received pong (connection alive)
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:08.676421  0:00:00.001844 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:08.684175  0:00:00.000815 POST    [200] /register
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 0 ACK received
+flutter: dpftp-new-file: 📊 Adaptive: RTT=8282ms, Chunk=4MB, Window=256MB
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 5 ACK received
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 10 ACK received
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:13.685814  0:00:00.000719 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:13.687306  0:00:00.000408 POST    [200] /register
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [HttpServer] GET /info from 192.168.1.179
+flutter: [HttpServer] Responding to /info request
+flutter: 2026-01-13T17:55:14.433919  0:00:00.000355 GET     [200] /info?fingerprint=18d718ad6f2319bd
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:23.725650  0:00:00.000856 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:23.727256  0:00:00.000418 POST    [200] /register
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 15 ACK received
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:28.791804  0:00:00.000757 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:28.793257  0:00:00.000363 POST    [200] /register
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [HttpServer] GET /info from 192.168.1.179
+flutter: [HttpServer] Responding to /info request
+flutter: 2026-01-13T17:55:29.253489  0:00:00.000397 GET     [200] /info?fingerprint=18d718ad6f2319bd
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:33.912031  0:00:00.000483 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:33.915514  0:00:00.000289 POST    [200] /register
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [ConnectionService] 📤 Sent message: ping to Mac Mini
+flutter: [ConnectionService] ✅ Keep-alive ping sent successfully
+flutter: [ConnectionService] 📥 Received message: ping from Dinesh
+flutter: [ConnectionService] 🏓 Received ping, sending pong
+flutter: [ConnectionService] 📤 Sent message: pong to Mac Mini
+flutter: [ConnectionService] 📥 Received message: pong from Dinesh
+flutter: [ConnectionService] 🏓 Received pong (connection alive)
+flutter: dpftp-new-file: ⏱️ Chunk 20 ACK received
+flutter: dpftp-new-file: 📊 Adaptive: RTT=20083ms, Chunk=2MB, Window=512MB
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ⏱️ Chunk 25 ACK received
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:38.695167  0:00:00.001018 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:38.697257  0:00:00.000476 POST    [200] /register
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: dpftp-new-file: ✅ COMPLETE! Speed: 24.6 Mbps (2.9 MB/s)
+flutter: [ConnectionService] 🏁 DPFTP Transfer 1768307101609150 Complete. Signaling UI.
+flutter: [DPFTP] Socket closed
+flutter: [DPFTP] Socket closed
+flutter: [DPFTP] Socket closed
+flutter: [DPFTP] Socket closed
+flutter: [DPFTP] Socket closed
+flutter: [DPFTP] Socket closed
+flutter: [DPFTP] Socket closed
+flutter: dpftp-new-file: Control connection closed
+flutter: dpftp-new-file: Data socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: dpftp-new-file: Data socket closed
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:43.612916  0:00:00.000353 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:43.613629  0:00:00.000160 POST    [200] /register
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [HttpServer] GET /info from 192.168.1.179
+flutter: [HttpServer] Responding to /info request
+flutter: 2026-01-13T17:55:44.233678  0:00:00.000396 GET     [200] /info?fingerprint=18d718ad6f2319bd
+flutter: [ConnectionService] 📥 Received message: goodbye from Dinesh
+flutter: [ConnectionService] 🔌 Socket closed by remote
+flutter: [ConnectionService] 📤 Sent message: goodbye to Mac Mini
+flutter: [ConnectionService] 🛑 Cancelling keep-alive timer (was active)
+flutter: [ConnectionService] 🛑 Keep-alive timer cancelled and nullified
+flutter: ChatScreen: Connection status changed to: ConnectionStatus.disconnected
+flutter: [ConnectionService] ✅ Disconnected
+flutter: [NotificationService] 📱 Notification shown: Disconnected - Connection to Dinesh disconnected
+flutter: [MulticastService] Sent announcement on en1: 104 bytes
+flutter: [MulticastService] Sent announcement: Mac Mini (104 bytes on 1 sockets)
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.179
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+flutter: [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:48.630494  0:00:00.000361 POST    [200] /register
+flutter: [HttpServer] POST /register from 192.168.1.179
+flutter: [HttpServer] Registered device: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: 2026-01-13T17:55:48.631262  0:00:00.000285 POST    [200] /register
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [MulticastService] 📨 Received packet on en1 from 192.168.1.188
+flutter: [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+flutter: [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+flutter: [MulticastService] ✅ Successfully notified 1 listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners
+flutter: [DiscoveryService] 🔄 Device updated: Dinesh (192.168.1.188:53317)
+flutter: [DiscoveryService] ✅ Successfully notified 1 UI listeners

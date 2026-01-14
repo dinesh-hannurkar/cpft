@@ -1,0 +1,1134 @@
+Launching lib/main.dart on Pixel 7a in debug mode...
+Running Gradle task 'assembleDebug'...                          
+I/flutter ( 4782): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 4782): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 4782): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 4782): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 4782): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 4782): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"23d340a04cf6c229","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 4782): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 4782): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 4782): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 4782): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"23d340a04cf6c229","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 4782): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 4782): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 4782): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 4782): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"23d340a04cf6c229","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 4782): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 4782): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 4782): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 4782): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"23d340a04cf6c229","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 4782): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+D/FlutterFileDialogPlugin( 4782): onDetachedFromActivity
+D/FlutterFileDialogPlugin( 4782): doOnDetachedFromActivity - IN
+D/FlutterFileDialogPlugin( 4782): doOnDetachedFromActivity - OUT
+D/FlutterFileDialogPlugin( 4782): onDetachedFromEngine
+D/FlutterFileDialogPlugin( 4782): doOnDetachedFromEngine - IN
+D/FlutterFileDialogPlugin( 4782): doOnDetachedFromEngine - OUT
+D/FlutterWebRTCPlugin( 4782): Stopping the audio manager...
+Running Gradle task 'assembleDebug'...                              7.4s
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...           6.4s
+D/FlutterJNI( 8021): Beginning load of flutter...
+D/FlutterJNI( 8021): flutter (null) was loaded normally!
+I/flutter ( 8021): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(62)] Using the Impeller rendering backend (Vulkan).
+D/FlutterFileDialogPlugin( 8021): onAttachedToEngine - IN
+D/FlutterFileDialogPlugin( 8021): doOnAttachedToEngine - IN
+D/FlutterFileDialogPlugin( 8021): doOnAttachedToEngine - OUT
+D/FlutterFileDialogPlugin( 8021): onAttachedToEngine - OUT
+D/FlutterFileDialogPlugin( 8021): onAttachedToActivity
+D/FlutterFileDialogPlugin( 8021): doOnAttachedToActivity - IN
+D/FlutterFileDialogPlugin( 8021): createFileDialog - IN
+D/FlutterFileDialogPlugin( 8021): createFileDialog - OUT
+D/FlutterFileDialogPlugin( 8021): doOnAttachedToActivity - OUT
+I/flutter ( 8021): [Main] CPFT_USE_NATIVE_RECEIVER=false
+D/AudioSystem( 8021): onNewService: media.audio_policy service obtained 0xb400006db8d32070
+D/AudioSystem( 8021): getService: IAudioPolicyService retrieved: 0xb400006db8d32070  cached: 0xb400006db8d32070
+Syncing files to device Pixel 7a...                             
+D/WindowOnBackDispatcher( 8021): setTopOnBackInvokedCallback (unwrapped): android.app.Activity$$ExternalSyntheticLambda0@a35f991
+I/WindowExtensionsImpl( 8021): Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
+D/VRI[MainActivity]( 8021): WindowInsets changed: 1080x2400 statusBars:[0,118,0,0] navigationBars:[0,0,0,63] mandatorySystemGestures:[0,150,0,84] 
+I/m.omnity.fylooo( 8021): Compiler allocated 5155KB to compile void android.view.ViewRootImpl.performTraversals()
+W/FlutterWebRTCPlugin( 8021): audioFocusChangeListener [Earpiece(name=Earpiece)] Earpiece(name=Earpiece)
+W/FlutterWebRTCPlugin( 8021): audioFocusChangeListener [Speakerphone(name=Speakerphone), Earpiece(name=Earpiece)] Speakerphone(name=Speakerphone)
+D/WindowLayoutComponentImpl( 8021): Register WindowLayoutInfoListener on Context=com.omnity.fylooo.MainActivity@bd022e9, of which baseContext=android.app.ContextImpl@1c5e65
+Syncing files to device Pixel 7a...                                 81ms
+
+Flutter run key commands.
+r Hot reload. 🔥🔥🔥
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on Pixel 7a is available at: http://127.0.0.1:50858/0uur-shTdG4=/
+The Flutter DevTools debugger and profiler on Pixel 7a is available at: http://127.0.0.1:9103?uri=http://127.0.0.1:50858/0uur-shTdG4=/
+I/HWUI    ( 8021): Using FreeType backend (prop=Auto)
+D/AudioSystem( 8021): onNewServiceWithAdapter: media.audio_flinger service obtained 0xb400006e38d1cc10
+D/AudioSystem( 8021): getService: IAudioFlingerService retrieved: 0xb400006db8cbbe20  IAudioFlinger cached: 0xb400006e38d1cc10
+D/m.omnity.fylooo( 8021): PlayerBase::PlayerBase()
+D/m.omnity.fylooo( 8021): TrackPlayerBase::TrackPlayerBase()
+I/libOpenSLES( 8021): Emulating old channel mask behavior (ignoring positional mask 0x3, using default mask 0x3 based on channel count of 2)
+D/m.omnity.fylooo( 8021): PlayerBase::stop() from IPlayer
+D/AudioTrack( 8021): stop(680): called with 0 frames delivered
+I/flutter ( 8021): [SoundService] Could not load connection_failed.mp3: Unable to load asset: "assets/sounds/connection_failed.mp3".
+I/flutter ( 8021): The asset does not exist or has empty data.
+I/flutter ( 8021): [SoundService] Could not load transfer_complete.mp3: Unable to load asset: "assets/sounds/transfer_complete.mp3".
+I/flutter ( 8021): The asset does not exist or has empty data.
+I/flutter ( 8021): [SoundService] Could not load transfer_failed.mp3: Unable to load asset: "assets/sounds/transfer_failed.mp3".
+I/flutter ( 8021): The asset does not exist or has empty data.
+I/flutter ( 8021): [SoundService] Could not load disconnect.mp3: Unable to load asset: "assets/sounds/disconnect.mp3".
+I/flutter ( 8021): The asset does not exist or has empty data.
+I/flutter ( 8021): [SoundService] Could not load notification.mp3: Unable to load asset: "assets/sounds/notification.mp3".
+I/flutter ( 8021): The asset does not exist or has empty data.
+I/flutter ( 8021): [SoundService] Could not load message_sent.mp3: Unable to load asset: "assets/sounds/message_sent.mp3".
+I/flutter ( 8021): The asset does not exist or has empty data.
+I/flutter ( 8021): [ConnectionService] 🧹 Starting cleanup: files older than 7 days
+I/flutter ( 8021): [ConnectionService] 📂 Directory: /data/user/0/com.omnity.fylooo/app_flutter
+I/flutter ( 8021): [ConnectionService] 🕐 Current time: 2026-01-13 17:54:27.372424
+I/flutter ( 8021): [ConnectionService] 🧹 Starting temp cleanup: dir=/data/user/0/com.omnity.fylooo/app_flutter
+I/Choreographer( 8021): Skipped 55 frames!  The application may be doing too much work on its main thread.
+I/flutter ( 8021): [ConnectionService] 📄 File: res_timestamp-2-1768307065057, Modified: 2026-01-13 17:54:26.221, Age: 0 days
+I/flutter ( 8021): [ConnectionService] ⏭️ Kept: res_timestamp-2-1768307065057 (Age: 0 days <= 7)
+I/flutter ( 8021): [ConnectionService] 📊 Scan complete: 1 files found
+I/flutter ( 8021): [ConnectionService] ✅ Cleanup complete: No old files to delete (scanned 1 files)
+I/flutter ( 8021): [ConnectionService] ✅ Temp cleanup complete: deleted 2 items, freed 0.00 MB
+I/flutter ( 8021): [NotificationService] ✅ Initialized
+I/flutter ( 8021): ShareIntentService: Initializing on android
+I/flutter ( 8021): ShareIntentService: Calling getInitialMedia on initialization...
+I/flutter ( 8021): ShareIntentService initialized
+I/flutter ( 8021): ShareIntentService: getInitialMedia returned 0 items on init
+I/flutter ( 8021): ShareIntentService: No initial shared media found on init
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : requestUpdateInfo(com.omnity.fylooo)
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : Initiate binding to the service.
+I/flutter ( 8021): [PermissionWrapper] Setting up notification handler
+I/flutter ( 8021): [PermissionWrapper] Notification handler setup complete
+I/flutter ( 8021): [MulticastPlatformHelper] Acquiring Android multicast lock...
+I/flutter ( 8021): [HomeScreen] 🎯 Setting up connection listener. Current connections: 0
+I/flutter ( 8021): [HomeScreen] 🎯 Connection listener registered successfully
+I/flutter ( 8021): SharedContentBanner: Setting up listener for shared files stream
+I/flutter ( 8021): SharedContentBanner: Initial shared files: 0
+I/flutter ( 8021): SharedContentBanner: Building with 0 files
+I/flutter ( 8021): SharedContentBanner: No shared files, returning SizedBox.shrink()
+D/InsetsController( 8021): hide(ime())
+I/ImeTracker( 8021): com.omnity.fylooo:b145ad15: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : ServiceConnectionImpl.onServiceConnected(ComponentInfo{com.android.vending/com.google.android.finsky.installservice.DevTriggeredUpdateService})
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : linkToDeath
+I/flutter ( 8021): [MulticastPlatformHelper] Error acquiring multicast lock: MissingPluginException(No implementation found for method acquireMulticastLock on channel com.omnity.fylooo/multicast)
+I/flutter ( 8021): [IncomingConnection] Attempting to bind to port 53318...
+I/flutter ( 8021): [IncomingConnection] ✅ Successfully bound to port 53318
+I/flutter ( 8021): [MulticastService] Filtering interfaces for socket creation...
+I/flutter ( 8021): [MulticastService] Creating socket for interface: rmnet16
+I/flutter ( 8021): [MulticastService] ✅ Socket created and joined multicast for rmnet16
+I/flutter ( 8021): [MulticastService] Creating socket for interface: wlan0
+I/flutter ( 8021): [MulticastService] ✅ Socket created and joined multicast for wlan0
+I/flutter ( 8021): [MulticastService] Created 2 multicast sockets
+I/flutter ( 8021): [MulticastService] 👂 Setting up listener for rmnet16
+I/flutter ( 8021): [MulticastService] 👂 Setting up listener for wlan0
+I/flutter ( 8021): [MulticastService] Listening on 224.0.0.167:53317
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [BackgroundService] Initialized
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : Unbind from service.
+I/PlayCore( 8021): UID: [10612]  PID: [8021] OnRequestInstallCallback : onRequestInfo
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+D/WiFiDirectManager( 8021): WiFi Direct initialized successfully
+I/flutter ( 8021): [WiFiDirect] Android P2P supported: true
+I/flutter ( 8021): Android update error: PlatformException(TASK_FAILURE, -10: Install Error(-10): The app is not owned by any user on this device. An app is "owned" if it has been acquired from Play. (https://developer.android.com/reference/com/google/android/play/core/install/model/InstallErrorCode#ERROR_APP_NOT_OWNED), null, null)
+D/WiFiDirect( 8021): P2P state changed: enabled=true
+I/flutter ( 8021): [PermissionWrapper] Setting up notification handler
+I/flutter ( 8021): [PermissionWrapper] Notification handler setup complete
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🆕 New device discovered: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:28.723102  0:00:00.020846 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:28.768438  0:00:00.001514 POST    [200] /register
+D/WiFiDirect( 8021): This device changed: Android_C2c4 (02:00:00:00:00:00)
+D/WiFiDirectManager( 8021): This device: Android_C2c4 (02:00:00:00:00:00)
+I/flutter ( 8021): [ConnectionHandler] 🔍 Tapped device: Mac Mini (IP: 192.168.1.179)
+I/flutter ( 8021): [ConnectionHandler] 🔍 Active connections keys: 
+I/flutter ( 8021): [ConnectionHandler] 🔍 No connection found by name, trying by IP: 192.168.1.179
+I/flutter ( 8021): [ConnectionHandler] 🔍 Connection found: false, isConnected: null, status: null
+I/flutter ( 8021): [ConnectionHandler] Showing connection dialog for Mac Mini
+I/flutter ( 8021): [ConnectionFlowDialog] Creating connection to Mac Mini
+I/flutter ( 8021): [ConnectionService] 🆕 NEW ConnectionService instance created for device: Dinesh (533296946)
+I/flutter ( 8021): [HomeScreen] 🔔 Connection listener fired: Mac Mini, isIncoming: false, isConnected: false
+I/flutter ( 8021): [ConnectionService] 🔌 Connecting to Mac Mini at 192.168.1.179:53318 (P2P: null)
+I/flutter ( 8021): [ConnectionFlowDialog] Status update for Mac Mini: ConnectionStatus.connecting
+D/WindowOnBackDispatcher( 8021): setTopOnBackInvokedCallback (unwrapped): io.flutter.embedding.android.FlutterActivity$1@de5317b
+I/flutter ( 8021): [ConnectionService] 🧹 Starting cleanup: files older than 7 days
+I/flutter ( 8021): [ConnectionService] 📂 Directory: /data/user/0/com.omnity.fylooo/app_flutter
+I/flutter ( 8021): [ConnectionService] 🕐 Current time: 2026-01-13 17:54:30.230625
+I/flutter ( 8021): [DPFTP] Starting Receiver Service on port 61234
+I/flutter ( 8021): [DPFTP] Receiver listening on 61234
+I/flutter ( 8021): [ConnectionService] 🚀 Socket buffers optimized - RCV: 16.0MB, SND: 16.0MB
+I/flutter ( 8021): [ConnectionService] ✅ Primary socket connected
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: handshake to Dinesh
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: parallel_request to Dinesh
+I/flutter ( 8021): [ConnectionService] 📤 Sent parallel_request for 4 streams
+I/flutter ( 8021): [ConnectionService] 📊 Scan complete: 0 files found
+I/flutter ( 8021): [ConnectionService] ✅ Cleanup complete: No old files to delete (scanned 0 files)
+I/flutter ( 8021): [ConnectionLogger] ✅ Log file created: /data/user/0/com.omnity.fylooo/app_flutter/cpft_logs/connection_log_2026-01-13T17-54-30.txt
+D/ProfileInstaller( 8021): Installing profile for com.omnity.fylooo
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [ConnectionService] 📥 Received message: handshake from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🖥️ Remote platform detected: macos
+I/flutter ( 8021): [ConnectionService] 🤝 Handshake received from Mac Mini.
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: handshake to Dinesh
+I/flutter ( 8021): [ConnectionFlowDialog] Status update for Mac Mini: ConnectionStatus.connected
+I/flutter ( 8021): [ConnectionFlowDialog] Connection established to Mac Mini, closing dialog
+I/flutter ( 8021): [ConnectionService] ✅ Handshake complete, connection established with Mac Mini
+I/flutter ( 8021): [ConnectionService] 📥 Received message: handshake from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🖥️ Remote platform detected: macos
+I/flutter ( 8021): [ConnectionService] 🤝 Received handshake (already connected), ignoring
+I/flutter ( 8021): [ConnectionService] 📥 Received message: parallel_ack from Mac Mini
+I/flutter ( 8021): [ConnectionService] ✅ Received parallel_ack
+I/flutter ( 8021): [ConnectionService] 🔌 Connecting parallel socket 2/4...
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [HttpServer] GET /info from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Responding to /info request
+I/flutter ( 8021): 2026-01-13T17:54:33.450651  0:00:00.000924 GET     [200] /info?fingerprint=f1a0e4052a396013
+I/flutter ( 8021): [ConnectionService] ✅ Socket 2/4 connected
+I/flutter ( 8021): [ConnectionService] 🔌 Connecting parallel socket 3/4...
+I/flutter ( 8021): [ConnectionService] 📥 Received message: handshake from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🖥️ Remote platform detected: macos
+I/flutter ( 8021): [ConnectionService] 🤝 Received handshake (already connected), ignoring
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [NotificationService] 📱 Notification shown: Connected - Successfully connected to Mac Mini
+I/flutter ( 8021): [ConnectionService] ✅ Socket 3/4 connected
+I/flutter ( 8021): [ConnectionService] 🔌 Connecting parallel socket 4/4...
+I/flutter ( 8021): [ConnectionService] 📥 Received message: handshake from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🖥️ Remote platform detected: macos
+I/flutter ( 8021): [ConnectionService] 🤝 Received handshake (already connected), ignoring
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+W/m.omnity.fylooo( 8021): type=1400 audit(0.0:9958): avc:  denied  { read } for  name="u:object_r:incremental_prop:s0" dev="tmpfs" ino=264 scontext=u:r:untrusted_app:s0:c100,c258,c512,c768 tcontext=u:object_r:incremental_prop:s0 tclass=file permissive=0 app=com.omnity.fylooo
+W/libc    ( 8021): Access denied finding property "ro.incremental.enable"
+I/incfs   ( 8021): ro.incremental.enable: on
+W/m.omnity.fylooo( 8021): type=1400 audit(0.0:9959): avc:  denied  { read } for  name="filesystems" dev="proc" ino=4026532050 scontext=u:r:untrusted_app:s0:c100,c258,c512,c768 tcontext=u:object_r:proc_filesystems:s0 tclass=file permissive=0 app=com.omnity.fylooo
+I/incfs   ( 8021): IncFs_Features: v2
+I/incfs-mounts( 8021): [incfs] Loaded incremental-fs mount info: 8 instances, 16 mount points
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [ConnectionService] ✅ Socket 4/4 connected
+I/flutter ( 8021): [ConnectionService] 📊 Connected 4/4 sockets
+I/flutter ( 8021): [ConnectionService] 📥 Received message: handshake from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🖥️ Remote platform detected: macos
+I/flutter ( 8021): [ConnectionService] 🤝 Received handshake (already connected), ignoring
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:33.603727  0:00:00.001159 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:33.606321  0:00:00.000843 POST    [200] /register
+D/FlutterFileDialogPlugin( 8021): onAttachedToEngine - IN
+D/FlutterFileDialogPlugin( 8021): doOnAttachedToEngine - IN
+D/FlutterFileDialogPlugin( 8021): doOnAttachedToEngine - OUT
+D/FlutterFileDialogPlugin( 8021): onAttachedToEngine - OUT
+I/flutter ( 8021): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(62)] Using the Impeller rendering backend (Vulkan).
+I/flutter ( 8021): [BackgroundService] Start result: true (status: Instance of 'ServiceRequestSuccess')
+I/flutter ( 8021): [ConnectionStateManager] Background service started - connections active
+W/FlutterWebRTCPlugin( 8021): audioFocusChangeListener [Earpiece(name=Earpiece)] Earpiece(name=Earpiece)
+W/FlutterWebRTCPlugin( 8021): audioFocusChangeListener [Speakerphone(name=Speakerphone), Earpiece(name=Earpiece)] Speakerphone(name=Speakerphone)
+I/flutter ( 8021): [ConnectionService] 🔍 Verifying sockets: 4/4
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: parallel_ready to Dinesh
+I/flutter ( 8021): [ConnectionService] 📤 Sent parallel_ready with 4 sockets
+I/flutter ( 8021): [ConnectionService] 📡 Attempting WiFi Direct upgrade...
+D/WiFiDirectManager( 8021): WiFi Direct initialized successfully
+I/flutter ( 8021): [WiFiDirect] Android P2P supported: true
+D/WiFiDirect( 8021): P2P state changed: enabled=true
+I/flutter ( 8021): [ConnectionService] 📡 WiFi Direct: local p2pId=02:00:00:00:00:00, p2pName=Android_C2c4
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: wifi_direct_offer to Dinesh
+D/WiFiDirectManager( 8021): This device: Android_C2c4 (02:00:00:00:00:00)
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+D/FilePickerDelegate( 8021): Selected type */*
+W/m.omnity.fylooo( 8021): userfaultfd: MOVE ioctl seems unsupported: Connection timed out
+I/libbinder.BpBinder( 8021): onLastStrongRef automatically unlinking death recipients for descriptor: '(not cached)'
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : requestUpdateInfo(com.omnity.fylooo)
+I/FilePickerUtils( 8021): Caching from URI: content://com.android.externalstorage.documents/document/primary%3ADownload%2FCpft%2Fapp-release(2).apk
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : Initiate binding to the service.
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : ServiceConnectionImpl.onServiceConnected(ComponentInfo{com.android.vending/com.google.android.finsky.installservice.DevTriggeredUpdateService})
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : linkToDeath
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/PlayCore( 8021): UID: [10612]  PID: [8021] AppUpdateService : Unbind from service.
+I/PlayCore( 8021): UID: [10612]  PID: [8021] OnRequestInstallCallback : onRequestInfo
+I/flutter ( 8021): [ConnectionService] 🧹 Starting temp cleanup: dir=/data/user/0/com.omnity.fylooo/app_flutter
+I/flutter ( 8021): [ConnectionService] ✅ Temp cleanup complete: nothing to delete
+D/InsetsController( 8021): hide(ime())
+I/ImeTracker( 8021): com.omnity.fylooo:a7ba250b: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+D/FilePickerUtils( 8021): File loaded and cached at:/data/user/0/com.omnity.fylooo/cache/file_picker/1768307076174/app-release(2).apk
+D/FilePickerDelegate( 8021): File path:[com.mr.flutter.plugin.filepicker.FileInfo@5b924cd]
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: file_offer to Dinesh
+I/flutter ( 8021): [ConnectionService] ⏳ Waiting for initial ACK for transfer 1768307077256963
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:38.536068  0:00:00.001222 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:38.539422  0:00:00.000762 POST    [200] /register
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [ConnectionService] 📥 Received message: dpftp_start from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🚀 Starting DPFTP Transfer for 1768307077256963 to 192.168.1.179 (WiFi Direct: false)
+I/flutter ( 8021): dpftp-new-file: Config → macOS | Connections: 6 | Chunk: 4MB | Window: 256MB)
+I/flutter ( 8021): dpftp-new-file: 🔍 Platform detection: _remotePlatform="macos", isWindows=false, isAndroid=false, isLinux=false, isMacOS=true
+I/flutter ( 8021): [DPFTP] Processing queue item: 1768307077256963 (/data/user/0/com.omnity.fylooo/cache/file_picker/1768307076174/app-release(2).apk)
+I/flutter ( 8021): [ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.
+D/WiFiPerformance( 8021): ✅ High-performance WiFi lock acquired
+I/System.out( 8021): WiFi Performance Lock acquired - power saving disabled
+I/flutter ( 8021): dpftp-new-file: 🔒 WiFi performance lock acquired
+I/flutter ( 8021): dpftp-new-file: Control socket connected from 192.168.1.179
+I/flutter ( 8021): 📂 dpftp-new-file: app-release(2).apk (111.3 MB) → 192.168.1.179:61234 | ID: 1768307077256963
+I/flutter ( 8021): dpftp-new-file: Starting 28 chunks (111.3 MB)
+I/flutter ( 8021): dpftp-new-file: Data socket #1 connected
+I/flutter ( 8021): dpftp-new-file: ⚡ Socket connected in 15ms
+I/flutter ( 8021): dpftp-new-file: Data socket #2 connected
+I/flutter ( 8021): dpftp-new-file: ⚡ Socket connected in 19ms
+I/flutter ( 8021): dpftp-new-file: Data socket #3 connected
+I/flutter ( 8021): dpftp-new-file: ⚡ Socket connected in 37ms
+I/flutter ( 8021): dpftp-new-file: Data socket #4 connected
+I/flutter ( 8021): dpftp-new-file: ⚡ Socket connected in 46ms
+I/flutter ( 8021): dpftp-new-file: Data socket #5 connected
+I/flutter ( 8021): dpftp-new-file: ⚡ Socket connected in 72ms
+I/flutter ( 8021): dpftp-new-file: Data socket #6 connected
+I/flutter ( 8021): dpftp-new-file: ⚡ Socket connected in 72ms
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 0 SENT in 11ms (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 5 SENT in 6ms (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 10 SENT in 8ms (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 15 SENT in 26ms (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 20 SENT in 8ms (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 0 ACK received
+I/flutter ( 8021): dpftp-new-file: 📊 Adaptive: RTT=594ms, Chunk=4MB, Window=256MB
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 25 SENT in 4ms (4.0MB)
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:44.341710  0:00:00.001085 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:44.344626  0:00:00.000850 POST    [200] /register
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 5 ACK received
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 10 ACK received
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 15 ACK received
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [HttpServer] GET /info from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Responding to /info request
+I/flutter ( 8021): 2026-01-13T17:54:49.312210  0:00:00.000376 GET     [200] /info?fingerprint=f1a0e4052a396013
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:49.559473  0:00:00.000940 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:49.561846  0:00:00.000578 POST    [200] /register
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:53.941322  0:00:00.001250 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:53.945561  0:00:00.000841 POST    [200] /register
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 20 ACK received
+I/flutter ( 8021): dpftp-new-file: 📊 Adaptive: RTT=8680ms, Chunk=2MB, Window=512MB
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 25 ACK received
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ✅ COMPLETE! Speed: 66.7 Mbps (8.0 MB/s)
+I/flutter ( 8021): [ConnectionService] 🏁 DPFTP Transfer 1768307077256963 Complete. Signaling UI.
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Control connection closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:58.740685  0:00:00.000816 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:54:58.743260  0:00:00.000841 POST    [200] /register
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [ConnectionService] 📥 Received message: file_offer from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🚀 Accepting with DPFTP for 1768307101609150
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: dpftp_start to Dinesh
+I/flutter ( 8021): [NotificationService] 📱 File transfer notification shown: Incoming File from Dinesh
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: Control socket connected from 192.168.1.179
+I/flutter ( 8021): dpftp-new-file: 🔒 WiFi performance lock acquired (receiver)
+I/flutter ( 8021): [DPFTP] Hello: app-release(1) (1).apk (117072196 bytes) from 192.168.1.179 (ID: 1768307101609150)
+I/flutter ( 8021): [DPFTP] Creating new transfer: 28 chunks, 111.6 MB
+I/flutter ( 8021): [DPFTP] Disk writer isolate started
+I/flutter ( 8021): dpftp-new-file: Data socket #1 connected
+I/flutter ( 8021): dpftp-new-file: Data socket #2 connected
+I/flutter ( 8021): dpftp-new-file: Data socket #3 connected
+I/flutter ( 8021): dpftp-new-file: Data socket #4 connected
+I/flutter ( 8021): dpftp-new-file: Data socket #5 connected
+I/flutter ( 8021): dpftp-new-file: Data socket #6 connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [HttpServer] GET /info from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Responding to /info request
+I/flutter ( 8021): 2026-01-13T17:55:03.278597  0:00:00.000447 GET     [200] /info?fingerprint=f1a0e4052a396013
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:03.653593  0:00:00.001376 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:03.657087  0:00:00.000870 POST    [200] /register
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: ping to Dinesh
+I/flutter ( 8021): [ConnectionService] ✅ Keep-alive ping sent successfully
+I/flutter ( 8021): [ConnectionService] 📥 Received message: pong from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🏓 Received pong (connection alive)
+I/flutter ( 8021): [ConnectionService] 📥 Received message: ping from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🏓 Received ping, sending pong
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: pong to Dinesh
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:08.695261  0:00:00.001147 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:08.698137  0:00:00.000894 POST    [200] /register
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 0 RECEIVED (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ✅ Chunk 0 ACK sent immediately
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 5 RECEIVED (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ✅ Chunk 5 ACK sent immediately
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 10 RECEIVED (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ✅ Chunk 10 ACK sent immediately
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:13.646273  0:00:00.000990 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:13.650017  0:00:00.001439 POST    [200] /register
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:18.763628  0:00:00.001028 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:18.766003  0:00:00.000670 POST    [200] /register
+I/flutter ( 8021): [HttpServer] GET /info from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Responding to /info request
+I/flutter ( 8021): 2026-01-13T17:55:19.138560  0:00:00.000623 GET     [200] /info?fingerprint=f1a0e4052a396013
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:23.685642  0:00:00.001965 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:23.688994  0:00:00.001073 POST    [200] /register
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 15 RECEIVED (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ✅ Chunk 15 ACK sent immediately
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:28.790559  0:00:00.001060 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:28.792844  0:00:00.000836 POST    [200] /register
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [HttpServer] GET /info from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Responding to /info request
+I/flutter ( 8021): 2026-01-13T17:55:33.155675  0:00:00.000529 GET     [200] /info?fingerprint=f1a0e4052a396013
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:33.634909  0:00:00.001385 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:33.638534  0:00:00.001234 POST    [200] /register
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: ping to Dinesh
+I/flutter ( 8021): [ConnectionService] ✅ Keep-alive ping sent successfully
+I/flutter ( 8021): [ConnectionService] 📥 Received message: ping from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🏓 Received ping, sending pong
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: pong to Dinesh
+I/flutter ( 8021): [ConnectionService] 📥 Received message: pong from Mac Mini
+I/flutter ( 8021): [ConnectionService] 🏓 Received pong (connection alive)
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 20 RECEIVED (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ✅ Chunk 20 ACK sent immediately
+I/flutter ( 8021): dpftp-new-file: ⏱️ Chunk 25 RECEIVED (4.0MB)
+I/flutter ( 8021): dpftp-new-file: ✅ Chunk 25 ACK sent immediately
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:38.595174  0:00:00.001084 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:38.597652  0:00:00.000625 POST    [200] /register
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [DPFTP] Transfer Complete!
+I/flutter ( 8021): [DPFTP] Actual transfer time: 34s
+I/flutter ( 8021): [ConnectionService] 🏁 DPFTP Transfer 1768307101609150 Complete. Signaling UI.
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Control connection closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): [DPFTP] Transfer complete for 192.168.1.179, ready for next file
+I/flutter ( 8021): [DPFTP] Session reset, ready for next transfer
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): [DPFTP] Socket closed
+I/flutter ( 8021): dpftp-new-file: Data socket closed
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:43.663587  0:00:00.000960 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:43.665838  0:00:00.000492 POST    [200] /register
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): ChatScreen: Build - isConnected = true, sharedFiles = 0, connectionInfo = ConnectionStatus.connected
+I/flutter ( 8021): [ConnectionService] 📤 Sent message: goodbye to Dinesh
+D/WiFiDirectManager( 8021): Peer discovery stopped
+I/flutter ( 8021): [ConnectionService] 🛑 Cancelling keep-alive timer (was active)
+I/flutter ( 8021): [ConnectionService] 🛑 Keep-alive timer cancelled and nullified
+I/flutter ( 8021): [BackgroundService] Stopping foreground service...
+I/flutter ( 8021): ChatScreen: Connection status changed to: ConnectionStatus.disconnected
+I/flutter ( 8021): [ConnectionService] ✅ Disconnected
+E/WiFiDirectManager( 8021): Failed to remove group: 2
+I/flutter ( 8021): [NotificationService] 📱 Notification shown: Disconnected - Connection to Mac Mini disconnected
+D/WindowOnBackDispatcher( 8021): setTopOnBackInvokedCallback (unwrapped): android.app.Activity$$ExternalSyntheticLambda0@a35f991
+I/flutter ( 8021): [BackgroundService] Updated notification to empty
+I/flutter ( 8021): ChatScreen: Build - isConnected = false, sharedFiles = 0, connectionInfo = ConnectionStatus.disconnected
+I/flutter ( 8021): [BackgroundService] Stopped (result: Instance of 'ServiceRequestSuccess')
+I/flutter ( 8021): [BackgroundService] Service still running after stop? false
+I/flutter ( 8021): [ConnectionStateManager] Background service stopped - no active connections
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.179
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.179:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Mac Mini","fingerprint":"f1a0e4052a396013","port":53317,"deviceModel":"macos","announce":true}
+I/flutter ( 8021): [MulticastService] ✅ Successfully notified 1 listeners
+I/flutter ( 8021): [HttpServer] GET /info from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Responding to /info request
+I/flutter ( 8021): 2026-01-13T17:55:48.107163  0:00:00.001161 GET     [200] /info?fingerprint=f1a0e4052a396013
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): [BackgroundService] Service not running
+I/flutter ( 8021): [MulticastService] Sent announcement on rmnet16: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement on wlan0: 104 bytes
+I/flutter ( 8021): [MulticastService] Sent announcement: Dinesh (208 bytes on 2 sockets)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on rmnet16 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [MulticastService] 📨 Received packet on wlan0 from 192.168.1.188
+I/flutter ( 8021): [MulticastService] 🔍 Processing packet from 192.168.1.188:53317, size: 104 bytes
+I/flutter ( 8021): [MulticastService] 📄 Packet content: {"alias":"Dinesh","fingerprint":"18d718ad6f2319bd","port":53317,"deviceModel":"android","announce":true}
+I/flutter ( 8021): [MulticastService] ⏭️  Ignoring self-discovery (same fingerprint)
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:48.580502  0:00:00.000922 POST    [200] /register
+I/flutter ( 8021): [HttpServer] POST /register from 192.168.1.188
+I/flutter ( 8021): [HttpServer] Registered device: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] 🔄 Device updated: Mac Mini (192.168.1.179:53317)
+I/flutter ( 8021): [DiscoveryService] ✅ Successfully notified 1 UI listeners
+I/flutter ( 8021): 2026-01-13T17:55:48.582702  0:00:00.000673 POST    [200] /register
+I/flutter ( 8021): [ConnectionStateManager] Attempted notification refresh workaround
+I/flutter ( 8021): [ConnectionStateManager] All notifications cancelled
+I/flutter ( 8021): [ConnectionStateManager] Cancelled notification ID: 256
+I/flutter ( 8021): [ConnectionStateManager] Cancelled notification ID: 257
+I/flutter ( 8021): [ConnectionStateManager] Cancelled notification ID: 258
+I/flutter ( 8021): [ConnectionStateManager] Cancelled notification ID: 259
+I/flutter ( 8021): [ConnectionStateManager] Cancelled notification ID: 260

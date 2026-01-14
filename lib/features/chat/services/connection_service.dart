@@ -1063,7 +1063,7 @@ class ConnectionService {
   Future<void> _attemptWiFiDirectUpgrade() async {
     if (_wifiDirectAttempted) return;
     _wifiDirectAttempted = true;
-    return;
+    // return;
     // Only attempt WiFi Direct on Android
     if (!Platform.isAndroid) {
       debugPrint('[ConnectionService] 📡 WiFi Direct: Not Android, skipping');
@@ -1930,17 +1930,28 @@ class ConnectionService {
                       ? 6 // Linux/Android/macOS: 6 connections
                       : 6); // Others: 6 connections
 
-            // Balanced 4MB chunks - reduces overhead vs 2MB
-            final int chunkSizeMB = 4 * 1024 * 1024;
+            // Windows-specific: Larger chunks to compensate for smaller socket buffers
+            // Windows has smaller default buffers than macOS, so we use larger chunks
+            // to keep more data in flight and maintain throughput
+            final int chunkSizeMB = isRemoteWindows
+                ? (8 *
+                      1024 *
+                      1024) // 8MB chunks for Windows (vs 4MB for others)
+                : (4 * 1024 * 1024); // 4MB chunks for other platforms
 
-            // MAXIMUM window for best throughput (256MB)
-            // 64 chunks × 4MB = 256MB in-flight
-            // Can handle up to 1 second of latency
-            final int windowMB = isRemoteWindows || isRemoteMacOS
-                ? (256 * 1024 * 1024) // 256MB for Windows/macOS
-                : (isRemoteLinux || isRemoteAndroid
-                      ? (256 * 1024 * 1024) // 256MB for Linux/Android
-                      : (128 * 1024 * 1024)); // 128MB for others
+            // Windows-specific: Larger window to compensate for smaller socket buffers
+            // This allows more data in-flight to maintain throughput despite RTT
+            final int windowMB = isRemoteWindows
+                ? (512 *
+                      1024 *
+                      1024) // 512MB for Windows (larger to compensate)
+                : (isRemoteMacOS
+                      ? (256 *
+                            1024 *
+                            1024) // 256MB for macOS (good default buffers)
+                      : (isRemoteLinux || isRemoteAndroid
+                            ? (256 * 1024 * 1024) // 256MB for Linux/Android
+                            : (128 * 1024 * 1024))); // 128MB for others
 
             debugPrint(
               'dpftp-new-file: Config → ${isRemoteWindows

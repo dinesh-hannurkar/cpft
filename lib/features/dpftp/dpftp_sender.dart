@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:fylooo/features/dpftp/dpftp_socket.dart';
 
+import '../../core/wifi_performance_service.dart';
 import 'adaptive_tuner.dart';
-import 'dpftp_types.dart';
 import 'dpftp_socket_manager.dart';
-import 'dpftp_socket.dart';
+import 'dpftp_types.dart';
 
 /// Sender side of DPFTP v1 (Client).
 /// - Connects to Receiver
@@ -47,7 +47,7 @@ class DpftpSender {
 
   // Adaptive tuning
   final AdaptiveTuner _tuner = AdaptiveTuner();
-  bool _useAdaptiveTuning = true; // Enable adaptive tuning
+  bool _useAdaptiveTuning = true; // Re-enabled - transfers work, just slow
 
   DpftpSender({
     required this.ip,
@@ -68,6 +68,10 @@ class DpftpSender {
 
   Future<void> start() async {
     try {
+      // Acquire all performance optimizations (WiFi lock, wake lock, performance mode)
+      await WiFiPerformanceService.acquireAllOptimizations();
+      debugPrint('dpftp-new-file: 🔒 Performance optimizations acquired');
+
       final fileSize = await file.length();
       // Open a file handle for each parallel connection for true parallel IO.
       for (int i = 0; i < parallelConnections; i++) {

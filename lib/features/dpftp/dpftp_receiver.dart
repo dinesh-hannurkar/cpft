@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 // import 'package:crypto/crypto.dart'; // PERF: Disabled
+import '../../core/wifi_performance_service.dart';
 import 'dpftp_types.dart';
 import 'dpftp_socket_manager.dart';
 import 'dpftp_socket.dart';
@@ -244,6 +245,11 @@ class _Session {
   // ... (handleHello in between)
 
   Future<void> _handleHello(Uint8List payload) async {
+    // Acquire all performance optimizations (WiFi lock, wake lock, performance mode)
+    await WiFiPerformanceService.acquireAllOptimizations();
+    debugPrint(
+      'dpftp-new-file: 🔒 Performance optimizations acquired (receiver)',
+    );
     // Payload: [NameLen:2][Name][Size:8] (Adapted)
     int offset = 0;
     final nameLen = Dpftp.readInt16(payload, offset);
