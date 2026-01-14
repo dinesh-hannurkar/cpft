@@ -68,6 +68,20 @@ void _diskWriterIsolate(_IsolateStartup startup) async {
   try {
     // Open file
     final file = File(startup.filePath);
+
+    // CRITICAL FIX: Explicitly delete file if it exists to ensure we start fresh.
+    // Windows seems to treat FileMode.write as append if the file has lingering handles?
+    if (await file.exists()) {
+      try {
+        await file.delete();
+        debugPrint(
+          '[DiskWriter] 🗑️ Deleted existing file to prevent append bug',
+        );
+      } catch (e) {
+        debugPrint('[DiskWriter] ⚠️ Failed to delete existing file: $e');
+      }
+    }
+
     raf = await file.open(mode: FileMode.write);
 
     // Pre-allocate
