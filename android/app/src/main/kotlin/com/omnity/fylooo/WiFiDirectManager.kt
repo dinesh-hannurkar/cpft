@@ -178,12 +178,11 @@ class WiFiDirectManager(
             return
         }
 
-        // Unregister if already registered
+        // Register receiver first to catch any state changes during cleanup/creation
         try {
             receiver?.let { context.unregisterReceiver(it) }
         } catch (_: Exception) {}
 
-        // Register broadcast receiver to catch GROUP_INFO_CHANGED
         val intentFilter = IntentFilter().apply {
             addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
@@ -195,6 +194,35 @@ class WiFiDirectManager(
 
         pendingCreateGroupResult = result
 
+        // Cleanup sequence: Stop Discovery -> Remove Group -> Create Group
+        p2pManager?.stopPeerDiscovery(p2pChannel, object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                Log.d(TAG, "Discovery stopped before group creation")
+                removeGroupAndCreate()
+            }
+
+            override fun onFailure(reason: Int) {
+                Log.d(TAG, "Failed to stop discovery (reason $reason), proceeding to remove group")
+                removeGroupAndCreate()
+            }
+        })
+    }
+
+    private fun removeGroupAndCreate() {
+        p2pManager?.removeGroup(p2pChannel, object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                Log.d(TAG, "Existing group removed")
+                createGroupInternal()
+            }
+
+            override fun onFailure(reason: Int) {
+                Log.d(TAG, "Failed to remove group (reason $reason), proceeding to create group")
+                createGroupInternal()
+            }
+        })
+    }
+
+    private fun createGroupInternal() {
         p2pManager?.createGroup(p2pChannel, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 Log.d(TAG, "Group creation initiated")
