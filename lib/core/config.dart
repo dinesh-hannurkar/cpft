@@ -48,8 +48,8 @@ class SocketConfig {
   // Large buffers are essential for overcoming the default small buffer sizes
   // that severely limit LAN transfer speeds.
   factory SocketConfig.windows() => SocketConfig(
-    soRcvbuf: 4 * 1024 * 1024, // 4 MB (Reduced from 16MB to fix Bufferbloat)
-    soSndbuf: 4 * 1024 * 1024, // 4 MB
+    soRcvbuf: 8 * 1024 * 1024, // 8 MB (Increased for speed)
+    soSndbuf: 8 * 1024 * 1024, // 8 MB
     tcpNoDelay: true,
   );
 

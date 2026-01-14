@@ -1930,15 +1930,15 @@ class ConnectionService {
                       ? 6 // Linux/Android/macOS: 6 connections
                       : 6); // Others: 6 connections
 
-            // FIXED: Use 1MB chunks globally for smoother flow and lower latency
-            // Matches Dpftp.defaultChunkSize
-            final int chunkSizeMB = 1 * 1024 * 1024;
+            // FIXED: Use 2MB chunks for Windows to reduce CPU/Header overhead
+            // 1MB was safe but slow (5 MB/s). 2MB is a good balance.
+            final int chunkSizeMB = 2 * 1024 * 1024;
 
             // Windows-specific: Tighter window to consume data faster and reduce RTT
             // 32MB is enough for 30+ MB/s even with high RTT.
             // 512MB caused massive bufferbloat (RTT > 5s).
             final int windowMB = isRemoteWindows
-                ? (32 * 1024 * 1024) // 32MB for Windows (Reduced to fix RTT)
+                ? (64 * 1024 * 1024) // 64MB for Windows (Increased for speed)
                 : (isRemoteMacOS
                       ? (256 *
                             1024 *

@@ -10,8 +10,8 @@ class AdaptiveTuner {
   final Map<int, DateTime> _chunkSentTimes = {};
 
   // Current settings
-  int _currentChunkSize = 1 * 1024 * 1024; // Start with 1 MB (Safe default)
-  int _currentWindowSize = 32 * 1024 * 1024; // Start with 32 MB (Safe default)
+  int _currentChunkSize = 2 * 1024 * 1024; // Start with 2 MB (Balanced)
+  int _currentWindowSize = 64 * 1024 * 1024; // Start with 64 MB (Balanced)
 
   // Tuning parameters
   // Tuning parameters
@@ -122,8 +122,8 @@ class AdaptiveTuner {
     _rttSamples.clear();
     _chunkSentTimes.clear();
     _adjustmentCounter = 0;
-    _currentChunkSize = 1 * 1024 * 1024;
-    _currentWindowSize = 32 * 1024 * 1024;
+    _currentChunkSize = 2 * 1024 * 1024;
+    _currentWindowSize = 64 * 1024 * 1024;
   }
 
   /// Get tuning statistics for debugging
