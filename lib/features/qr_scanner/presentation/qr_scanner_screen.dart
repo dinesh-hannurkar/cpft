@@ -8,7 +8,8 @@ import 'package:fylooo/services/wifi_service.dart';
 import 'package:flutter/foundation.dart';
 
 class QrScannerScreen extends StatefulWidget {
-  const QrScannerScreen({super.key});
+  final bool returnResult;
+  const QrScannerScreen({super.key, this.returnResult = false});
 
   @override
   State<QrScannerScreen> createState() => _QrScannerScreenState();
@@ -441,6 +442,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   void _handleScannedCode(String code) {
+    if (widget.returnResult) {
+       Navigator.of(context).pop(code);
+       return;
+    }
+
     if (code.startsWith('WIFI:')) {
       debugPrint('QR Scanner: WiFi QR code detected');
       final wifiData = _parseWifiQrCode(code);

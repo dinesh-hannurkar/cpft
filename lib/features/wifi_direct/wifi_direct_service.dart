@@ -162,6 +162,68 @@ class WiFiDirectService {
     }
   }
 
+  /// Create a P2P group and return credentials (Android 10+)
+  Future<P2PCredentials?> createGroup() async {
+    if (!_isSupported) return null;
+
+    try {
+      _ensureCallbacksWired();
+      final result = await _channel.invokeMethod('createGroup');
+      if (result is Map) {
+        return P2PCredentials(
+          ssid: result['ssid'] as String,
+          password: result['password'] as String,
+        );
+      }
+    } catch (e) {
+      debugPrint('[WiFiDirect] Create group error: $e');
+    }
+    return null;
+  }
+
+  /// Connect to a WiFi Direct Group (Client side)
+  Future<bool> connectToGroup({required String ssid, required String password}) async {
+     if (!_isSupported) return false;
+
+     try {
+       // On Android, we can reuse the generic WifiService connect logic via method channel
+       // or we can invoke a specific method in WIFI_DIRECT_CHANNEL if we implemented it there.
+       // The plan decided to implement `connectToGroup` in WIFI_DIRECT_CHANNEL in MainActivity.kt
+       // but I haven't added `connectToGroup` to MainActivity.kt yet in the new plan.
+       // The previous attempt added `connect` (for peerId) but not `connectToGroup` (for SSID).
+
+       // Actually, the best way is to use the existing WifiService.connectToWifi
+       // because it already handles WifiNetworkSpecifier perfectly.
+       // But to encapsulate it here as requested:
+
+       final method = Platform.isAndroid ? 'connectToGroup' : 'connectToGroupIOS';
+       // Note: iOS doesn't support connecting to specific SSID programmatically usually without NEHotspotConfigurationManager.
+       // WifiService likely handles it.
+
+       // Let's call the native `connectToGroup` which I will add to MainActivity/WiFiDirectManager
+       // to satisfy the strict P2P requirement.
+       final result = await _channel.invokeMethod('connectToGroup', {
+         'ssid': ssid,
+         'password': password
+       });
+       return result == true;
+     } catch (e) {
+       debugPrint('[WiFiDirect] Connect to group error: $e');
+       return false;
+     }
+  }
+
+  /// Remove P2P group
+  Future<void> removeGroup() async {
+    if (!_isSupported) return;
+
+    try {
+      await _channel.invokeMethod('removeGroup');
+    } catch (e) {
+      debugPrint('[WiFiDirect] Remove group error: $e');
+    }
+  }
+
   /// Connect to a WiFi Direct peer
   Future<WiFiDirectConnection?> connect(String peerId) async {
     if (!_isSupported) return null;
@@ -260,4 +322,11 @@ class WiFiDirectThisDevice {
   final String name;
 
   WiFiDirectThisDevice({required this.id, this.name = ''});
+}
+
+class P2PCredentials {
+  final String ssid;
+  final String password;
+
+  P2PCredentials({required this.ssid, required this.password});
 }

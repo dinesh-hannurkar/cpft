@@ -33,6 +33,8 @@ class WiFiDirectManager(
     private var isDiscovering = false
 
     private var pendingConnectCallback: ((Boolean, String?, Int?) -> Unit)? = null
+    private var pendingCreateGroupResult: MethodChannel.Result? = null
+    private var currentNetworkCallback: android.net.ConnectivityManager.NetworkCallback? = null
 
     private var thisDeviceAddress: String? = null
     private var thisDeviceName: String? = null
@@ -170,6 +172,43 @@ class WiFiDirectManager(
         Log.d(TAG, "Found ${peers.size} peers")
     }
     
+    fun createGroup(result: MethodChannel.Result) {
+        if (p2pManager == null || p2pChannel == null) {
+            result.error("NOT_INITIALIZED", "WiFi Direct not initialized", null)
+            return
+        }
+
+        // Unregister if already registered
+        try {
+            receiver?.let { context.unregisterReceiver(it) }
+        } catch (_: Exception) {}
+
+        // Register broadcast receiver to catch GROUP_INFO_CHANGED
+        val intentFilter = IntentFilter().apply {
+            addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
+            addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
+            addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
+            addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+        }
+        receiver = WiFiDirectBroadcastReceiver(this)
+        context.registerReceiver(receiver, intentFilter)
+
+        pendingCreateGroupResult = result
+
+        p2pManager?.createGroup(p2pChannel, object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                Log.d(TAG, "Group creation initiated")
+                // Wait for onConnectionChanged to get group details
+            }
+
+            override fun onFailure(reason: Int) {
+                Log.e(TAG, "Failed to create group: $reason")
+                pendingCreateGroupResult?.error("CREATE_GROUP_FAILED", "Reason: $reason", null)
+                pendingCreateGroupResult = null
+            }
+        })
+    }
+
     fun connect(deviceAddress: String, callback: (Boolean, String?, Int?) -> Unit) {
         pendingConnectCallback = callback
         val config = WifiP2pConfig().apply {
@@ -206,6 +245,29 @@ class WiFiDirectManager(
             // Complete any pending connect() call.
             pendingConnectCallback?.invoke(true, ipAddress, TRANSFER_PORT)
             pendingConnectCallback = null
+
+            // Handle pending createGroup result
+            if (isGroupOwner && pendingCreateGroupResult != null && group != null) {
+                val ssid = group.networkName
+                val password = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    group.passphrase
+                } else {
+                    group.passphrase // Might be null on older versions or if persistent group logic differs
+                }
+
+                Log.d(TAG, "Group created credentials - SSID: $ssid")
+
+                if (ssid != null && password != null) {
+                    pendingCreateGroupResult?.success(mapOf(
+                        "ssid" to ssid,
+                        "password" to password
+                    ))
+                } else {
+                    pendingCreateGroupResult?.error("CREDENTIALS_MISSING", "SSID or Password missing", null)
+                }
+                pendingCreateGroupResult = null
+            }
+
         } else {
             Log.d(TAG, "P2P Connection lost")
             channel.invokeMethod("onConnectionLost", null)
@@ -213,10 +275,20 @@ class WiFiDirectManager(
             // If we were waiting for a connection, fail it.
             pendingConnectCallback?.invoke(false, null, null)
             pendingConnectCallback = null
+
+            // If we were creating a group but failed to form it properly
+            pendingCreateGroupResult?.error("GROUP_FORMATION_LOST", "Connection lost before group info", null)
+            pendingCreateGroupResult = null
         }
     }
     
     fun disconnect() {
+        // Stop discovery if active
+        if (isDiscovering) {
+            stopDiscovery()
+        }
+
+        // Clean up P2P group
         p2pManager?.removeGroup(p2pChannel, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 Log.d(TAG, "Group removed successfully")
@@ -226,6 +298,82 @@ class WiFiDirectManager(
                 Log.e(TAG, "Failed to remove group: $reason")
             }
         })
+
+        // Clean up network binding (Client side)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+
+            // Unbind process from network
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                connectivityManager.bindProcessToNetwork(null)
+            } else {
+                @Suppress("DEPRECATION")
+                android.net.ConnectivityManager.setProcessDefaultNetwork(null)
+            }
+
+            // Unregister callback
+            currentNetworkCallback?.let {
+                try {
+                    connectivityManager.unregisterNetworkCallback(it)
+                    Log.d(TAG, "Network callback unregistered")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error unregistering network callback: ${e.message}")
+                }
+                currentNetworkCallback = null
+            }
+        }
+    }
+
+    fun connectToGroup(ssid: String, password: String, result: MethodChannel.Result) {
+        // Use WifiNetworkSpecifier on Android 10+ (Q)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                // Unregister previous callback if any
+                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                currentNetworkCallback?.let {
+                    try {
+                        connectivityManager.unregisterNetworkCallback(it)
+                    } catch (_: Exception) {}
+                    currentNetworkCallback = null
+                }
+
+                val specifier = android.net.wifi.WifiNetworkSpecifier.Builder()
+                    .setSsid(ssid)
+                    .setWpa2Passphrase(password)
+                    .build()
+
+                val request = android.net.NetworkRequest.Builder()
+                    .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                    .setNetworkSpecifier(specifier)
+                    .build()
+
+                val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        Log.d(TAG, "Connected to P2P Group SSID: $ssid")
+                        try {
+                            connectivityManager.bindProcessToNetwork(network)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to bind to network: ${e.message}")
+                            result.error("BIND_FAILED", e.message, null)
+                        }
+                    }
+
+                    override fun onUnavailable() {
+                        Log.e(TAG, "Failed to connect to P2P Group SSID: $ssid")
+                        result.error("CONNECT_FAILED", "Network unavailable", null)
+                    }
+                }
+
+                currentNetworkCallback = callback
+                connectivityManager.requestNetwork(request, callback)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error connecting to group: ${e.message}")
+                result.error("CONNECT_ERROR", e.message, null)
+            }
+        } else {
+            result.error("UNSUPPORTED", "Direct group connection via SSID/Pass requires Android 10+", null)
+        }
     }
     
     fun cleanup() {

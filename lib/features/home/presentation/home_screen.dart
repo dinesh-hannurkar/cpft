@@ -39,6 +39,7 @@ import 'package:fylooo/features/chat/presentation/chat_screen.dart';
 import 'package:fylooo/features/webshare/services/webrtc_file_transfer_service.dart';
 import 'package:fylooo/features/webshare/services/webshare_service.dart';
 import 'package:fylooo/features/qr_scanner/presentation/qr_scanner_screen.dart';
+import 'package:fylooo/features/wifi_direct/presentation/offline_mode_screen.dart';
 import 'package:fylooo/features/chat/services/connection_service.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:fylooo/shared/showcase/showcase_helper.dart';
@@ -1421,6 +1422,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               context,
             ).textTheme.bodySmall?.copyWith(color: AppColors.greyLight),
           ),
+        ),
+        const SizedBox(height: AppSizes.md),
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const OfflineModeScreen()),
+            );
+          },
+          icon: const Icon(Icons.offline_share),
+          label: const Text('Offline Mode (Beta)'),
         ),
       ],
     );
