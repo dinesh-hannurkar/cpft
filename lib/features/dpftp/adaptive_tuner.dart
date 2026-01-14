@@ -10,19 +10,22 @@ class AdaptiveTuner {
   final Map<int, DateTime> _chunkSentTimes = {};
 
   // Current settings
-  int _currentChunkSize = 4 * 1024 * 1024; // Start with 4 MB
-  int _currentWindowSize = 256 * 1024 * 1024; // Start with 256 MB
+  int _currentChunkSize = 1 * 1024 * 1024; // Start with 1 MB (Safe default)
+  int _currentWindowSize = 32 * 1024 * 1024; // Start with 32 MB (Safe default)
 
   // Tuning parameters
-  static const int _minChunkSize = 2 * 1024 * 1024; // 2 MB
+  // Tuning parameters
+  static const int _minChunkSize =
+      1 * 1024 * 1024; // 1 MB (Allow smaller chunks)
   static const int _maxChunkSize = 8 * 1024 * 1024; // 8 MB
-  static const int _minWindowSize = 128 * 1024 * 1024; // 128 MB
+  static const int _minWindowSize =
+      16 * 1024 * 1024; // 16 MB (Allow tighter window)
   static const int _maxWindowSize = 512 * 1024 * 1024; // 512 MB
 
   // Adjustment thresholds (in milliseconds)
   static const int _lowLatencyThreshold = 50;
   static const int _mediumLatencyThreshold = 100;
-  static const int _highLatencyThreshold = 200;
+  // static const int _highLatencyThreshold = 200; // Unused
 
   // Hysteresis to prevent oscillation
   int _adjustmentCounter = 0;
@@ -103,17 +106,14 @@ class AdaptiveTuner {
   /// Calculate optimal chunk size based on RTT
   int _calculateOptimalChunkSize(int rtt) {
     if (rtt < _lowLatencyThreshold) {
-      // Low latency: use large chunks (8 MB)
-      return _maxChunkSize;
-    } else if (rtt < _mediumLatencyThreshold) {
-      // Medium latency: use 6 MB chunks
-      return 6 * 1024 * 1024;
-    } else if (rtt < _highLatencyThreshold) {
-      // High latency: use 4 MB chunks
+      // Low latency (<50ms): use large chunks (4 MB) - 8MB is too big for many receivers
       return 4 * 1024 * 1024;
+    } else if (rtt < _mediumLatencyThreshold) {
+      // Medium latency (<100ms): use 2 MB chunks
+      return 2 * 1024 * 1024;
     } else {
-      // Very high latency: use small chunks (2 MB)
-      return _minChunkSize;
+      // High latency (>100ms): use small chunks (1 MB) to keep flow smooth
+      return 1 * 1024 * 1024;
     }
   }
 
@@ -122,8 +122,8 @@ class AdaptiveTuner {
     _rttSamples.clear();
     _chunkSentTimes.clear();
     _adjustmentCounter = 0;
-    _currentChunkSize = 4 * 1024 * 1024;
-    _currentWindowSize = 256 * 1024 * 1024;
+    _currentChunkSize = 1 * 1024 * 1024;
+    _currentWindowSize = 32 * 1024 * 1024;
   }
 
   /// Get tuning statistics for debugging
