@@ -1930,9 +1930,9 @@ class ConnectionService {
                       ? 6 // Linux/Android/macOS: 6 connections
                       : 6); // Others: 6 connections
 
-            // FIXED: Must use 4MB chunks to match Receiver's Dpftp.defaultChunkSize (hardcoded)
-            // Using 8MB causes file corruption because Receiver calculates offset = id * 4MB
-            final int chunkSizeMB = 4 * 1024 * 1024;
+            // FIXED: Use 1MB chunks globally for smoother flow and lower latency
+            // Matches Dpftp.defaultChunkSize
+            final int chunkSizeMB = 1 * 1024 * 1024;
 
             // Windows-specific: Larger window to compensate for smaller socket buffers
             // This allows more data in-flight to maintain throughput despite RTT
