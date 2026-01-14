@@ -287,32 +287,26 @@ class _Session {
       '[DPFTP] Hello: $_fileName ($fileSize bytes) from $ip (ID: $_transferId)',
     );
 
-    // Create session file info with unique filename if needed
-    String uniqueFileName = _fileName ?? 'unknown';
-    File file = File('$saveDir/$uniqueFileName');
+    // Generate unique filename with timestamp to avoid ANY conflict or overwrite logic
+    // This is the safest way to ensure clean writes on Windows
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final parts = _fileName!.split('.');
+    final extension = parts.length > 1 ? parts.last : '';
+    final baseName = parts.length > 1
+        ? parts.sublist(0, parts.length - 1).join('.')
+        : _fileName!;
 
-    // Generate unique filename if file already exists (avoid overwriting)
-    if (await file.exists() &&
-        !await File('$saveDir/$uniqueFileName.dpftp').exists()) {
-      int counter = 1;
-      final parts = uniqueFileName.split('.');
-      final extension = parts.length > 1 ? parts.last : '';
-      final baseName = parts.length > 1
-          ? parts.sublist(0, parts.length - 1).join('.')
-          : uniqueFileName;
+    _fileName = extension.isNotEmpty
+        ? '${baseName}_$timestamp.$extension'
+        : '${_fileName}_$timestamp';
 
-      while (await file.exists()) {
-        uniqueFileName = extension.isNotEmpty
-            ? '$baseName ($counter).$extension'
-            : '$uniqueFileName ($counter)';
-        file = File('$saveDir/$uniqueFileName');
-        counter++;
-        if (counter > 100) break; // Safety limit
-      }
+    final file = File('$saveDir/$_fileName');
+    debugPrint('[DPFTP] Using unique filename: $_fileName');
 
-      debugPrint('[DPFTP] File exists, using unique name: $uniqueFileName');
-      _fileName = uniqueFileName; // Update filename
-    }
+    /* 
+    // OLD LOGIC (Removed for stability) 
+    if (await file.exists() && ... ) { ... } 
+    */
 
     final metaFile = File('$saveDir/${_fileName}.dpftp');
 
