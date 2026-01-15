@@ -63,6 +63,8 @@ class WiFiDirectService {
                   ipAddress: ip,
                   port: port,
                   isGroupOwner: isGroupOwner,
+                  ssid: args['ssid'] as String?,
+                  password: args['password'] as String?,
                 ),
               );
             }
@@ -80,6 +82,10 @@ class WiFiDirectService {
               _thisDevice = WiFiDirectThisDevice(id: id ?? '', name: name);
             }
           }
+          return;
+        case 'onGroupCreationFailed':
+          final reason = call.arguments['reason'];
+          debugPrint('[WiFiDirect] Group creation failed: $reason');
           return;
         default:
           debugPrint('[WiFiDirect] Unknown callback: ${call.method}');
@@ -150,6 +156,35 @@ class WiFiDirectService {
     }
   }
 
+  /// Explicitly Create P2P Group (Offline Host)
+  Future<bool> createGroup() async {
+    if (!_isSupported) return false;
+    try {
+      _ensureCallbacksWired();
+      final result = await _channel.invokeMethod('createGroup');
+      return result == true;
+    } catch (e) {
+      debugPrint('[WiFiDirect] Start Group error: $e');
+      return false;
+    }
+  }
+
+  /// Connect to P2P Group via Credentials (Offline Guest)
+  Future<bool> connectToGroup(String ssid, String password) async {
+    if (!_isSupported) return false;
+    try {
+      _ensureCallbacksWired();
+      final result = await _channel.invokeMethod('connectToGroup', {
+        'ssid': ssid,
+        'password': password,
+      });
+      return result == true;
+    } catch (e) {
+      debugPrint('[WiFiDirect] Connect to Group error: $e');
+      return false;
+    }
+  }
+
   /// Stop WiFi Direct discovery
   Future<void> stopDiscovery() async {
     if (!_isSupported) return;
@@ -208,18 +243,24 @@ class WiFiDirectConnectionEvent {
   final String? ipAddress;
   final int? port;
   final bool isGroupOwner;
+  final String? ssid;
+  final String? password;
   final bool isLost;
 
   const WiFiDirectConnectionEvent({
     required this.ipAddress,
     required this.port,
     required this.isGroupOwner,
+    this.ssid,
+    this.password,
   }) : isLost = false;
 
   const WiFiDirectConnectionEvent.lost()
     : ipAddress = null,
       port = null,
       isGroupOwner = false,
+      ssid = null,
+      password = null,
       isLost = true;
 }
 

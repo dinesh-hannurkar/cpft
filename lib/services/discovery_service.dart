@@ -24,6 +24,8 @@ class DiscoveryService {
   HttpDiscoveryClient? _httpClient;
   IncomingConnectionService? _incomingConnectionService;
   static ConnectionManager? _sharedConnectionManager;
+  static ConnectionManager? get sharedConnectionManager =>
+      _sharedConnectionManager;
   BonjourService? _bonjourService;
   WebServer? _webServer;
   final String alias;
@@ -374,12 +376,9 @@ class DiscoveryService {
     if (_sharedConnectionManager != null) {
       bool accepted = await _sharedConnectionManager!.tryAutoAcceptConnection(
         socket,
+        displayName,
       );
       if (accepted) {
-        AppLogger.d(
-          'Auto-accepted incoming connection from $ip',
-          tag: 'Discovery',
-        );
         return;
       }
     }
@@ -637,21 +636,10 @@ class DiscoveryService {
         }
       } else {
         // New P2P-only device
-        // Use a special key format for P2P-only devices
-        final key = 'p2p:${peer.id}';
-
-        // Use 0.0.0.0 as placeholder IP for P2P-only devices
-        _discoveredDevices[key] = DeviceInfo(
-          name: peer.name,
-          ip: '0.0.0.0',
-          port: 0,
-          lastSeen: DateTime.now(),
-          p2pPeerId: peer.id,
-        );
-        changed = true;
-        AppLogger.d(
-          '[DiscoveryService] 🆕 Found P2P-only device: ${peer.name} (${peer.id})',
-        );
+        // USER REQUEST: Don't show WiFi Direct discovered devices in radar
+        // We skip adding them as new devices. They will only be associated if found via mDNS/Multicast first.
+        // AppLogger.d('[DiscoveryService] 🆕 Found P2P-only device (Skipping per request): ${peer.name}');
+        continue;
       }
     }
 

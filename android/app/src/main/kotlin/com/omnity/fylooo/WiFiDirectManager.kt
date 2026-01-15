@@ -1,5 +1,6 @@
 package com.omnity.fylooo
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -14,7 +15,16 @@ import android.os.Build
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiManager
+import android.net.wifi.WifiNetworkSpecifier
+import android.os.Handler
+import androidx.annotation.RequiresPermission
 import io.flutter.plugin.common.MethodChannel
+import java.util.Random
 
 /**
  * WiFi Direct (P2P) Manager for Android
@@ -36,6 +46,7 @@ class WiFiDirectManager(
 
     private var thisDeviceAddress: String? = null
     private var thisDeviceName: String? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
     
     companion object {
         const val TRANSFER_PORT = 53320 // Different from regular P2P port
@@ -51,6 +62,8 @@ class WiFiDirectManager(
         )
     }
     
+    @RequiresApi(Build.VERSION_CODES.Q)
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
     fun initialize(): Boolean {
         return try {
             p2pManager = context.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager
@@ -96,6 +109,7 @@ class WiFiDirectManager(
         }
     }
     
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
     @RequiresApi(Build.VERSION_CODES.JELLY_BEAN)
     fun startDiscovery(): Boolean {
         if (p2pManager == null || p2pChannel == null) {
@@ -142,6 +156,191 @@ class WiFiDirectManager(
         }
     }
     
+    fun createGroup(): Boolean {
+        if (p2pManager == null || p2pChannel == null) {
+            Log.e(TAG, "WiFi Direct not initialized")
+            return false
+        }
+        
+        try {
+            // If receiver not registered, register it.
+            if (receiver == null) {
+                val intentFilter = IntentFilter().apply {
+                    addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
+                    addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
+                    addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
+                    addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+                }
+                receiver = WiFiDirectBroadcastReceiver(this)
+                context.registerReceiver(receiver, intentFilter)
+            }
+            
+            // First, remove any existing group to avoid ERROR_BUSY (error code 2)
+            p2pManager?.removeGroup(p2pChannel, object : WifiP2pManager.ActionListener {
+                @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+                override fun onSuccess() {
+                    Log.d(TAG, "Existing group removed, creating new group...")
+                    createGroupInternal()
+                }
+                
+                @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+                override fun onFailure(reason: Int) {
+                    // If removal fails (e.g., no group exists), proceed to create anyway
+                    Log.d(TAG, "No existing group to remove (reason: $reason), creating new group...")
+                    createGroupInternal()
+                }
+            })
+            
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initiate group creation", e)
+            return false
+        }
+    }
+    
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+    private fun createGroupInternal() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                // Disconnect from WiFi to free up radio for 5GHz GO (Fix for single-radio devices like Redmi)
+                val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                wifiManager?.disconnect()
+                
+                // Generate random credentials for 5GHz group
+                val random = Random()
+                val suffix = random.nextInt(9000) + 1000
+                val ssid = "DIRECT-FY-QR-$suffix"
+                val pass = "fylooo${random.nextInt(900000) + 100000}" // 8+ chars
+
+                val config = WifiP2pConfig.Builder()
+                    .setNetworkName(ssid)
+                    .setPassphrase(pass)
+                    .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_5GHZ)
+                    .build()
+
+                Log.d(TAG, "Attempting to create 5GHz Group ($ssid)")
+                p2pManager?.createGroup(p2pChannel!!, config, object : WifiP2pManager.ActionListener {
+                    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+                    override fun onSuccess() {
+                        Log.d(TAG, "5GHz Group creation initiated successfully")
+                        requestGroupInfo()
+                    }
+
+                    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+                    override fun onFailure(reason: Int) {
+                        Log.w(TAG, "5GHz Group creation failed ($reason), falling back to legacy")
+                        createLegacyGroup()
+                    }
+                })
+                return
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception creating 5GHz group, falling back", e)
+            }
+        }
+        createLegacyGroup()
+    }
+
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+    private fun createLegacyGroup() {
+        p2pManager?.createGroup(p2pChannel!!, object : WifiP2pManager.ActionListener {
+            @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+            override fun onSuccess() {
+                Log.d(TAG, "Legacy Group creation initiated successfully")
+                requestGroupInfo()
+            }
+
+            override fun onFailure(reason: Int) {
+                Log.e(TAG, "Group creation failed: $reason")
+                val errorMsg = when(reason) {
+                    0 -> "ERROR (0): Internal error"
+                    1 -> "P2P_UNSUPPORTED (1): P2P is not supported on this device"
+                    2 -> "BUSY (2): Framework is busy, try again"
+                    else -> "Unknown error ($reason)"
+                }
+                Log.e(TAG, "Error details: $errorMsg")
+                channel.invokeMethod("onGroupCreationFailed", mapOf(
+                    "reason" to reason,
+                    "message" to errorMsg
+                ))
+            }
+        })
+    }
+
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+    private fun requestGroupInfo() {
+        p2pManager?.requestGroupInfo(p2pChannel) { group ->
+            if (group != null) {
+                Log.d(TAG, "Group info received: SSID=${group.networkName}, isGO=${group.isGroupOwner}")
+                if (group.isGroupOwner) {
+                    val payload = mapOf(
+                        "ipAddress" to "192.168.49.1",
+                        "port" to TRANSFER_PORT,
+                        "isGroupOwner" to true,
+                        "ssid" to group.networkName,
+                        "password" to group.passphrase
+                    )
+                    channel.invokeMethod("onConnectionEstablished", payload)
+                }
+            } else {
+                Log.w(TAG, "Group info is null after creation")
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun connectToGroup(ssid: String, password: String, callback: (Boolean) -> Unit) {
+        try {
+            val specifier = WifiNetworkSpecifier.Builder()
+                .setSsid(ssid)
+                .setWpa2Passphrase(password)
+                .build()
+
+            val request = NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) // Important for P2P
+                .setNetworkSpecifier(specifier)
+                .build()
+
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            
+            // Unregister any existing callback
+            networkCallback?.let { 
+                try { connectivityManager.unregisterNetworkCallback(it) } catch(_:Exception){}
+            }
+
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.d(TAG, "Connected to P2P Group via Specifier!")
+                    // Bind process to ensure traffic goes through this network
+                    connectivityManager.bindProcessToNetwork(network)
+                    Handler(Looper.getMainLooper()).post {
+                        callback(true)
+                    }
+                }
+
+                override fun onUnavailable() {
+                    Log.e(TAG, "P2P Group Unavailable")
+                    Handler(Looper.getMainLooper()).post {
+                        callback(false)
+                    }
+                }
+                
+                override fun onLost(network: Network) {
+                    Log.d(TAG, "P2P Network Lost")
+                    Handler(Looper.getMainLooper()).post {
+                        channel.invokeMethod("onConnectionLost", null)
+                    }
+                }
+            }
+            
+            connectivityManager.requestNetwork(request, networkCallback!!)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to connect to group", e)
+            callback(false)
+        }
+    }
+    
     fun stopDiscovery() {
         try {
             receiver?.let { context.unregisterReceiver(it) }
@@ -170,6 +369,7 @@ class WiFiDirectManager(
         Log.d(TAG, "Found ${peers.size} peers")
     }
     
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
     fun connect(deviceAddress: String, callback: (Boolean, String?, Int?) -> Unit) {
         pendingConnectCallback = callback
         val config = WifiP2pConfig().apply {
@@ -197,11 +397,34 @@ class WiFiDirectManager(
             
             Log.d(TAG, "P2P Connection established. Group owner: $isGroupOwner, IP: $ipAddress")
             
-            channel.invokeMethod("onConnectionEstablished", mapOf(
+            val payload = mutableMapOf<String, Any?>(
                 "ipAddress" to ipAddress,
                 "port" to TRANSFER_PORT,
                 "isGroupOwner" to isGroupOwner
-            ))
+            )
+            
+            
+            if (isGroupOwner && group == null) {
+                // Group owner but no group details - request them
+                Log.d(TAG, "Group owner detected, requesting group info...")
+                p2pManager?.requestGroupInfo(p2pChannel) { groupInfo ->
+                    if (groupInfo != null) {
+                        Log.d(TAG, "✓ Group info retrieved: SSID=${groupInfo.networkName}, Pass=${groupInfo.passphrase}")
+                        payload["ssid"] = groupInfo.networkName
+                        payload["password"] = groupInfo.passphrase
+                        channel.invokeMethod("onConnectionEstablished", payload)
+                    } else {
+                        Log.w(TAG, "Group info still null, sending without credentials")
+                        channel.invokeMethod("onConnectionEstablished", payload)
+                    }
+                }
+            } else {
+                if (isGroupOwner && group != null) {
+                    payload["ssid"] = group.networkName
+                    payload["password"] = group.passphrase
+                }
+                channel.invokeMethod("onConnectionEstablished", payload)
+            }
 
             // Complete any pending connect() call.
             pendingConnectCallback?.invoke(true, ipAddress, TRANSFER_PORT)
@@ -231,6 +454,17 @@ class WiFiDirectManager(
     fun cleanup() {
         stopDiscovery()
         disconnect()
+        
+        // Cleanup network callback
+        networkCallback?.let {
+             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+             try {
+                connectivityManager.unregisterNetworkCallback(it)
+                connectivityManager.bindProcessToNetwork(null)
+             } catch(_: Exception){}
+        }
+        networkCallback = null
+        
         pendingConnectCallback = null
         p2pChannel = null
         p2pManager = null
@@ -243,6 +477,7 @@ class WiFiDirectManager(
         private val manager: WiFiDirectManager
     ) : BroadcastReceiver() {
         
+        @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> {
@@ -294,6 +529,23 @@ class WiFiDirectManager(
                                 "name" to device.deviceName
                             )
                         )
+                        
+                        // Check if we're now a group owner (fires when group is created)
+                        manager.p2pManager?.requestGroupInfo(manager.p2pChannel) { group ->
+                            if (group != null && group.isGroupOwner) {
+                                Log.d("WiFiDirect", "✓ Group detected: SSID=${group.networkName}, Pass=${group.passphrase}")
+                                val payload = mapOf(
+                                    "ipAddress" to "192.168.49.1",
+                                    "port" to TRANSFER_PORT,
+                                    "isGroupOwner" to true,
+                                    "ssid" to group.networkName,
+                                    "password" to group.passphrase
+                                )
+                                manager.channel.invokeMethod("onConnectionEstablished", payload)
+                            } else {
+                                Log.d("WiFiDirect", "No group yet or not GO: group=${group?.networkName}, isGO=${group?.isGroupOwner}")
+                            }
+                        }
                     } else {
                         Log.d("WiFiDirect", "This device changed (no device extra)")
                     }

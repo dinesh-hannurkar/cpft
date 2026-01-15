@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:fylooo/utils/permissions.dart';
 import 'dart:io';
@@ -20,7 +21,7 @@ enum NotificationType {
 }
 
 /// Reusable notification service for the app
-class NotificationService {
+class NotificationService with WidgetsBindingObserver {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
 
@@ -30,6 +31,13 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycleState = state;
+    debugPrint('[NotificationService] Lifecycle changed: $state');
+  }
 
   /// Callback for notification tap (to navigate to chat)
   Function(String deviceName, String transferId)? onNotificationTap;
@@ -105,6 +113,9 @@ class NotificationService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
+    // Track lifecycle to prevent crashes when detached
+    WidgetsBinding.instance.addObserver(this);
+
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -127,7 +138,9 @@ class NotificationService {
           android: initializationSettingsAndroid,
           iOS: initializationSettingsIOS,
           macOS: initializationSettingsMacOS,
-          linux: LinuxInitializationSettings(defaultActionName: 'Open notification'),
+          linux: LinuxInitializationSettings(
+            defaultActionName: 'Open notification',
+          ),
           windows: WindowsInitializationSettings(
             appName: 'Fylooo',
             appUserModelId: 'com.omnity.fylooo',
@@ -161,6 +174,13 @@ class NotificationService {
     if (!_isInitialized) {
       debugPrint(
         '[NotificationService] ⚠️  Not initialized, call initialize() first',
+      );
+      return;
+    }
+
+    if (_lifecycleState == AppLifecycleState.detached) {
+      debugPrint(
+        '[NotificationService] ⚠️ App detached, skipping notification to prevent crash',
       );
       return;
     }
@@ -359,9 +379,9 @@ class NotificationService {
 
     // Android 13+ (API 33+): Request POST_NOTIFICATIONS permission
     if (Platform.isAndroid) {
-        final status = await AppPermissions.runGuarded(
-          () => Permission.notification.request(),
-        );
+      final status = await AppPermissions.runGuarded(
+        () => Permission.notification.request(),
+      );
       return status.isGranted;
     }
 

@@ -393,6 +393,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Resume radar when hotspot is active
         controller.resumeRadar();
 
+        // Enable auto-accept for incoming QR scan connections
+        widget.discoveryService.connectionManager?.setAutoAccept(true);
+
         // Auto-show QR code when manually switching to hotspot
         if (autoShowQr && mounted) {
           // Small delay to ensure UI is updated
@@ -976,6 +979,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onRefresh: _handleServiceRestart,
             onShowConnectedDevices: _showConnectedDevicesDialog,
             onQrScan: _handleQrScan,
+            onOfflineP2P: () {},
           ),
           body: DropTarget(
             onDragDone: (detail) async {
@@ -1469,9 +1473,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => const QrScannerScreen()));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => QrScannerScreen(
+          discoveryService: widget.discoveryService,
+          myDeviceName: widget.myDeviceName,
+        ),
+      ),
+    );
   }
 
   Future<void> _handleServiceRestart() async {

@@ -41,13 +41,13 @@ class DpftpSender {
   final List<int> _chunkQueue = [];
 
   bool _isPumping = false;
-  bool _waitingForAssignment = false;
   Completer<void>? _flowControlWait;
   int _socketIdx = 0;
 
   // Adaptive tuning
   final AdaptiveTuner _tuner = AdaptiveTuner();
-  bool _useAdaptiveTuning = true; // Re-enabled - transfers work, just slow
+  final bool _useAdaptiveTuning =
+      true; // Re-enabled - transfers work, just slow
 
   DpftpSender({
     required this.ip,

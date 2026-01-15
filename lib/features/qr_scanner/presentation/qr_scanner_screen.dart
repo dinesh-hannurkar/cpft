@@ -6,9 +6,17 @@ import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
 import 'package:fylooo/services/wifi_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
+import 'package:fylooo/shared/widgets/app_snackbar.dart';
+
+import 'package:fylooo/services/discovery_service.dart';
+import 'package:fylooo/features/chat/presentation/chat_screen.dart';
 
 class QrScannerScreen extends StatefulWidget {
-  const QrScannerScreen({super.key});
+  final DiscoveryService? discoveryService;
+  final String? myDeviceName;
+
+  const QrScannerScreen({super.key, this.discoveryService, this.myDeviceName});
 
   @override
   State<QrScannerScreen> createState() => _QrScannerScreenState();
@@ -476,7 +484,85 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pop();
+
+      // Notify user
+      AppSnackbar.showSuccess(
+        context,
+        'Connected to WiFi! Searching for host...',
+      );
+
+      // Trigger discovery and navigation (same as Android)
+      if (widget.discoveryService != null && widget.myDeviceName != null) {
+        // Enable auto-accept for incoming connections from the host
+        widget.discoveryService!.connectionManager?.setAutoAccept(true);
+
+        // Define the expected IP for WiFi Direct Group Owner (standard gateway)
+        const groupOwnerIp = '192.168.49.1';
+        bool found = false;
+
+        void navigateToChat(String name, int port) {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                deviceName: name,
+                ipAddress: groupOwnerIp,
+                port: port,
+                myDeviceName: widget.myDeviceName!,
+                connectionManager: widget.discoveryService!.connectionManager!,
+              ),
+            ),
+          );
+        }
+
+        // Check current devices
+        final devices = widget.discoveryService!.discoveredDevices;
+        for (final DeviceInfo device in devices.values) {
+          if (device.ip == groupOwnerIp) {
+            navigateToChat(device.name, device.port);
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          void onDiscovered(String name, String ip, int port) {
+            if (ip == groupOwnerIp) {
+              widget.discoveryService!.removeDiscoveryListener(onDiscovered);
+              navigateToChat(name, port);
+            }
+          }
+
+          widget.discoveryService!.addDiscoveryListener(onDiscovered);
+
+          // Force announcements to speed up discovery
+          widget.discoveryService!.announce();
+
+          Future.delayed(const Duration(seconds: 10), () {
+            if (mounted) {
+              widget.discoveryService!.removeDiscoveryListener(onDiscovered);
+              // Fallback navigation
+              if (!found) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      deviceName: 'P2P Host',
+                      ipAddress: groupOwnerIp,
+                      port: 53317,
+                      myDeviceName: widget.myDeviceName!,
+                      connectionManager:
+                          widget.discoveryService!.connectionManager!,
+                    ),
+                  ),
+                );
+              }
+            }
+          });
+        }
+      } else {
+        // Fallback if no services
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -487,36 +573,122 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Future<void> _autoConnectOnAndroid(Map<String, String> wifiData) async {
     final ssid = wifiData['ssid']!;
     final password = wifiData['password'];
-    final security = (wifiData['security'] ?? 'WPA2');
 
     try {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Connecting to $ssid...'),
-          duration: const Duration(seconds: 3),
-        ),
-      );
 
-      await WifiService.connectToWifi(
-        ssid: ssid,
-        password: password?.isNotEmpty == true ? password : null,
-        security: security,
+      // Import WiFiDirectService at the top of the file
+      final wifiDirectService = WiFiDirectService();
+      await wifiDirectService.initialize();
+
+      // Show connecting message using AppSnackbar
+      AppSnackbar.showInfo(context, 'Connecting to $ssid via WiFi Direct...');
+
+      // Enable auto-accept for incoming connections from the host
+      widget.discoveryService?.connectionManager?.setAutoAccept(true);
+
+      final success = await wifiDirectService.connectToGroup(
+        ssid,
+        password ?? '',
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Connection requested for $ssid'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      Navigator.of(context).pop(); // Close scanner
+
+      if (success) {
+        AppSnackbar.showSuccess(
+          context,
+          'Connected! Waiting for device discovery...',
+        );
+
+        // Wait for mDNS to discover the device if we have the service
+        if (widget.discoveryService != null && widget.myDeviceName != null) {
+          // Define the expected IP for WiFi Direct Group Owner
+          const groupOwnerIp = '192.168.49.1';
+
+          // Check if already discovered
+          bool found = false;
+
+          // Helper to navigate
+          void navigateToChat(String name, int port) {
+            if (!mounted) return;
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => ChatScreen(
+                  deviceName: name,
+                  ipAddress: groupOwnerIp,
+                  port: port,
+                  myDeviceName: widget.myDeviceName!,
+                  connectionManager:
+                      widget.discoveryService!.connectionManager!,
+                ),
+              ),
+            );
+          }
+
+          // Check current devices first
+          final devices = widget.discoveryService!.discoveredDevices;
+          for (final DeviceInfo device in devices.values) {
+            if (device.ip == groupOwnerIp) {
+              navigateToChat(device.name, device.port);
+              found = true;
+              break;
+            }
+          }
+
+          if (!found) {
+            // Listen for new devices
+            void onDiscovered(String name, String ip, int port) {
+              if (ip == groupOwnerIp) {
+                widget.discoveryService!.removeDiscoveryListener(onDiscovered);
+                navigateToChat(name, port);
+              }
+            }
+
+            widget.discoveryService!.addDiscoveryListener(onDiscovered);
+
+            // Timeout after 10 seconds (mDNS can be slow)
+            Future.delayed(const Duration(seconds: 10), () {
+              if (mounted) {
+                widget.discoveryService!.removeDiscoveryListener(onDiscovered);
+                // Fallback if not discovered: Just go back or try to connect assuming defaults
+                // But without port/name it's hard.
+                // We can try default port 53317 and generic name.
+                if (!found) {
+                  // Don't navigate if already found
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => ChatScreen(
+                        deviceName: 'P2P Host',
+                        ipAddress: groupOwnerIp,
+                        port: 53317,
+                        myDeviceName: widget.myDeviceName!,
+                        connectionManager:
+                            widget.discoveryService!.connectionManager!,
+                      ),
+                    ),
+                  );
+                }
+              }
+            });
+          }
+        } else {
+          // Fallback if service not provided
+          await Future.delayed(const Duration(seconds: 2));
+          if (mounted) {
+            Navigator.of(context).pop(); // Close scanner
+          }
+        }
+      } else {
+        _isProcessing = false;
+        AppSnackbar.showError(
+          context,
+          'Failed to connect to WiFi Direct group',
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      _showErrorDialog('Failed to connect: $e');
+      _isProcessing = false;
+      AppSnackbar.showError(context, 'Connection failed: $e');
     }
   }
 

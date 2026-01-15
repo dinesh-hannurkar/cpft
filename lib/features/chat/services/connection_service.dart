@@ -251,15 +251,14 @@ class ConnectionService {
       }
     } catch (e) {
       debugPrint('[ConnectionService] ❌ Error writing to socket: $e');
-      // If socket is in bad state, trigger reconnection
-      if (e.toString().contains('StreamSink is bound') ||
-          e.toString().contains('Socket is closed')) {
-        debugPrint(
-          '[ConnectionService] Socket is in bad state, will attempt to recover',
-        );
-        _handleConnectionError('Socket write error: $e');
-      }
-      rethrow;
+
+      // Always handle socket write errors gracefully during disconnect/cleanup
+      // Assertions in socket_patch can happen if flush() is called on a closed socket
+      debugPrint(
+        '[ConnectionService] Socket write failed (likely closed), ignoring.',
+      );
+      _handleConnectionError('Socket write error: $e');
+      // Do not rethrow - prevents unhandled exceptions during cleanup
     }
   }
 
@@ -277,9 +276,16 @@ class ConnectionService {
     buffer.add(_int32(payloadLen));
     buffer.add([type & 0xFF]);
     buffer.add(payload);
-    socket.add(buffer.takeBytes());
-    if (forceFlush) {
-      await socket.flush();
+    try {
+      socket.add(buffer.takeBytes());
+      if (forceFlush) {
+        await socket.flush();
+      }
+    } catch (e) {
+      debugPrint('[ConnectionService] ❌ Error writing to specific socket: $e');
+      // If we can't write, likely the socket is dead.
+      // We don't rethrow to avoid unhandled exceptions crashing the app,
+      // but we should probably signal that this socket is bad.
     }
   }
 
@@ -387,14 +393,17 @@ class ConnectionService {
     header[offset++] = isLast ? 1 : 0;
 
     Future<void> write() async {
-      // Combine header and bytes into a single buffer for atomic write
-      // This prevents interleaving issues when multiple chunks are sent in parallel
-      final combined = BytesBuilder(copy: false);
-      combined.add(header);
-      combined.add(bytes);
-      targetSocket.add(combined.takeBytes());
-      if (flush) {
-        await targetSocket.flush();
+      try {
+        final combined = BytesBuilder(copy: false);
+        combined.add(header);
+        combined.add(bytes);
+        targetSocket.add(combined.takeBytes());
+        if (flush) {
+          await targetSocket.flush();
+        }
+      } catch (e) {
+        debugPrint('[ConnectionService] ❌ Error writing binary chunk: $e');
+        // Safe to ignore, connection likely dead and will be handled by onError/onDone
       }
     }
 
@@ -669,6 +678,16 @@ class ConnectionService {
     if (currentConnection?.status == ConnectionStatus.connecting) return false;
     if (currentConnection?.status == ConnectionStatus.connected) return true;
 
+    // CRITICAL: Prevent self-connections
+    if (ipAddress == '127.0.0.1' ||
+        ipAddress == '::1' ||
+        ipAddress == '0.0.0.0') {
+      debugPrint(
+        '[ConnectionService] ❌ Cannot connect to loopback address: $ipAddress',
+      );
+      return false;
+    }
+
     if (_sockets.isNotEmpty) {
       debugPrint('[ConnectionService] Disconnecting from previous connection');
       await disconnect();
@@ -745,6 +764,15 @@ class ConnectionService {
       );
       _socketSubscriptions.add(sub);
       debugPrint('[ConnectionService] ✅ Primary socket connected');
+
+      // Detect WiFi Direct P2P network by IP address (for QR-based connections)
+      if (ipAddress.startsWith('192.168.49.')) {
+        _usingWifiDirect = true;
+        wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+        debugPrint(
+          '[ConnectionService] 📡 Detected WiFi Direct P2P network: $ipAddress',
+        );
+      }
 
       // If we connected via standard TCP but have a p2pPeerId, we might want to upgrade later
       // The current _attemptWiFiDirectUpgrade logic handles this via "wifi_direct_offer"
@@ -987,6 +1015,15 @@ class ConnectionService {
         debugPrint('[ConnectionService] ⚠️  Failed to set socket options: $e');
       }
 
+      // Detect WiFi Direct P2P network by IP address (for incoming connections)
+      if (ipAddress.startsWith('192.168.49.')) {
+        _usingWifiDirect = true;
+        wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+        debugPrint(
+          '[ConnectionService] 📡 Incoming connection from WiFi Direct P2P network: $ipAddress',
+        );
+      }
+
       debugPrint('[ConnectionService] 🎧 Setting up socket listener...');
       try {
         final sub = socket.listen(
@@ -1070,7 +1107,28 @@ class ConnectionService {
       return;
     }
 
+    // Skip if already on WiFi Direct P2P network (192.168.49.x)
+    if (_currentConnection?.ipAddress.startsWith('192.168.49.') ?? false) {
+      debugPrint(
+        '[ConnectionService] 📡 Already on WiFi Direct P2P network (${_currentConnection?.ipAddress}), skipping upgrade',
+      );
+      return;
+    }
+
     wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
+
+    // ⏰ Timeout fallback: If not connected within 60s, revert status so UI doesn't hang
+    // This effectively falls back to standard DPFTP (since _usingWifiDirect remains false)
+    Timer(const Duration(minutes: 1), () {
+      if (!isUsingWifiDirect &&
+          wifiDirectStatusNotifier.value == WifiDirectStatus.connecting) {
+        debugPrint(
+          '[ConnectionService] ⏰ WiFi Direct upgrade timed out after 60s. Fallback to DPFTP.',
+        );
+        wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
+        // _wifiDirectAttempted remains true to prevent retry loops
+      }
+    });
 
     try {
       debugPrint('[ConnectionService] 📡 Attempting WiFi Direct upgrade...');
@@ -1242,12 +1300,42 @@ class ConnectionService {
             shared: true,
           );
         }
-        final socket = await _wifiDirectServer!.first;
-        await _attachWifiDirectDataSocket(socket);
+        // Use loop to filter out unwanted connections (e.g. self-connects from other services)
+        await for (final socket in _wifiDirectServer!) {
+          final remoteIp = socket.remoteAddress.address;
+          debugPrint(
+            '[ConnectionService] 📡 WiFi Direct: Accepted connection from $remoteIp',
+          );
+
+          // prevent self-connection (loopback or own IP)
+          if (socket.remoteAddress.isLoopback ||
+              remoteIp == '127.0.0.1' ||
+              remoteIp == '::1' ||
+              remoteIp == ipAddress) {
+            debugPrint(
+              '[ConnectionService] ⚠️  Ignoring loopback/self connection from $remoteIp',
+            );
+            socket.destroy();
+            continue;
+          }
+
+          // Valid peer connection
+          await _attachWifiDirectDataSocket(socket);
+          break; // Stop accepting for now (1-to-1 P2P)
+        }
       } else {
         debugPrint(
           '[ConnectionService] 🚀 WiFi Direct: connecting to $ipAddress:$port',
         );
+
+        if (ipAddress == '127.0.0.1' ||
+            ipAddress == '0.0.0.0' ||
+            ipAddress == '::1') {
+          throw StateError(
+            'Cannot connect to loopback address ($ipAddress) in WiFi Direct Client mode',
+          );
+        }
+
         Socket? socket;
         for (int attempt = 1; attempt <= 5; attempt++) {
           try {
@@ -1271,7 +1359,21 @@ class ConnectionService {
       await _wifiDirectService.stopDiscovery();
       debugPrint('[ConnectionService] ✅ WiFi Direct data socket ready');
       wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
-      _wifiDirectIpAddress = ipAddress; // Store for DPFTP usage
+
+      // CRITICAL FIX: Store the PEER's IP for DPFTP usage
+      // - Group Owner: Use client's IP (from socket.remoteAddress)
+      // - Client: Use Group Owner's IP (from ipAddress parameter)
+      if (isGroupOwner) {
+        _wifiDirectIpAddress = _wifiDirectDataSocket!.remoteAddress.address;
+        debugPrint(
+          '[ConnectionService] 📍 Group Owner storing client IP for DPFTP: $_wifiDirectIpAddress',
+        );
+      } else {
+        _wifiDirectIpAddress = ipAddress; // Client stores GO IP
+        debugPrint(
+          '[ConnectionService] 📍 Client storing GO IP for DPFTP: $_wifiDirectIpAddress',
+        );
+      }
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️  WiFi Direct data socket failed: $e');
       _teardownWifiDirectDataSocket();
@@ -1295,6 +1397,23 @@ class ConnectionService {
   }
 
   Future<void> _attachWifiDirectDataSocket(Socket socket) async {
+    final remoteAddr = socket.remoteAddress;
+    debugPrint(
+      '[ConnectionService] 🔗 Attaching WiFi Direct socket from ${remoteAddr.address}:${socket.remotePort}',
+    );
+
+    // CRITICAL: Final safety check - reject loopback connections
+    if (remoteAddr.isLoopback ||
+        remoteAddr.address == '127.0.0.1' ||
+        remoteAddr.address == '::1' ||
+        remoteAddr.address == '0.0.0.0') {
+      debugPrint(
+        '[ConnectionService] ❌ REJECTED loopback WiFi Direct socket from ${remoteAddr.address}',
+      );
+      socket.destroy();
+      throw StateError('Cannot attach loopback WiFi Direct socket');
+    }
+
     _wifiDirectDataSocket = socket;
 
     // 🚀 CRITICAL: Optimize WiFi Direct P2P socket for maximum throughput
@@ -1926,15 +2045,17 @@ class ConnectionService {
             // Moderate connection count for router compatibility
             final int parallelConns = isRemoteWindows
                 ? 10 // Windows: 10 connections (Aggressive Parallelism)
-                : (isRemoteLinux || isRemoteAndroid || isRemoteMacOS
-                      ? 6 // Linux/Android/macOS: 6 connections
-                      : 6); // Others: 6 connections
+                : (isRemoteLinux || isRemoteMacOS
+                      ? 6 // Linux/macOS: 6 connections
+                      : (isRemoteAndroid
+                            ? 4 // Android: 4 connections (Safe for older devices)
+                            : 6)); // Others: 6 connections
 
             // FIXED: Use 2MB chunks for Windows to reduce CPU/Header overhead
             // 4MB for optimal throughput on other platforms
             final int chunkSizeMB = isRemoteWindows
                 ? 2 * 1024 * 1024
-                : 4 * 1024 * 1024;
+                : (isRemoteAndroid ? 1024 * 1024 : 4 * 1024 * 1024);
 
             // Windows-specific: Tighter window to consume data faster and reduce RTT
             // 32MB is enough for 30+ MB/s even with high RTT.
@@ -1947,9 +2068,13 @@ class ConnectionService {
                       ? (256 *
                             1024 *
                             1024) // 256MB for macOS (good default buffers)
-                      : (isRemoteLinux || isRemoteAndroid
-                            ? (256 * 1024 * 1024) // 256MB for Linux/Android
-                            : (128 * 1024 * 1024))); // 128MB for others
+                      : (isRemoteLinux
+                            ? (256 * 1024 * 1024) // 256MB for Linux
+                            : (isRemoteAndroid
+                                  ? (64 *
+                                        1024 *
+                                        1024) // 64MB for Android (prevent bufferbloat on Redmi etc)
+                                  : (128 * 1024 * 1024)))); // 128MB for others
 
             debugPrint(
               'dpftp-new-file: Config → ${isRemoteWindows
@@ -2147,9 +2272,9 @@ class ConnectionService {
             }
           }
 
-          // Use DPFTP only when WiFi Direct is NOT active
-          // When WiFi Direct is connected, use legacy transfer which routes through WiFi Direct socket
-          if (useDpftp && !_usingWifiDirect) {
+          // 🚀 ALWAYS Use DPFTP (parallel sockets) if enabled, even for WiFi Direct
+          // This bypasses the slower single-socket legacy WiFi Direct path
+          if (useDpftp) {
             debugPrint(
               '[ConnectionService] 🚀 DPFTP took over. Legacy sender logic stopping.',
             );
@@ -2593,9 +2718,9 @@ class ConnectionService {
       return;
     }
 
-    // Use DPFTP only when WiFi Direct is NOT active
-    // When WiFi Direct is connected, use legacy receive which routes through WiFi Direct socket
-    if (useDpftp && !_usingWifiDirect) {
+    // 🚀 ALWAYS Use DPFTP (parallel sockets) if enabled, even for WiFi Direct
+    // This bypasses the slower single-socket legacy WiFi Direct path
+    if (useDpftp) {
       debugPrint('[ConnectionService] 🚀 Accepting with DPFTP for $transferId');
       await sendMessage(
         DeviceMessage(
@@ -2872,6 +2997,20 @@ class ConnectionService {
 
   /// Update connection status
   void _updateStatus(ConnectionInfo info) {
+    // 🛡️ Guard: If we are on WiFi Direct P2P, do NOT overwrite the P2P IP with a LAN IP (e.g. from mDNS)
+    // This prevents falling back to slow WiFi when both devices are also on office/home WiFi.
+    if (_usingWifiDirect &&
+        _currentConnection != null &&
+        _currentConnection!.ipAddress.startsWith('192.168.49.') &&
+        !info.ipAddress.startsWith('192.168.49.') &&
+        info.status == ConnectionStatus.connected) {
+      debugPrint(
+        '[ConnectionService] 🛡️ Preserving P2P IP ${_currentConnection!.ipAddress} against update to ${info.ipAddress}',
+      );
+      // Keep the new status/device name but force the P2P IP
+      info = info.copyWith(ipAddress: _currentConnection!.ipAddress);
+    }
+
     _currentConnection = info;
     for (final listener in List.of(_statusListeners)) {
       listener(info);
@@ -2965,6 +3104,7 @@ class ConnectionService {
         );
       }
     }
+    wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
 
     for (final sub in _socketSubscriptions) {
       await sub.cancel();

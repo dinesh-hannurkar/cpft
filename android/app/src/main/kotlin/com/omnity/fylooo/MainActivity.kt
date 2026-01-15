@@ -14,6 +14,11 @@ import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiNetworkSpecifier
 import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
 
@@ -250,8 +255,27 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+                "createGroup" -> {
+                    val success = wifiDirectManager?.createGroup() ?: false
+                    result.success(success)
+                }
+                "connectToGroup" -> {
+                    val ssid = call.argument<String>("ssid")
+                    val password = call.argument<String>("password")
+                    if (ssid == null || password == null) {
+                        result.error("INVALID_ARGS", "SSID and Password required", null)
+                        return@setMethodCallHandler
+                    }
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        wifiDirectManager?.connectToGroup(ssid, password) { success ->
+                             result.success(success)
+                        }
+                    } else {
+                        result.error("UNSUPPORTED", "Only Android 10+ supported for offline QR mode", null)
+                    }
+                }
                 "disconnect" -> {
-                    wifiDirectManager?.disconnect()
+                    wifiDirectManager?.cleanup()
                     result.success(true)
                 }
                 else -> result.notImplemented()

@@ -157,14 +157,32 @@ class ConnectionManager {
     return ip;
   }
 
-  /// Try to auto-accept a connection if it's a parallel socket for an existing connection.
+  bool _isAutoAcceptEnabled = false;
+
+  void setAutoAccept(bool enabled) {
+    _isAutoAcceptEnabled = enabled;
+    AppLogger.d('Auto-accept mode set to: $enabled', tag: 'ConnMgr');
+  }
+
+  /// Try to auto-accept a connection if it's a parallel socket for an existing connection,
+  /// OR if global auto-accept is enabled (e.g. Host mode).
   /// Returns true if accepted (processed), false if it should be handled as a simplified incoming request.
-  Future<bool> tryAutoAcceptConnection(Socket socket) async {
+  Future<bool> tryAutoAcceptConnection(Socket socket, String remoteName) async {
     final ip = _normalizeIp(socket.remoteAddress.address);
     AppLogger.v(
       'Auto-accept check for IP: $ip (raw: ${socket.remoteAddress.address})',
       tag: 'ConnMgr',
     );
+
+    // 0. Check global auto-accept (Host mode)
+    if (_isAutoAcceptEnabled) {
+      AppLogger.i(
+        'Global auto-accept enabled. Accepting connection from $remoteName ($ip)',
+        tag: 'ConnMgr',
+      );
+      await handleIncomingConnection(socket, remoteName);
+      return true;
+    }
 
     // 1. Find existing service via IP match
     ConnectionService? existingServiceByIp;

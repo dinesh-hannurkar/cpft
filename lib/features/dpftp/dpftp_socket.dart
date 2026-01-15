@@ -28,6 +28,34 @@ class DpftpSocket {
   int get remotePort => _socket.remotePort;
 
   DpftpSocket(this._socket) {
+    try {
+      _socket.setOption(SocketOption.tcpNoDelay, true);
+
+      // Tune buffers for Android/Linux to absorb scheduling jitter (especially for Redmi as GO)
+      if (Platform.isAndroid || Platform.isLinux) {
+        // SO_SNDBUF = 7, SO_RCVBUF = 8 (Standard Linux constants)
+        // Set to 2MB to ensure kernel has plenty of data to send even if app thread is preempted
+        const int bufferSize = 2 * 1024 * 1024;
+
+        _socket.setRawOption(
+          RawSocketOption.fromInt(
+            RawSocketOption.levelSocket,
+            7, // SO_SNDBUF
+            bufferSize,
+          ),
+        );
+
+        _socket.setRawOption(
+          RawSocketOption.fromInt(
+            RawSocketOption.levelSocket,
+            8, // SO_RCVBUF
+            bufferSize,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[DPFTP] Failed to set socket options: $e');
+    }
     _socket.listen(
       _onData,
       onError: (e) {

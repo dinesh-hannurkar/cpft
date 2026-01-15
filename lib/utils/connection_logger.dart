@@ -47,9 +47,15 @@ class ConnectionLogger {
   Future<void> log(String message) async {
     if (!_initialized) await initialize();
     try {
-      final timestamp = DateTime.now().toIso8601String();
-      final logMessage = '[$timestamp] $message\n';
-      await _logFile?.writeAsString(logMessage, mode: FileMode.append);
+      if (_logFile != null) {
+        final parent = _logFile!.parent;
+        if (!await parent.exists()) {
+          await parent.create(recursive: true);
+        }
+        final timestamp = DateTime.now().toIso8601String();
+        final logMessage = '[$timestamp] $message\n';
+        await _logFile?.writeAsString(logMessage, mode: FileMode.append);
+      }
     } catch (e) {
       debugPrint('[ConnectionLogger] ❌ Failed to write log: $e');
     }

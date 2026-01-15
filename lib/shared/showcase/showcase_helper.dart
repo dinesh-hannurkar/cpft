@@ -17,6 +17,7 @@ class ShowcaseHelper {
   static final GlobalKey connectedDevicesKey = GlobalKey();
   static final GlobalKey settingsKey = GlobalKey();
   static final GlobalKey helpKey = GlobalKey();
+  static final GlobalKey offlineP2PKey = GlobalKey();
 
   // File operation keys
   static final GlobalKey saveButtonKey = GlobalKey();

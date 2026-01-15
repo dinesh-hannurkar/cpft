@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/models/hotspot_info.dart';
-import 'package:fylooo/services/discovery_service.dart';
 
 class LocalHotspotService {
   static const platform = MethodChannel('com.omnity.fylooo/hotspot');
@@ -18,20 +17,19 @@ class LocalHotspotService {
         // Initialize WiFi Direct service
         await _wifiDirectService.initialize();
 
-        // Create WiFi Direct group
-        final success = await _wifiDirectService.createGroup();
-        if (!success) {
-          return null;
-        }
-
-        // Wait for group credentials from connection stream
+        // Set up listener BEFORE creating group to avoid race condition
         final completer = Completer<HotspotInfo?>();
 
+        print('WiFi Direct: Setting up connection stream listener...');
         _connectionSub = _wifiDirectService.connectionStream.listen((event) {
+          print(
+            'WiFi Direct: Event - isGO=${event.isGroupOwner}, ssid=${event.ssid}, hasPassword=${event.password != null}',
+          );
           if (event.isGroupOwner &&
               event.ssid != null &&
               event.password != null) {
             if (!completer.isCompleted) {
+              print('WiFi Direct: Got credentials! SSID=${event.ssid}');
               completer.complete(
                 HotspotInfo(
                   ssid: event.ssid!,
@@ -42,14 +40,27 @@ class LocalHotspotService {
             }
           } else if (event.isLost) {
             if (!completer.isCompleted) {
+              print('WiFi Direct: Connection lost');
               completer.complete(null);
             }
           }
         });
 
-        // Timeout after 30 seconds (some devices take longer to establish group)
+        // Small delay to ensure listener is ready
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Now create WiFi Direct group
+        print('WiFi Direct: Creating group...');
+        final success = await _wifiDirectService.createGroup();
+        if (!success) {
+          print('WiFi Direct: createGroup returned false');
+          _connectionSub?.cancel();
+          return null;
+        }
+
+        print('WiFi Direct: Waiting for credentials (timeout: 15s)...');
         return await completer.future.timeout(
-          const Duration(seconds: 30),
+          const Duration(seconds: 10),
           onTimeout: () {
             _connectionSub?.cancel();
             return null;
@@ -79,9 +90,6 @@ class LocalHotspotService {
 
   /// Stop hotspot - disconnects WiFi Direct on Android, stops platform hotspot on other platforms
   static Future<bool> stopHotspot() async {
-    // Disable auto-accept regardless of platform
-    DiscoveryService.sharedConnectionManager?.setAutoAccept(false);
-
     if (Platform.isAndroid) {
       // Disconnect WiFi Direct
       try {
