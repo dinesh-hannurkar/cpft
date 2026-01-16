@@ -554,24 +554,25 @@ class ConnectionService {
       } else {
         // Desktop: Check for saved download location preference
         final prefs = await SharedPreferences.getInstance();
-        final savedPath = prefs.getString('download_directory');
+        final savedPath = prefs.getString('download_save_path');
 
         if (savedPath != null && savedPath.isNotEmpty) {
           dir = Directory(savedPath);
           if (!await dir.exists()) {
             // Saved path no longer exists, clear it
-            await prefs.remove('download_directory');
+            await prefs.remove('download_save_path');
             dir = null;
           }
         }
 
         // If no saved location, use Downloads folder as default
-        // Prompt will happen when actually receiving a file
+        // User can change this in Settings
         if (dir == null) {
           dir = await getDownloadsDirectory();
           dir ??= await getApplicationDocumentsDirectory();
         }
       }
+
       await DpftpService().startReceiver(saveDirectory: dir.path);
 
       // Listen to progress
