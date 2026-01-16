@@ -530,7 +530,7 @@ class MulticastService {
 
       if (successfulSockets > 0) {
         debugPrint(
-          '[MulticastService] Sent announcement: $alias ($totalBytesSent bytes on $successfulSockets sockets)',
+          '[MulticastService] Sent announcement: $alias ($totalBytesSent bytes on $successfulSockets interfaces)',
         );
       } else {
         debugPrint(

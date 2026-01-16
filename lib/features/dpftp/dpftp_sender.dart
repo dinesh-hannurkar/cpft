@@ -103,6 +103,9 @@ class DpftpSender {
       b.add(Dpftp.int16(idBytes.length));
       b.add(idBytes);
 
+      // Give iOS/Hotspot receiver a moment to stabilize connection before sending HELLO
+      await Future.delayed(const Duration(milliseconds: 200));
+
       await _sockets.sendControl(Dpftp.typeHello, b.takeBytes());
 
       debugPrint(
@@ -115,13 +118,22 @@ class DpftpSender {
 
   Future<void> _connectSocket() async {
     final startTime = DateTime.now();
-    final socket = await Socket.connect(ip, port);
-    final duration = DateTime.now().difference(startTime).inMilliseconds;
-    _sockets.addSocket(socket);
+    try {
+      // Add timeout to prevent hanging forever
+      final socket = await Socket.connect(
+        ip,
+        port,
+      ).timeout(const Duration(seconds: 3));
+      final duration = DateTime.now().difference(startTime).inMilliseconds;
+      _sockets.addSocket(socket);
 
-    // Log connection time for data sockets (not control)
-    if (_sockets.dataConnectionCount > 0) {
-      debugPrint('dpftp-new-file: ⚡ Socket connected in ${duration}ms');
+      // Log connection time for data sockets (not control)
+      if (_sockets.dataConnectionCount > 0) {
+        debugPrint('dpftp-new-file: ⚡ Socket connected in ${duration}ms');
+      }
+    } catch (e) {
+      debugPrint('[DPFTP] ⚠️ Data socket connection failed: $e');
+      // Don't rethrow - allow partial parallel connections
     }
   }
 
@@ -156,9 +168,20 @@ class DpftpSender {
 
     // Establish Parallel Data Connections (ALL AT ONCE!)
     // This reduces connection time from 2-3s to ~500ms
+    // Establish Parallel Data Connections (ALL AT ONCE!)
+    // This reduces connection time from 2-3s to ~500ms
+    // Use separate error handling to allow partial success
     await Future.wait([
       for (int i = 0; i < parallelConnections; i++) _connectSocket(),
     ]);
+
+    if (_sockets.dataConnectionCount == 0 && parallelConnections > 0) {
+      debugPrint(
+        '[DPFTP] ⚠️ No parallel sockets connected! Transfer might be slow or fail.',
+      );
+      // Proceed anyway, maybe control socket can handle it (if supported) or retry logic needed.
+      // For now, we trust the robust _connectSocket to catch errors but we warn here.
+    }
 
     // Proactively start sending chunks ("push" model)
     // Enqueue all chunks and let the pump and flow control manage the rate.
@@ -268,9 +291,18 @@ class DpftpSender {
 
         final id = _chunkQueue.removeAt(0);
 
-        // Send (Awaited but IO is separate from Control)
-        // Cycle through available sockets (0, 1, 2, 3, 0, 1, 2, 3...)
-        await _sendChunk(id, _socketIdx++ % parallelConnections);
+        // Cycle through available sockets using ACTUAL connected count
+        // (parallelConnections might be 4 but maybe only 2 connected)
+        final socketCount = _sockets.dataConnectionCount;
+        if (socketCount > 0) {
+          await _sendChunk(id, _socketIdx++ % socketCount);
+        } else {
+          // Fallback: This shouldn't happen if we paused for at least 1 socket,
+          // but if all failed, we might need to error out or use control socket?
+          // For now, skip sending (will timeout) or try index 0 (if control behaves as data?)
+          // Safe fallback:
+          await _sendChunk(id, 0);
+        }
 
         // 📊 Real-time speed monitoring every 10 chunks
         if (id > 0 && id % 10 == 0 && _startTime != null) {

@@ -166,9 +166,9 @@ class DpftpSocket {
 
     try {
       _socket.add(header.takeBytes());
-      if (type != Dpftp.typeAssignChunks) {
-        // Flush important messages immediately? No, OS handles it.
-        // await _socket.flush(); // Generally avoid await flush in Dart unless closing
+      if (type == Dpftp.typeHello || type == Dpftp.typeFileInfo) {
+        // Force flush for handshake messages to ensure they aren't buffered
+        await _socket.flush();
       }
     } catch (e) {
       debugPrint('[DPFTP] Send error: $e');

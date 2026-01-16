@@ -252,12 +252,12 @@ class ConnectionService {
     } catch (e) {
       debugPrint('[ConnectionService] ❌ Error writing to socket: $e');
 
-      // Always handle socket write errors gracefully during disconnect/cleanup
-      // Assertions in socket_patch can happen if flush() is called on a closed socket
+      // Socket is already closed/broken - don't propagate error to avoid cascading failures
+      // Just return silently since we can't write anyway
       debugPrint(
         '[ConnectionService] Socket write failed (likely closed), ignoring.',
       );
-      _handleConnectionError('Socket write error: $e');
+      return; // Don't call _handleConnectionError to avoid double-close
       // Do not rethrow - prevents unhandled exceptions during cleanup
     }
   }
@@ -766,11 +766,11 @@ class ConnectionService {
       debugPrint('[ConnectionService] ✅ Primary socket connected');
 
       // Detect WiFi Direct P2P network by IP address (for QR-based connections)
+      // Detect WiFi Direct P2P network by IP address
       if (ipAddress.startsWith('192.168.49.')) {
-        _usingWifiDirect = true;
-        wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+        // Don't set _usingWifiDirect = true yet! Wait for handshake to confirm peer is Android.
         debugPrint(
-          '[ConnectionService] 📡 Detected WiFi Direct P2P network: $ipAddress',
+          '[ConnectionService] 📡 Detected potential WiFi Direct P2P network: $ipAddress (waiting for handshake)',
         );
       }
 
@@ -1016,11 +1016,11 @@ class ConnectionService {
       }
 
       // Detect WiFi Direct P2P network by IP address (for incoming connections)
+      // Detect WiFi Direct P2P network by IP address (for incoming connections)
       if (ipAddress.startsWith('192.168.49.')) {
-        _usingWifiDirect = true;
-        wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+        // Don't set _usingWifiDirect = true yet! Wait for handshake to confirm peer is Android.
         debugPrint(
-          '[ConnectionService] 📡 Incoming connection from WiFi Direct P2P network: $ipAddress',
+          '[ConnectionService] 📡 Incoming connection from potential WiFi Direct P2P network: $ipAddress',
         );
       }
 
@@ -1589,6 +1589,22 @@ class ConnectionService {
         );
       }
 
+      // CRITICAL FIX: Only enable WiFi Direct mode if remote is Android AND we are on P2P subnet
+      if (_remotePlatform == 'android' &&
+          (_currentConnection?.ipAddress.startsWith('192.168.49.') ?? false)) {
+        _usingWifiDirect = true;
+        wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+        debugPrint(
+          '[ConnectionService] 📡 Confirmed WiFi Direct P2P connection with Android peer',
+        );
+      } else if (_remotePlatform != 'android') {
+        // Explicitly disable WiFi Direct optimizations for non-Android peers
+        _usingWifiDirect = false;
+        debugPrint(
+          '[ConnectionService] ℹ️ Peer is $_remotePlatform, disabling WiFi Direct mode',
+        );
+      }
+
       if (_currentConnection != null &&
           _currentConnection!.status == ConnectionStatus.connecting) {
         debugPrint(
@@ -2041,15 +2057,20 @@ class ConnectionService {
             final bool isRemoteLinux = _remotePlatform == 'linux';
             final bool isRemoteAndroid = _remotePlatform == 'android';
             final bool isRemoteMacOS = _remotePlatform == 'macos';
+            final bool isRemoteIOS = _remotePlatform == 'ios';
 
             // Moderate connection count for router compatibility
-            final int parallelConns = isRemoteWindows
-                ? 10 // Windows: 10 connections (Aggressive Parallelism)
-                : (isRemoteLinux || isRemoteMacOS
-                      ? 6 // Linux/macOS: 6 connections
-                      : (isRemoteAndroid
-                            ? 4 // Android: 4 connections (Safe for older devices)
-                            : 6)); // Others: 6 connections
+            final int parallelConns = Platform.isIOS
+                ? 2 // iOS: Strict limit of 2 parallel connections
+                : (isRemoteWindows
+                      ? 10 // Windows: 10 connections
+                      : (isRemoteLinux || isRemoteMacOS
+                            ? 6 // Linux/macOS: 6 connections
+                            : (isRemoteAndroid
+                                  ? 4 // Android: 4 connections
+                                  : (isRemoteIOS
+                                        ? 1
+                                        : 2)))); // iOS: 1 connection, Others: 2
 
             // FIXED: Use 2MB chunks for Windows to reduce CPU/Header overhead
             // 4MB for optimal throughput on other platforms
@@ -3097,10 +3118,14 @@ class ConnectionService {
           content: 'Disconnecting',
           senderName: deviceName,
         );
-        await sendMessage(goodbye);
+        // timeout to prevent hanging on disconnect
+        await sendMessage(
+          goodbye,
+        ).timeout(const Duration(milliseconds: 500), onTimeout: () => false);
       } catch (e) {
+        // Ignore any errors during goodbye (socket likely closed)
         debugPrint(
-          '[ConnectionService] ⚠️  Could not send goodbye message: $e',
+          '[ConnectionService] ⚠️  Could not send goodbye message (ignored): $e',
         );
       }
     }

@@ -86,35 +86,35 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                 child: _buildConnectedDevicesButton(),
               ),
               const SizedBox(width: AppSizes.sm),
-              if (Theme.of(context).platform == TargetPlatform.android) ...[
-                Showcase(
-                  key: ShowcaseHelper
-                      .offlineP2PKey, // Need to add key? Or just skip tutorial for now
-                  disableBarrierInteraction: false,
-                  targetPadding: const EdgeInsets.all(8),
-                  title: 'Offline P2P',
-                  description:
-                      'Connect Android devices directly (No WiFi needed).',
-                  tooltipBackgroundColor: Colors.white,
-                  textColor: Colors.black,
-                  descTextStyle: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black87,
-                  ),
-                  titleTextStyle: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                    fontSize: 16,
-                  ),
-                  tooltipBorderRadius: BorderRadius.circular(12),
-                  targetBorderRadius: BorderRadius.circular(12),
-                  child: AppIconButton(
-                    icon: Icons.wifi_tethering,
-                    onPressed: onOfflineP2P,
-                  ),
-                ),
-                const SizedBox(width: AppSizes.sm),
-              ],
+              // if (Theme.of(context).platform == TargetPlatform.android) ...[
+              //   Showcase(
+              //     key: ShowcaseHelper
+              //         .offlineP2PKey, // Need to add key? Or just skip tutorial for now
+              //     disableBarrierInteraction: false,
+              //     targetPadding: const EdgeInsets.all(8),
+              //     title: 'Offline P2P',
+              //     description:
+              //         'Connect Android devices directly (No WiFi needed).',
+              //     tooltipBackgroundColor: Colors.white,
+              //     textColor: Colors.black,
+              //     descTextStyle: const TextStyle(
+              //       fontSize: 12,
+              //       color: Colors.black87,
+              //     ),
+              //     titleTextStyle: const TextStyle(
+              //       fontWeight: FontWeight.bold,
+              //       color: Colors.black,
+              //       fontSize: 16,
+              //     ),
+              //     tooltipBorderRadius: BorderRadius.circular(12),
+              //     targetBorderRadius: BorderRadius.circular(12),
+              //     child: AppIconButton(
+              //       icon: Icons.wifi_tethering,
+              //       onPressed: onOfflineP2P,
+              //     ),
+              //   ),
+              //   const SizedBox(width: AppSizes.sm),
+              // ],
               Showcase(
                 key: ShowcaseHelper.qrScannerKey,
                 disableBarrierInteraction: false,

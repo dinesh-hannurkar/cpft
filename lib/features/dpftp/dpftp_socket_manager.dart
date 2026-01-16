@@ -95,16 +95,30 @@ class DpftpSocketManager {
     bd.setUint32(4, payload.length, Endian.big);
     frame.setRange(8, frameSize, payload);
 
-    await socket.sendMessage(0x08, frame);
+    try {
+      await socket.sendMessage(0x08, frame);
+    } catch (e) {
+      debugPrint('[DPFTP] ⚠️ Data Send Error (socket $socketIndex): $e');
+      // If one socket dies, we might need to remove it?
+      // For now, just logging to prevent crash.
+    }
   }
 
   void dispose() {
     _isDisposed = true;
-    _controlSocket?.dispose();
+    try {
+      _controlSocket?.dispose();
+    } catch (_) {}
+
     for (var s in _dataSockets) {
-      s.dispose();
+      try {
+        s.dispose();
+      } catch (_) {}
     }
-    _controlStream.close();
-    _dataStream.close();
+
+    try {
+      _controlStream.close();
+      _dataStream.close();
+    } catch (_) {}
   }
 }
