@@ -565,32 +565,11 @@ class ConnectionService {
           }
         }
 
-        // If no saved location, prompt user to choose
+        // If no saved location, use Downloads folder as default
+        // Prompt will happen when actually receiving a file
         if (dir == null) {
-          debugPrint(
-            '[ConnectionService] No download location set, prompting user...',
-          );
-
-          // Use file_picker to let user choose a directory
-          final selectedDirectory = await FilePicker.platform.getDirectoryPath(
-            dialogTitle: 'Choose Download Location',
-          );
-
-          if (selectedDirectory != null && selectedDirectory.isNotEmpty) {
-            dir = Directory(selectedDirectory);
-            // Save the chosen location for future use
-            await prefs.setString('download_directory', selectedDirectory);
-            debugPrint(
-              '[ConnectionService] Download location saved: $selectedDirectory',
-            );
-          } else {
-            // User cancelled, use Downloads folder as fallback
-            debugPrint(
-              '[ConnectionService] User cancelled, using default Downloads folder',
-            );
-            dir = await getDownloadsDirectory();
-            dir ??= await getApplicationDocumentsDirectory();
-          }
+          dir = await getDownloadsDirectory();
+          dir ??= await getApplicationDocumentsDirectory();
         }
       }
       await DpftpService().startReceiver(saveDirectory: dir.path);

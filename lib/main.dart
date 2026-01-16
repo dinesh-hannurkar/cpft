@@ -55,13 +55,9 @@ void main() async {
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
 
-    // Get screen size to avoid taskbar overlap
-    final screenSize = await windowManager.getSize();
-    final screenHeight = screenSize.height;
-
-    // Use 90% of screen height to leave room for taskbar
-    // Cap at 800px for normal screens, but scale down on small screens
-    final windowHeight = (screenHeight * 0.9).clamp(600.0, 800.0);
+    // Set window height - works well on most screens
+    // Users can resize manually if needed
+    const windowHeight = 800.0;
 
     WindowOptions windowOptions = WindowOptions(
       size: Size(450, windowHeight),
