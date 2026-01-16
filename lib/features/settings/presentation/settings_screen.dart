@@ -44,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isApplying = false;
   bool _soundsEnabled = true;
   bool _useNativeReceiver = true; // Debug toggle for direct Dart I/O test
-  String _downloadPath = 'Downloads (Default)';
+  String _downloadPath = '';
 
   @override
   void initState() {
@@ -135,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (_) {}
 
     if (path == null || (defaultPath != null && path == defaultPath)) {
-      if (mounted) setState(() => _downloadPath = 'Downloads (Default)');
+      if (mounted) setState(() => _downloadPath = '');
     } else {
       if (mounted) setState(() => _downloadPath = path);
     }
