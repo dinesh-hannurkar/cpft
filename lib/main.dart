@@ -55,10 +55,21 @@ void main() async {
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
 
-    WindowOptions windowOptions = const WindowOptions(
-      size: Size(450, 800),
-      minimumSize: Size(450, 600),
-      maximumSize: Size(450, 4000), // Effectively fixed width, flexible height
+    // Get screen size to avoid taskbar overlap
+    final screenSize = await windowManager.getSize();
+    final screenHeight = screenSize.height;
+
+    // Use 90% of screen height to leave room for taskbar
+    // Cap at 800px for normal screens, but scale down on small screens
+    final windowHeight = (screenHeight * 0.9).clamp(600.0, 800.0);
+
+    WindowOptions windowOptions = WindowOptions(
+      size: Size(450, windowHeight),
+      minimumSize: const Size(450, 600),
+      maximumSize: const Size(
+        450,
+        4000,
+      ), // Effectively fixed width, flexible height
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,

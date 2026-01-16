@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fylooo/models/file_transfer.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fylooo/services/notification_service.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:flutter/services.dart';
@@ -551,8 +552,46 @@ class ConnectionService {
       if (Platform.isAndroid || Platform.isIOS) {
         dir = await getApplicationDocumentsDirectory();
       } else {
-        dir = await getDownloadsDirectory();
-        dir ??= await getApplicationDocumentsDirectory();
+        // Desktop: Check for saved download location preference
+        final prefs = await SharedPreferences.getInstance();
+        final savedPath = prefs.getString('download_directory');
+
+        if (savedPath != null && savedPath.isNotEmpty) {
+          dir = Directory(savedPath);
+          if (!await dir.exists()) {
+            // Saved path no longer exists, clear it
+            await prefs.remove('download_directory');
+            dir = null;
+          }
+        }
+
+        // If no saved location, prompt user to choose
+        if (dir == null) {
+          debugPrint(
+            '[ConnectionService] No download location set, prompting user...',
+          );
+
+          // Use file_picker to let user choose a directory
+          final selectedDirectory = await FilePicker.platform.getDirectoryPath(
+            dialogTitle: 'Choose Download Location',
+          );
+
+          if (selectedDirectory != null && selectedDirectory.isNotEmpty) {
+            dir = Directory(selectedDirectory);
+            // Save the chosen location for future use
+            await prefs.setString('download_directory', selectedDirectory);
+            debugPrint(
+              '[ConnectionService] Download location saved: $selectedDirectory',
+            );
+          } else {
+            // User cancelled, use Downloads folder as fallback
+            debugPrint(
+              '[ConnectionService] User cancelled, using default Downloads folder',
+            );
+            dir = await getDownloadsDirectory();
+            dir ??= await getApplicationDocumentsDirectory();
+          }
+        }
       }
       await DpftpService().startReceiver(saveDirectory: dir.path);
 
