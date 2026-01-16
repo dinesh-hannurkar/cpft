@@ -9,6 +9,11 @@ import 'package:flutter/foundation.dart';
 class DpftpDiskWriter {
   SendPort? _sendPort;
   Isolate? _isolate;
+  final Function(String)? onError;
+  final Function(int chunkId)?
+  onWriteComplete; // Callback when chunk is written to disk
+
+  DpftpDiskWriter({this.onError, this.onWriteComplete});
 
   /// Start the disk writer isolate
   Future<void> start(String filePath, int fileSize) async {
@@ -29,9 +34,12 @@ class DpftpDiskWriter {
       if (message is SendPort) {
         completer.complete(message);
       } else if (message is _WriteResult) {
-        // Handle write completion (for future use)
+        // Notify that chunk has been written to disk
+        onWriteComplete?.call(message.chunkId);
       } else if (message is _Error) {
         debugPrint('[DiskWriter] Error: ${message.message}');
+        // Propagate error to callback
+        onError?.call(message.message);
       }
     });
 

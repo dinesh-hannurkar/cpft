@@ -23,6 +23,7 @@ import 'package:fylooo/features/settings/presentation/feedback_screen.dart';
 import 'package:fylooo/features/chat/services/connection_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:fylooo/features/dpftp/dpftp_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
@@ -146,6 +147,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (selectedDirectory != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('download_save_path', selectedDirectory);
+
+      // Restart DPFTP receiver with new location
+      try {
+        await DpftpService().restartReceiver(saveDirectory: selectedDirectory);
+        debugPrint(
+          '[Settings] DPFTP receiver restarted with new path: $selectedDirectory',
+        );
+      } catch (e) {
+        debugPrint('[Settings] Failed to restart DPFTP receiver: $e');
+      }
+
       if (mounted) {
         setState(() => _downloadPath = selectedDirectory);
       }

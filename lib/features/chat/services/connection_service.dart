@@ -542,40 +542,8 @@ class ConnectionService {
     }
 
     if (useDpftp) {
-      _initDpftp();
-    }
-  }
-
-  Future<void> _initDpftp() async {
-    try {
-      Directory? dir;
-      if (Platform.isAndroid || Platform.isIOS) {
-        dir = await getApplicationDocumentsDirectory();
-      } else {
-        // Desktop: Check for saved download location preference
-        final prefs = await SharedPreferences.getInstance();
-        final savedPath = prefs.getString('download_save_path');
-
-        if (savedPath != null && savedPath.isNotEmpty) {
-          dir = Directory(savedPath);
-          if (!await dir.exists()) {
-            // Saved path no longer exists, clear it
-            await prefs.remove('download_save_path');
-            dir = null;
-          }
-        }
-
-        // If no saved location, use Downloads folder as default
-        // User can change this in Settings
-        if (dir == null) {
-          dir = await getDownloadsDirectory();
-          dir ??= await getApplicationDocumentsDirectory();
-        }
-      }
-
-      await DpftpService().startReceiver(saveDirectory: dir.path);
-
-      // Listen to progress
+      // Set up DPFTP progress listener ONCE in constructor
+      // This persists across receiver restarts (from Settings, file_offer prompts, etc.)
       DpftpService().progress.listen((p) {
         _notifyMessageListeners(
           DeviceMessage(
@@ -595,8 +563,7 @@ class ConnectionService {
           ),
         );
 
-        // If complete, signal legacy UI completion
-        // If complete, signal legacy UI completion
+        // If complete, signal UI completion
         if (p.isComplete) {
           debugPrint(
             '[ConnectionService] 🏁 DPFTP Transfer ${p.transferId} Complete. Signaling UI.',
@@ -619,12 +586,62 @@ class ConnectionService {
                 'path': p.filePath,
                 'size': p.totalBytes,
                 'outgoing': p.isOutgoing,
-                'durationMs': p.durationMs, // Pass accurate duration to UI
+                'durationMs': p.durationMs,
               },
             ),
           );
         }
       });
+
+      _initDpftp();
+    }
+  }
+
+  Future<void> _initDpftp() async {
+    try {
+      Directory? dir;
+      if (Platform.isAndroid || Platform.isIOS) {
+        dir = await getApplicationDocumentsDirectory();
+      } else {
+        // Desktop: Check for saved download location preference
+        final prefs = await SharedPreferences.getInstance();
+        final savedPath = prefs.getString('download_save_path');
+
+        if (savedPath != null && savedPath.isNotEmpty) {
+          dir = Directory(savedPath);
+          if (!await dir.exists()) {
+            // Saved path no longer exists, clear it
+            await prefs.remove('download_save_path');
+            dir = null;
+          } else {
+            // Test if we have write permission
+            try {
+              final testFile = File('${dir.path}/.cpft_permission_test');
+              await testFile.writeAsString('test');
+              await testFile.delete();
+            } catch (e) {
+              // No write permission, clear the saved path and prompt
+              debugPrint(
+                '[ConnectionService] No write permission to $savedPath: $e',
+              );
+              await prefs.remove('download_save_path');
+              dir = null;
+            }
+          }
+        }
+
+        // If no saved location on desktop, don't initialize receiver yet
+        // Will prompt when actually receiving a file
+        if (dir == null) {
+          debugPrint(
+            '[ConnectionService] No download location set, will prompt on file reception',
+          );
+          return; // Don't start receiver yet
+        }
+      }
+
+      // Start receiver (progress listener already set up in constructor)
+      await DpftpService().startReceiver(saveDirectory: dir.path);
     } catch (e) {
       debugPrint('[ConnectionService] ⚠️ Failed to init DPFTP: $e');
     }
@@ -1887,6 +1904,42 @@ class ConnectionService {
 
     if (message.type == 'file_offer') {
       try {
+        // On desktop, check if download location is set before accepting file
+        if (!Platform.isAndroid && !Platform.isIOS) {
+          final prefs = await SharedPreferences.getInstance();
+          final savedPath = prefs.getString('download_save_path');
+
+          if (savedPath == null || savedPath.isEmpty) {
+            // No download location set, prompt user
+            debugPrint(
+              '[ConnectionService] No download location, prompting user...',
+            );
+
+            final selectedDirectory = await FilePicker.platform
+                .getDirectoryPath(dialogTitle: 'Choose Download Location');
+
+            if (selectedDirectory != null && selectedDirectory.isNotEmpty) {
+              // Save the chosen location
+              await prefs.setString('download_save_path', selectedDirectory);
+              debugPrint(
+                '[ConnectionService] Download location saved: $selectedDirectory',
+              );
+
+              // Initialize DPFTP receiver with the chosen location
+              await DpftpService().startReceiver(
+                saveDirectory: selectedDirectory,
+              );
+              // Progress listener already set up in constructor
+            } else {
+              // User cancelled, reject the file
+              debugPrint(
+                '[ConnectionService] User cancelled download location selection, rejecting file',
+              );
+              return; // Don't process the file_offer
+            }
+          }
+        }
+
         final offer = FileOffer.fromJson(
           (message.metadata?['payload'] as Map?)?.cast<String, dynamic>() ?? {},
         );

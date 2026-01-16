@@ -208,9 +208,9 @@ class WiFiDirectManager(
                 
                 // Generate random credentials for 5GHz group
                 val random = Random()
-                val suffix = random.nextInt(9000) + 1000
-                val ssid = "DIRECT-FY-QR-$suffix"
-                val pass = "fylooo${random.nextInt(900000) + 100000}" // 8+ chars
+                val suffix = random.nextInt(90) + 10
+                val ssid = "DIRECT-FY-$suffix"
+                val pass = "fylooo13" // 8+ chars
 
                 val config = WifiP2pConfig.Builder()
                     .setNetworkName(ssid)
@@ -405,6 +405,9 @@ class WiFiDirectManager(
             
             
             if (isGroupOwner && group == null) {
+                // Send immediate event to update UI (without credentials)
+                channel.invokeMethod("onConnectionEstablished", payload)
+                
                 // Group owner but no group details - request them
                 Log.d(TAG, "Group owner detected, requesting group info...")
                 p2pManager?.requestGroupInfo(p2pChannel) { groupInfo ->
@@ -412,10 +415,10 @@ class WiFiDirectManager(
                         Log.d(TAG, "✓ Group info retrieved: SSID=${groupInfo.networkName}, Pass=${groupInfo.passphrase}")
                         payload["ssid"] = groupInfo.networkName
                         payload["password"] = groupInfo.passphrase
+                        // Send updated event with credentials
                         channel.invokeMethod("onConnectionEstablished", payload)
                     } else {
-                        Log.w(TAG, "Group info still null, sending without credentials")
-                        channel.invokeMethod("onConnectionEstablished", payload)
+                        Log.w(TAG, "Group info still null after request")
                     }
                 }
             } else {

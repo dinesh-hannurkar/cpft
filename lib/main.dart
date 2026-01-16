@@ -57,7 +57,7 @@ void main() async {
 
     // Set window height - works well on most screens
     // Users can resize manually if needed
-    const windowHeight = 800.0;
+    const windowHeight = 750.0;
 
     WindowOptions windowOptions = WindowOptions(
       size: Size(450, windowHeight),

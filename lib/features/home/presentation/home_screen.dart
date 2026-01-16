@@ -81,6 +81,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _didStartShowcase = false;
   bool _dragging = false;
   List<XFile> _droppedFiles = []; // Files waiting to be sent to a device
+  bool _hotspotAutoConnectAttempted =
+      false; // Track if we've tried auto-connect for current hotspot
 
   @override
   void initState() {
@@ -284,6 +286,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       if (isNowDisconnected && !wasDisconnected) {
         widget.discoveryService.clearDevices();
+        // Reset hotspot auto-connect flag when disconnected
+        _hotspotAutoConnectAttempted = false;
         // On Android, keep radar active since WiFi Direct discovery is still running
         // Only pause radar on iOS if not in manual hotspot mode
         if (Platform.isIOS && !_iosManualHotspotMode && _hotspotInfo == null) {
@@ -302,6 +306,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
         controller.resumeRadar();
         if (mounted) setState(() {});
+      }
+
+      // Desktop: Auto-connect when connected to Android hotspot (192.168.49.1)
+      if (!kIsWeb &&
+          (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+        await _checkAndAutoConnectToHotspot();
       }
     });
   }
@@ -356,6 +366,90 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _networkName = 'Not Connected';
         });
       }
+    }
+  }
+
+  /// Check if connected to Android hotspot and auto-connect to discovered device
+  Future<void> _checkAndAutoConnectToHotspot() async {
+    // Skip if already attempted auto-connect for this hotspot session
+    if (_hotspotAutoConnectAttempted) return;
+
+    // Check if local IP is in Android hotspot range (192.168.49.x)
+    final localIp = _localIp;
+    if (localIp == null || !localIp.startsWith('192.168.49.')) return;
+
+    debugPrint(
+      '[HomeScreen] 📱 Detected Android hotspot connection (IP: $localIp)',
+    );
+
+    // Mark as attempted to avoid repeated attempts
+    _hotspotAutoConnectAttempted = true;
+
+    // Standard Android hotspot gateway IP
+    const groupOwnerIp = '192.168.49.1';
+
+    // Enable auto-accept for incoming connections
+    widget.discoveryService.connectionManager?.setAutoAccept(true);
+
+    bool found = false;
+
+    void navigateToChat(String name, int port) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            deviceName: name,
+            ipAddress: groupOwnerIp,
+            port: port,
+            myDeviceName: widget.myDeviceName,
+            connectionManager: widget.discoveryService.connectionManager!,
+          ),
+        ),
+      );
+    }
+
+    // Check if any devices are already discovered
+    final devices = widget.discoveryService.discoveredDevices;
+    for (final device in devices.values) {
+      if (device.ip == groupOwnerIp) {
+        debugPrint(
+          '[HomeScreen] 🔗 Auto-connecting to ${device.name} at $groupOwnerIp',
+        );
+        navigateToChat(device.name, device.port);
+        found = true;
+        return;
+      }
+    }
+
+    // No devices found yet, listen for new discoveries
+    if (!found) {
+      debugPrint('[HomeScreen] 👀 Waiting for device discovery on hotspot...');
+
+      void onDiscovered(String name, String ip, int port) {
+        if (ip == groupOwnerIp) {
+          widget.discoveryService.removeDiscoveryListener(onDiscovered);
+          debugPrint(
+            '[HomeScreen] 🔗 Auto-connecting to $name at $groupOwnerIp',
+          );
+          navigateToChat(name, port);
+          found = true;
+        }
+      }
+
+      widget.discoveryService.addDiscoveryListener(onDiscovered);
+
+      // Force announcements to speed up discovery
+      widget.discoveryService.announce();
+
+      // Cancel listener after 30 seconds if no device found
+      Future.delayed(const Duration(seconds: 30), () {
+        if (!found) {
+          widget.discoveryService.removeDiscoveryListener(onDiscovered);
+          debugPrint(
+            '[HomeScreen] ⏱️ Hotspot auto-connect timeout (no device found)',
+          );
+        }
+      });
     }
   }
 

@@ -86,6 +86,8 @@ class _Session {
   String? _transferId;
   DateTime? _startTime;
   int _receivedBytes = 0;
+  final Set<int> _chunksWrittenToDisk =
+      {}; // Track chunks actually written to disk
 
   _Session(this.ip, this.saveDir, this.onProgress, {this.onComplete}) {
     _sockets.controlMessages.listen(_handleControlMessage);
@@ -191,11 +193,9 @@ class _Session {
       // debugPrint('dpftp-new-file: ✅ Chunk $chunkId ACK sent immediately');
     }
 
-    // Save metadata and check completion
+    // Save metadata (chunks written tracking now handled by disk writer callback)
     _saveMetadata();
-    if (_fileInfo!.bitmap.isComplete) {
-      _finishTransfer();
-    }
+    // Completion check moved to disk writer callback - only finishes when chunks are actually on disk
 
     // PERF: Throttled progress callbacks (chunk 0 + every 8 chunks for UI timing)
     if (chunkId == 0 || chunkId % 8 == 0 || _fileInfo!.bitmap.isComplete) {
@@ -234,7 +234,8 @@ class _Session {
       // Send ACK for flow control & progress sync
       _sockets.sendControl(Dpftp.typeChunkAck, Dpftp.int32(id));
 
-      if (_fileInfo!.bitmap.isComplete) {
+      // Only finish if ALL chunks are received AND written to disk
+      if (_fileInfo!.bitmap.isComplete && _isAllChunksWritten()) {
         _finishTransfer();
       }
     } else {
@@ -358,8 +359,17 @@ class _Session {
       _saveMetadata();
       _receivedBytes = 0;
 
-      // Initialize disk writer isolate
-      _diskWriter = DpftpDiskWriter();
+      // Initialize disk writer isolate with write completion callback
+      _diskWriter = DpftpDiskWriter(
+        onWriteComplete: (chunkId) {
+          // Mark chunk as actually written to disk
+          _chunksWrittenToDisk.add(chunkId);
+          // Check if transfer is complete now that this chunk is written
+          if (_fileInfo!.bitmap.isComplete && _isAllChunksWritten()) {
+            _finishTransfer();
+          }
+        },
+      );
       await _diskWriter!.start('$saveDir/$_fileName', fileSize);
       debugPrint('[DPFTP] Disk writer isolate started');
     }
@@ -471,6 +481,13 @@ class _Session {
     onComplete?.call();
   }
 
+  /// Check if all chunks have been written to disk
+  bool _isAllChunksWritten() {
+    if (_fileInfo == null) return false;
+    final totalChunks = _fileInfo!.bitmap.totalChunks;
+    return _chunksWrittenToDisk.length >= totalChunks;
+  }
+
   void reset() {
     // Reset transfer state without closing sockets (for sequential transfers)
     _raf?.close();
@@ -485,6 +502,7 @@ class _Session {
     _calculatedHashes.clear();
     _pendingDoneHashes.clear();
     _inFlightChunks.clear();
+    _chunksWrittenToDisk.clear(); // Clear disk write tracking
     _startTime = null;
     _metaSaveTimer?.cancel();
     _metaSaveTimer = null;

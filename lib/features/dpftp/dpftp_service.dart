@@ -35,6 +35,14 @@ class DpftpService {
     await _receiver!.start();
   }
 
+  /// Restart receiver with a new save directory (e.g., when user changes download location)
+  Future<void> restartReceiver({required String saveDirectory}) async {
+    debugPrint(
+      '[DPFTP] Restarting receiver with new save directory: $saveDirectory',
+    );
+    await startReceiver(saveDirectory: saveDirectory);
+  }
+
   // Queue for handling multiple files sequentially
   final List<_TransferRequest> _transferQueue = [];
   bool _isProcessing = false;
