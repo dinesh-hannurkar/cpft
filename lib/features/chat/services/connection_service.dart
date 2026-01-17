@@ -2136,13 +2136,15 @@ class ConnectionService {
                 ? 2 // iOS: Strict limit of 2 parallel connections
                 : (isRemoteWindows
                       ? 10 // Windows: 10 connections
-                      : (isRemoteLinux || isRemoteMacOS
-                            ? 6 // Linux/macOS: 6 connections
-                            : (isRemoteAndroid
-                                  ? 4 // Android: 4 connections
-                                  : (isRemoteIOS
-                                        ? 1
-                                        : 2)))); // iOS: 1 connection, Others: 2
+                      : (isRemoteLinux
+                            ? 4 // Linux: 4 connections (reduced to prevent buffer bloat/high RTT)
+                            : (isRemoteMacOS
+                                  ? 6 // macOS: 6 connections
+                                  : (isRemoteAndroid
+                                        ? 4 // Android: 4 connections
+                                        : (isRemoteIOS
+                                              ? 1
+                                              : 2))))); // iOS: 1 connection, Others: 2
 
             // FIXED: Use 2MB chunks for Windows to reduce CPU/Header overhead
             // 4MB for optimal throughput on other platforms
