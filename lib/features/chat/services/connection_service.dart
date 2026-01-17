@@ -2137,7 +2137,7 @@ class ConnectionService {
                 : (isRemoteWindows
                       ? 10 // Windows: 10 connections
                       : (isRemoteLinux
-                            ? 4 // Linux: 4 connections (reduced to prevent buffer bloat/high RTT)
+                            ? 3 // Linux: 2 connections (reduced for stability)
                             : (isRemoteMacOS
                                   ? 6 // macOS: 6 connections
                                   : (isRemoteAndroid
@@ -2148,7 +2148,7 @@ class ConnectionService {
 
             // FIXED: Use 2MB chunks for Windows to reduce CPU/Header overhead
             // 4MB for optimal throughput on other platforms
-            final int chunkSizeMB = isRemoteWindows
+            final int chunkSizeMB = (isRemoteWindows || isRemoteLinux)
                 ? 2 * 1024 * 1024
                 : (isRemoteAndroid ? 1024 * 1024 : 4 * 1024 * 1024);
 

@@ -31,11 +31,16 @@ class DpftpSocket {
     try {
       _socket.setOption(SocketOption.tcpNoDelay, true);
 
-      // Tune buffers for Android/Linux to absorb scheduling jitter (especially for Redmi as GO)
-      if (Platform.isAndroid || Platform.isLinux) {
+      // Tune buffers for Android/Linux
+      if (Platform.isAndroid) {
         // SO_SNDBUF = 7, SO_RCVBUF = 8 (Standard Linux constants)
-        // Set to 2MB to ensure kernel has plenty of data to send even if app thread is preempted
-        const int bufferSize = 2 * 1024 * 1024;
+        // Linux: 16MB to match Android sender's buffer size (prevents kernel overhead)
+        // Android: 2MB is sufficient for mobile devices
+        final int bufferSize = Platform.isLinux
+            ? 16 *
+                  1024 *
+                  1024 // Linux: 16MB (match Android sender)
+            : 2 * 1024 * 1024; // Android: 2MB
 
         _socket.setRawOption(
           RawSocketOption.fromInt(
