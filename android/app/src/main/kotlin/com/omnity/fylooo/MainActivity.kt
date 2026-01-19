@@ -232,6 +232,9 @@ class MainActivity : FlutterActivity() {
                     wifiDirectManager?.stopDiscovery()
                     result.success(true)
                 }
+                "createGroup" -> {
+                    wifiDirectManager?.createGroup(result)
+                }
                 "connect" -> {
                     val peerId = call.argument<String>("peerId")
                     if (peerId == null) {
@@ -249,6 +252,20 @@ class MainActivity : FlutterActivity() {
                             result.error("CONNECT_FAILED", "Connection failed", null)
                         }
                     }
+                }
+                "connectToGroup" -> {
+                    val ssid = call.argument<String>("ssid")
+                    val password = call.argument<String>("password")
+
+                    if (ssid == null || password == null) {
+                        result.error("INVALID_ARGS", "ssid and password required", null)
+                        return@setMethodCallHandler
+                    }
+                    wifiDirectManager?.connectToGroup(ssid, password, result)
+                }
+                "removeGroup" -> {
+                    wifiDirectManager?.disconnect()
+                    result.success(true)
                 }
                 "disconnect" -> {
                     wifiDirectManager?.disconnect()
