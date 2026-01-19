@@ -46,6 +46,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
   android_intent_plus: ^6.0.0
   window_manager: ^0.5.1
+  ffi: ^2.0.1
 
 dev_dependencies:
   flutter_test:

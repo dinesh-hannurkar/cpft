@@ -1,0 +1,187 @@
+
+import 'dart:io';
+import 'dart:ffi';
+import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
+import 'native_socket.dart';
+import 'macos_ffi.dart' as ffi;
+
+class MacosSocket implements NativeSocket {
+  int _socketFd = -1;
+
+  MacosSocket() {
+    _socketFd = ffi.socket(ffi.AF_INET, ffi.SOCK_STREAM, 0);
+    if (_socketFd < 0) {
+      final errno = ffi.get_errno();
+      throw 'Failed to create socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
+    }
+  }
+
+  MacosSocket._fromFd(this._socketFd);
+
+  @override
+  Future<void> bind(SocketAddress address) async {
+    await Isolate.run((int fd) {
+      final hints = calloc<ffi.AddrInfo>();
+      hints.ref.ai_family = ffi.AF_INET;
+      hints.ref.ai_socktype = ffi.SOCK_STREAM;
+      hints.ref.ai_flags = 1; // AI_PASSIVE
+      final resultPointer = calloc<Pointer<ffi.AddrInfo>>();
+      final service = address.port.toString().toNativeUtf8();
+
+      final ret = ffi.getaddrinfo(nullptr, service, hints, resultPointer);
+
+      if (ret != 0) {
+        calloc.free(hints);
+        calloc.free(resultPointer);
+        calloc.free(service);
+        throw 'Failed to resolve host: ${ffi.gai_strerror(ret).toDartString()}';
+      }
+
+      final result = resultPointer.value;
+      final bindResult = ffi.bind(fd, result.ref.ai_addr, result.ref.ai_addrlen);
+
+      ffi.freeaddrinfo(result);
+      calloc.free(hints);
+      calloc.free(resultPointer);
+      calloc.free(service);
+
+      if (bindResult < 0) {
+        final errno = ffi.get_errno();
+        throw 'Failed to bind socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
+      }
+    }, _socketFd);
+  }
+
+  @override
+  Future<void> listen(int backlog) async {
+    await Isolate.run((int fd) {
+      final result = ffi.listen(fd, backlog);
+      if (result < 0) {
+        final errno = ffi.get_errno();
+        throw 'Failed to listen on socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
+      }
+    }, _socketFd);
+  }
+
+  @override
+  Future<NativeSocket> accept() async {
+    return await Isolate.run((int fd) {
+      final sockaddr = calloc<ffi.SockAddrIn>();
+      final addrlen = calloc<Int32>()..value = sizeOf<ffi.SockAddrIn>();
+      final clientFd = ffi.accept(fd, sockaddr, addrlen);
+      calloc.free(sockaddr);
+      calloc.free(addrlen);
+      if (clientFd < 0) {
+        final errno = ffi.get_errno();
+        throw 'Failed to accept connection: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
+      }
+      return MacosSocket._fromFd(clientFd);
+    }, _socketFd);
+  }
+
+  @override
+  Future<void> connect(SocketAddress address) async {
+    await Isolate.run((int fd) {
+      final hints = calloc<ffi.AddrInfo>();
+      hints.ref.ai_family = ffi.AF_INET;
+      hints.ref.ai_socktype = ffi.SOCK_STREAM;
+      final resultPointer = calloc<Pointer<ffi.AddrInfo>>();
+      final service = address.port.toString().toNativeUtf8();
+      final host = address.host.toNativeUtf8();
+
+      final ret = ffi.getaddrinfo(host, service, hints, resultPointer);
+
+      if (ret != 0) {
+        calloc.free(host);
+        calloc.free(hints);
+        calloc.free(resultPointer);
+        calloc.free(service);
+        throw 'Failed to resolve host: ${ffi.gai_strerror(ret).toDartString()}';
+      }
+
+      final result = resultPointer.value;
+      final connectResult = ffi.connect(fd, result.ref.ai_addr, result.ref.ai_addrlen);
+
+      ffi.freeaddrinfo(result);
+      calloc.free(hints);
+      calloc.free(resultPointer);
+      calloc.free(service);
+      calloc.free(host);
+
+      if (connectResult < 0) {
+        final errno = ffi.get_errno();
+        throw 'Failed to connect to socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
+      }
+    }, _socketFd);
+  }
+
+  @override
+  Future<int> write(List<int> data) async {
+    return await Isolate.run((int fd) {
+      final buffer = calloc<Uint8>(data.length);
+      buffer.asTypedList(data.length).setAll(0, data);
+      final result = ffi.send(fd, buffer.cast(), data.length, 0);
+      calloc.free(buffer);
+      return result;
+    }, _socketFd);
+  }
+
+  @override
+  Future<List<int>> read(int length) async {
+    return await Isolate.run((int fd) {
+      final buffer = calloc<Uint8>(length);
+      final result = ffi.recv(fd, buffer.cast(), length, 0);
+      if (result < 0) {
+        calloc.free(buffer);
+        final errno = ffi.get_errno();
+        throw 'Failed to read from socket: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
+      }
+      final data = buffer.asTypedList(result).toList();
+      calloc.free(buffer);
+      return data;
+    }, _socketFd);
+  }
+
+  @override
+  Future<void> close() async {
+    await Isolate.run((int fd) => ffi.close(fd), _socketFd);
+  }
+
+  @override
+  Future<void> sendFile(File file, {void Function(int bytesSent)? onProgress}) async {
+    await Isolate.run((int fd) async {
+      final fileAccess = await file.open(mode: FileMode.read);
+      final fileFd = (fileAccess as dynamic).fd;
+      final fileSize = await file.length();
+      int totalBytesSent = 0;
+      final lenPtr = calloc<Int64>();
+
+      try {
+        while (totalBytesSent < fileSize) {
+          // On input, len specifies the number of bytes to write.
+          lenPtr.value = fileSize - totalBytesSent;
+
+          // The offset specifies where to begin reading from in the input file.
+          final result = ffi.sendfile(fileFd, fd, totalBytesSent, lenPtr, nullptr, 0);
+
+          // On output, len contains the number of bytes actually written.
+          final bytesSentThisCall = lenPtr.value;
+
+          if (result < 0) {
+              final errno = ffi.get_errno();
+              // A more robust implementation would check errno for EAGAIN and retry.
+              // For now, any error is considered fatal.
+              throw 'Failed to send file: ${ffi.strerror(errno).toDartString()} (errno = $errno)';
+          }
+
+          totalBytesSent += bytesSentThisCall;
+          onProgress?.call(totalBytesSent);
+        }
+      } finally {
+        calloc.free(lenPtr);
+        await fileAccess.close();
+      }
+    }, _socketFd);
+  }
+}
