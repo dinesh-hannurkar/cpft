@@ -3,8 +3,11 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 
 // sockaddr_in structure
-class SockAddrIn extends Struct {
-  @Int16()
+final class SockAddrIn extends Struct {
+  @Uint8()
+  external int sin_len;
+
+  @Uint8()
   external int sin_family;
 
   @Uint16()
@@ -51,7 +54,7 @@ typedef ErrnoLocationDart = Pointer<Int32> Function();
 typedef StrerrorC = Pointer<Utf8> Function(Int32 errnum);
 typedef StrerrorDart = Pointer<Utf8> Function(int errnum);
 
-class AddrInfo extends Struct {
+final class AddrInfo extends Struct {
   @Int32()
   external int ai_flags;
   @Int32()
@@ -62,8 +65,8 @@ class AddrInfo extends Struct {
   external int ai_protocol;
   @Int32()
   external int ai_addrlen;
-  external Pointer<SockAddrIn> ai_addr;
   external Pointer<Utf8> ai_canonname;
+  external Pointer<SockAddrIn> ai_addr;
   external Pointer<AddrInfo> ai_next;
 }
 

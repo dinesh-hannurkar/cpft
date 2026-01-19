@@ -3,7 +3,7 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 
 // SOCKADDR_IN structure
-class SockAddrIn extends Struct {
+final class SockAddrIn extends Struct {
   @Int16()
   external int sin_family;
 
@@ -18,7 +18,7 @@ class SockAddrIn extends Struct {
 }
 
 // WSAData structure
-class WSAData extends Struct {
+final class WSAData extends Struct {
   @Int16()
   external int wVersion;
   @Int16()
@@ -77,7 +77,7 @@ typedef WSAGetLastErrorDart = int Function();
 typedef FormatMessageC = Int32 Function(Int32 dwFlags, Pointer<Void> lpSource, Int32 dwMessageId, Int32 dwLanguageId, Pointer<Pointer<Utf16>> lpBuffer, Int32 nSize, Pointer<Void> Arguments);
 typedef FormatMessageDart = int Function(int dwFlags, Pointer<Void> lpSource, int dwMessageId, int dwLanguageId, Pointer<Pointer<Utf16>> lpBuffer, int nSize, Pointer<Void> Arguments);
 
-class AddrInfo extends Struct {
+final class AddrInfo extends Struct {
   @Int32()
   external int ai_flags;
   @Int32()
@@ -106,7 +106,7 @@ typedef GaiStrerrorC = Pointer<Utf8> Function(Int32 errcode);
 typedef GaiStrerrorDart = Pointer<Utf8> Function(int errcode);
 
 // OVERLAPPED structure
-class Overlapped extends Struct {
+final class Overlapped extends Struct {
   @IntPtr()
   external int Internal;
   @IntPtr()
