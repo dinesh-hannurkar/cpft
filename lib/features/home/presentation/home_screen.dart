@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:fylooo/core/logging/app_logger.dart';
 import 'package:fylooo/features/home/presentation/widgets/buttons/link_share_button.dart';
+import 'package:fylooo/features/home/presentation/widgets/sheets/hotspot_qr_sheet.dart';
 import 'package:fylooo/features/home/presentation/widgets/sheets/ios_hotspot_instruction_sheet.dart';
 import 'package:fylooo/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
 import 'package:fylooo/features/home/presentation/widgets/sheets/incoming_request_dialog.dart';
@@ -10,7 +11,7 @@ import 'package:fylooo/features/webshare/presentation/widgets/web_rtc_connection
 import 'package:fylooo/models/hotspot_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
+
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
 import 'package:fylooo/features/home/helpers/device_position.dart';
@@ -530,6 +531,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _regenerateHotspot() async {
+    await _maybeStopHotspot();
+    // Wait a bit before restarting
+    await Future.delayed(const Duration(seconds: 1));
+    await _maybeStartHotspot();
+  }
+
   void _showHotspotQrCode() {
     if (_hotspotInfo == null) return;
 
@@ -537,400 +545,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 30,
-              offset: const Offset(0, -8),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Drag handle
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 50,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSizes.lg,
-                  vertical: AppSizes.md,
-                ),
-                child: Column(
-                  children: [
-                    // Header with close button (iOS sheet style)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Scan QR Code',
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.darkPrimary,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Scan and Connect instantly',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: Colors.grey.shade600,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close_rounded, size: 24),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.grey.shade100,
-                            padding: const EdgeInsets.all(10),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSizes.md),
-
-                    // QR Code with modern design
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.skyBlue.withValues(alpha: 0.15),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                            spreadRadius: 0,
-                          ),
-                        ],
-                        border: Border.all(
-                          color: AppColors.skyBlue.withValues(alpha: 0.2),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: AppColors.secondary,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: QrImageView(
-                              data:
-                                  'WIFI:T:${_hotspotInfo!.securityType};S:${_hotspotInfo!.ssid};P:${_hotspotInfo!.password};;',
-                              version: QrVersions.auto,
-                              size: 220,
-                              errorCorrectionLevel: QrErrorCorrectLevel.H,
-                              eyeStyle: const QrEyeStyle(
-                                eyeShape: QrEyeShape.square,
-                                color: AppColors.primary,
-                              ),
-                              dataModuleStyle: const QrDataModuleStyle(
-                                dataModuleShape: QrDataModuleShape.square,
-                                color: AppColors.darkPrimary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.secondary,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.wifi_rounded,
-                                  size: 18,
-                                  color: AppColors.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(
-                                    _hotspotInfo!.ssid,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primary,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.md),
-
-                    // Quick steps
-                    Container(
-                      padding: const EdgeInsets.all(AppSizes.md),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Quick Steps',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          _buildModernStep(
-                            Icons.photo_camera_rounded,
-                            'Open your Camera app',
-                          ),
-                          const SizedBox(height: 14),
-                          _buildModernStep(
-                            Icons.center_focus_strong_rounded,
-                            'Point at the QR code',
-                          ),
-                          const SizedBox(height: 14),
-                          _buildModernStep(
-                            Icons.touch_app_rounded,
-                            'Tap to connect',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-
-                    // Manual connection
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Manual Connection',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.darkPrimary,
-                                ),
-                          ),
-                          const SizedBox(height: 18),
-                          _buildModernDetailRow(
-                            Icons.wifi_rounded,
-                            'Network',
-                            _hotspotInfo!.ssid,
-                          ),
-                          const Divider(height: 24),
-                          _buildModernDetailRow(
-                            Icons.lock_rounded,
-                            'Password',
-                            _hotspotInfo!.password,
-                          ),
-                          const Divider(height: 24),
-                          _buildModernDetailRow(
-                            Icons.security_rounded,
-                            'Security',
-                            _hotspotInfo!.securityType,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-
-                    // Info tip
-                    Container(
-                      padding: const EdgeInsets.all(AppSizes.md),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Colors.blue.shade50, Colors.cyan.shade50],
-                        ),
-                        borderRadius: BorderRadius.circular(AppSizes.md),
-                        border: Border.all(
-                          color: Colors.blue.shade200.withValues(alpha: 0.5),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.info_outline_rounded,
-                              color: Colors.blue.shade700,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              'Can\'t scan? Use Wi‑Fi settings to connect manually',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue.shade900,
-                                fontWeight: FontWeight.w600,
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-
-                    // Done button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 20),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          elevation: 0,
-                          shadowColor: AppColors.primary.withValues(alpha: 0.4),
-                        ),
-                        child: const Text(
-                          'Done',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+      builder: (context) => HotspotQrSheet(
+        hotspotInfo: _hotspotInfo!,
+        onStop: () {
+          Navigator.pop(context);
+          _maybeStopHotspot();
+        },
+        onRegenerate: _regenerateHotspot,
       ),
-    );
-  }
-
-  Widget _buildModernStep(IconData icon, String text) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(AppSizes.sm),
-          decoration: BoxDecoration(
-            color: AppColors.skyBlue.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: AppSizes.iconMd, color: AppColors.primary),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-              height: 1.4,
-              color: AppColors.darkPrimary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildModernDetailRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: AppSizes.iconMd, color: AppColors.darkPrimary),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 80,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.grey.shade700,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: value));
-              AppSnackbar.showSuccess(
-                context,
-                '$label copied',
-                duration: const Duration(milliseconds: 1500),
-              );
-            },
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              child: Icon(
-                Icons.content_copy_rounded,
-                size: 18,
-                color: const Color(0xFF2962FF),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

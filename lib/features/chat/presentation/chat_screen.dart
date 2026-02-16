@@ -1167,406 +1167,395 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       'ChatScreen: Build - isConnected = $isConnected, sharedFiles = ${_sharedFiles.length}, connectionInfo = ${_connectionInfo?.status}',
     );
     // ignore: deprecated_member_use
-    return ShowCaseWidget(
-      builder: (context) => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: DropTarget(
-          onDragDone: (detail) async {
-            setState(() {
-              _dragging = false;
-            });
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: DropTarget(
+        onDragDone: (detail) async {
+          setState(() {
+            _dragging = false;
+          });
 
-            // Handle dropped files
-            if (detail.files.isNotEmpty) {
-              await _handleDroppedFiles(detail.files);
-            }
-          },
-          onDragEntered: (detail) {
-            setState(() {
-              _dragging = true;
-            });
-          },
-          onDragExited: (detail) {
-            setState(() {
-              _dragging = false;
-            });
-          },
-          child: Stack(
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                    stops: [0.0, 1.0],
-                  ),
+          // Handle dropped files
+          if (detail.files.isNotEmpty) {
+            await _handleDroppedFiles(detail.files);
+          }
+        },
+        onDragEntered: (detail) {
+          setState(() {
+            _dragging = true;
+          });
+        },
+        onDragExited: (detail) {
+          setState(() {
+            _dragging = false;
+          });
+        },
+        child: Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                  stops: [0.0, 1.0],
                 ),
-                child: SafeArea(
-                  child: Column(
-                    children: [
-                      ChatTopBar(
-                        deviceName: _remoteDeviceName(),
-                        statusText: _statusText(),
-                        receivedFilesCount: _receivedFiles.length,
-                        connectionsCount:
-                            widget.connectionManager.activeConnections.length,
-                        onBack: () => Navigator.of(context).pop(),
-                        onShowReceivedFiles: _showReceivedFilesSheet,
-                        onShowDevices: _showAllConnectedDevices,
-                        onDisconnect: isConnected ? _disconnect : null,
-                        onSaveAll: _receivedFiles.length > 1 ? _saveAll : null,
-                        connectionManager: widget.connectionManager,
-                        isConnected: isConnected,
+              ),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    ChatTopBar(
+                      deviceName: _remoteDeviceName(),
+                      statusText: _statusText(),
+                      receivedFilesCount: _receivedFiles.length,
+                      connectionsCount:
+                          widget.connectionManager.activeConnections.length,
+                      onBack: () => Navigator.of(context).pop(),
+                      onShowReceivedFiles: _showReceivedFilesSheet,
+                      onShowDevices: _showAllConnectedDevices,
+                      onDisconnect: isConnected ? _disconnect : null,
+                      onSaveAll: _receivedFiles.length > 1 ? _saveAll : null,
+                      connectionManager: widget.connectionManager,
+                      isConnected: isConnected,
+                    ),
+                    if (_isConnecting ||
+                        _connectionInfo?.status == ConnectionStatus.connecting)
+                      ConnectingBanner(deviceName: _remoteDeviceName()),
+                    if (_connectionInfo?.status == ConnectionStatus.failed)
+                      ErrorBanner(
+                        error: _connectionInfo?.error,
+                        onRetry: _connectToDevice,
                       ),
-                      if (_isConnecting ||
-                          _connectionInfo?.status ==
-                              ConnectionStatus.connecting)
-                        ConnectingBanner(deviceName: _remoteDeviceName()),
-                      if (_connectionInfo?.status == ConnectionStatus.failed)
-                        ErrorBanner(
-                          error: _connectionInfo?.error,
-                          onRetry: _connectToDevice,
-                        ),
-                      WiFiDirectBanner(
-                        statusNotifier:
-                            _connectionService.wifiDirectStatusNotifier,
-                        canConnect: _connectionService.canConnectWifiDirect,
-                        onConnect: () async {
-                          await _connectionService.connectWifiDirect();
-                          if (mounted) {
-                            setState(() {});
-                          }
-                        },
-                        onInfo: () {
-                          if (!mounted) return;
+                    WiFiDirectBanner(
+                      statusNotifier:
+                          _connectionService.wifiDirectStatusNotifier,
+                      canConnect: _connectionService.canConnectWifiDirect,
+                      onConnect: () async {
+                        await _connectionService.connectWifiDirect();
+                        if (mounted) {
+                          setState(() {});
+                        }
+                      },
+                      onInfo: () {
+                        if (!mounted) return;
 
-                          // Show connection details dialog
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Row(
-                                children: [
-                                  Icon(
-                                    Icons.wifi_tethering,
-                                    color: Colors.green,
+                        // Show connection details dialog
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Row(
+                              children: [
+                                Icon(Icons.wifi_tethering, color: Colors.green),
+                                SizedBox(width: 12),
+                                Text('WiFi Direct Info'),
+                              ],
+                            ),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildInfoRow(
+                                  'Status',
+                                  _connectionService.isUsingWifiDirect
+                                      ? 'Connected (5GHz)'
+                                      : 'Available (Not Connected)',
+                                  _connectionService.isUsingWifiDirect
+                                      ? Icons.check_circle
+                                      : Icons.info_outline,
+                                  _connectionService.isUsingWifiDirect
+                                      ? Colors.green
+                                      : Colors.blue,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildInfoRow(
+                                  'Role',
+                                  _connectionService.isUsingWifiDirect
+                                      ? (_connectionService
+                                                .isWifiDirectGroupOwner
+                                            ? 'Group Owner (Host)'
+                                            : 'Client (Peer)')
+                                      : 'Pending Negotiation',
+                                  _connectionService.isUsingWifiDirect
+                                      ? (_connectionService
+                                                .isWifiDirectGroupOwner
+                                            ? Icons.router
+                                            : Icons.devices)
+                                      : Icons.hourglass_empty,
+                                  Colors.blue,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildInfoRow(
+                                  'Peer IP',
+                                  _connectionService.wifiDirectIp ??
+                                      'Not assigned',
+                                  Icons.link,
+                                  Colors.orange,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildInfoRow(
+                                  'Peer Name',
+                                  _connectionService.remoteWifiDirectName ??
+                                      'Unknown',
+                                  Icons.smartphone,
+                                  Colors.purple,
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Divider(),
+                                ),
+                                Text(
+                                  'Credentials (MAC)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[700],
                                   ),
-                                  SizedBox(width: 12),
-                                  Text('WiFi Direct Info'),
-                                ],
-                              ),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildInfoRow(
-                                    'Status',
-                                    _connectionService.isUsingWifiDirect
-                                        ? 'Connected (5GHz)'
-                                        : 'Available (Not Connected)',
-                                    _connectionService.isUsingWifiDirect
-                                        ? Icons.check_circle
-                                        : Icons.info_outline,
-                                    _connectionService.isUsingWifiDirect
-                                        ? Colors.green
-                                        : Colors.blue,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  _buildInfoRow(
-                                    'Role',
-                                    _connectionService.isUsingWifiDirect
-                                        ? (_connectionService
-                                                  .isWifiDirectGroupOwner
-                                              ? 'Group Owner (Host)'
-                                              : 'Client (Peer)')
-                                        : 'Pending Negotiation',
-                                    _connectionService.isUsingWifiDirect
-                                        ? (_connectionService
-                                                  .isWifiDirectGroupOwner
-                                              ? Icons.router
-                                              : Icons.devices)
-                                        : Icons.hourglass_empty,
-                                    Colors.blue,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  _buildInfoRow(
-                                    'Peer IP',
-                                    _connectionService.wifiDirectIp ??
-                                        'Not assigned',
-                                    Icons.link,
-                                    Colors.orange,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  _buildInfoRow(
-                                    'Peer Name',
-                                    _connectionService.remoteWifiDirectName ??
-                                        'Unknown',
-                                    Icons.smartphone,
-                                    Colors.purple,
-                                  ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 12),
-                                    child: Divider(),
-                                  ),
-                                  Text(
-                                    'Credentials (MAC)',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildInfoRow(
-                                    'Remote ID',
-                                    _connectionService.remoteWifiDirectMac ??
-                                        'Scanning...',
-                                    Icons.radar,
-                                    Colors.grey,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildInfoRow(
-                                    'Local ID',
-                                    _connectionService.localWifiDirectMac ??
-                                        'Initializing...',
-                                    Icons.fingerprint,
-                                    Colors.grey,
-                                  ),
-                                ],
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: const Text('Close'),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildInfoRow(
+                                  'Remote ID',
+                                  _connectionService.remoteWifiDirectMac ??
+                                      'Scanning...',
+                                  Icons.radar,
+                                  Colors.grey,
+                                ),
+                                const SizedBox(height: 8),
+                                _buildInfoRow(
+                                  'Local ID',
+                                  _connectionService.localWifiDirectMac ??
+                                      'Initializing...',
+                                  Icons.fingerprint,
+                                  Colors.grey,
                                 ),
                               ],
                             ),
-                          );
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const TemporaryFilesWarningBanner(),
+                    if (_lastTransferBytes != null &&
+                        _lastTransferDuration != null)
+                      TransferStatsBanner(
+                        totalBytes: _lastTransferBytes!,
+                        duration: _lastTransferDuration!,
+                      ),
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: () {
+                          // Close keyboard when tapping outside input field
+                          FocusScope.of(context).unfocus();
                         },
-                      ),
-                      const TemporaryFilesWarningBanner(),
-                      if (_lastTransferBytes != null &&
-                          _lastTransferDuration != null)
-                        TransferStatsBanner(
-                          totalBytes: _lastTransferBytes!,
-                          duration: _lastTransferDuration!,
-                        ),
-                      Expanded(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onTap: () {
-                            // Close keyboard when tapping outside input field
-                            FocusScope.of(context).unfocus();
-                          },
-                          child: (() {
-                            final totalItems =
-                                _messages.length +
-                                _incomingProgress.length +
-                                _outgoingProgress.length;
-                            if (totalItems == 0) {
-                              return EmptyDataWidget();
-                            }
-                            return ListView.builder(
-                              controller: _scrollController,
-                              physics: const ClampingScrollPhysics(),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              itemCount: totalItems,
-                              itemBuilder: (context, index) {
-                                if (index < _messages.length) {
-                                  final msg = _messages[index];
-                                  final isMine =
-                                      msg.senderName == widget.myDeviceName;
-                                  if (msg.type == 'file_complete') {
-                                    // Use 'outgoing' metadata for file transfers to be more reliable
-                                    final isOutgoing =
-                                        msg.metadata?['outgoing'] as bool? ??
-                                        isMine;
-                                    final savedPath =
-                                        msg.metadata?['path'] as String?;
-                                    // Use updated path if file was saved
-                                    final actualPath = savedPath != null
-                                        ? (_savedFilePaths[savedPath] ??
-                                              savedPath)
-                                        : null;
-
-                                    // Show showcase on first received file only
-                                    final isFirstReceivedFile =
-                                        !isOutgoing &&
-                                        _messages
-                                                .where(
-                                                  (m) =>
-                                                      m.type ==
-                                                          'file_complete' &&
-                                                      (m.metadata?['outgoing']
-                                                                  as bool? ??
-                                                              false) ==
-                                                          false,
-                                                )
-                                                .first ==
-                                            msg;
-
-                                    return CompletedFileCard(
-                                      message: msg,
-                                      isMine: isOutgoing,
-                                      savedPath: actualPath,
-                                      onOpen: (p, n) => _openFile(p, n),
-                                      onSaveAs: (p, n) => _saveAs(p, n),
-                                      showShowcase: isFirstReceivedFile,
-                                    );
-                                  }
-                                  if (msg.type == 'file_offer') {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return MessageBubble(
-                                    message: msg,
-                                    isMine: isMine,
-                                  );
-                                }
-                                final extra = index - _messages.length;
-                                final incomingKeys = _incomingProgress.keys
-                                    .toList();
-                                if (extra < incomingKeys.length) {
-                                  final tId = incomingKeys[extra];
-                                  return TransferProgressTile(
-                                    progress: _incomingProgress[tId]!,
-                                    onCancel: () {
-                                      _connectionService.cancelTransfer(tId);
-                                      setState(() {
-                                        _incomingProgress.remove(tId);
-                                        _outgoingProgress.remove(tId);
-                                      });
-                                    },
-                                    onResume: () async {
-                                      if (_incomingProgress.containsKey(tId)) {
-                                        await _connectionService.resumeIncoming(
-                                          tId,
-                                        );
-                                      } else if (_outgoingProgress.containsKey(
-                                        tId,
-                                      )) {
-                                        await _connectionService.requestResume(
-                                          tId,
-                                        );
-                                      }
-                                    },
-                                  );
-                                }
-                                final outExtra = extra - incomingKeys.length;
-                                final outKeys = _outgoingProgress.keys.toList();
-                                if (outExtra < outKeys.length) {
-                                  final tId = outKeys[outExtra];
-                                  return TransferProgressTile(
-                                    progress: _outgoingProgress[tId]!,
-                                    onCancel: () {
-                                      _connectionService.cancelTransfer(tId);
-                                      setState(() {
-                                        _incomingProgress.remove(tId);
-                                        _outgoingProgress.remove(tId);
-                                      });
-                                    },
-                                    onResume: () async {
-                                      if (_incomingProgress.containsKey(tId)) {
-                                        await _connectionService.resumeIncoming(
-                                          tId,
-                                        );
-                                      } else if (_outgoingProgress.containsKey(
-                                        tId,
-                                      )) {
-                                        await _connectionService.requestResume(
-                                          tId,
-                                        );
-                                      }
-                                    },
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            );
-                          })(),
-                        ),
-                      ),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) =>
-                            SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 1),
-                                end: Offset.zero,
-                              ).animate(animation),
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              ),
+                        child: (() {
+                          final totalItems =
+                              _messages.length +
+                              _incomingProgress.length +
+                              _outgoingProgress.length;
+                          if (totalItems == 0) {
+                            return EmptyDataWidget();
+                          }
+                          return ListView.builder(
+                            controller: _scrollController,
+                            physics: const ClampingScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
                             ),
-                        child:
-                            (isConnected &&
-                                MediaQuery.of(context).viewInsets.bottom == 0)
-                            ? Showcase(
-                                key: ShowcaseHelper.sendFileButtonKey,
-                                disableBarrierInteraction: false,
-                                targetPadding: const EdgeInsets.all(8),
-                                title: 'Send Files',
-                                description:
-                                    'Tap here to select and send files to the connected device.',
-                                tooltipBackgroundColor: Colors.white,
-                                textColor: Colors.black,
-                                descTextStyle: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black87,
-                                ),
-                                titleTextStyle: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                  fontSize: 16,
-                                ),
-                                tooltipBorderRadius: BorderRadius.circular(12),
-                                targetBorderRadius: BorderRadius.circular(12),
-                                child: FileTaglineBar(
-                                  onTapMain: _pickAndSendFile,
-                                  onTapFab: _pickAndSendFile,
-                                  pulseController: _fileIconPulse!,
-                                  fileIcons: fileIcons,
-                                  fileIconIndex: _fileIconIndex,
-                                  slideFromLeft: _slideFromLeft,
-                                  isLoading: _isPickingFile,
-                                ),
-                              )
-                            : const SizedBox.shrink(key: ValueKey('hidden')),
-                      ),
-                      if (_sharedFiles.isNotEmpty &&
-                          isConnected) // Auto-send enabled, banner disabled
-                        // print('ChatScreen: Showing shared files banner, files: ${_sharedFiles.length}, connected: $isConnected');
-                        SharedFilesBanner(
-                          files: _sharedFiles,
-                          onSend: _sendSharedFiles,
-                        ),
+                            itemCount: totalItems,
+                            itemBuilder: (context, index) {
+                              if (index < _messages.length) {
+                                final msg = _messages[index];
+                                final isMine =
+                                    msg.senderName == widget.myDeviceName;
+                                if (msg.type == 'file_complete') {
+                                  // Use 'outgoing' metadata for file transfers to be more reliable
+                                  final isOutgoing =
+                                      msg.metadata?['outgoing'] as bool? ??
+                                      isMine;
+                                  final savedPath =
+                                      msg.metadata?['path'] as String?;
+                                  // Use updated path if file was saved
+                                  final actualPath = savedPath != null
+                                      ? (_savedFilePaths[savedPath] ??
+                                            savedPath)
+                                      : null;
 
-                      MessageInputBar(
-                        controller: _messageController,
-                        focusNode: _inputFocus,
-                        onSend: _sendMessage,
-                        enabled: isConnected,
+                                  // Show showcase on first received file only
+                                  final isFirstReceivedFile =
+                                      !isOutgoing &&
+                                      _messages
+                                              .where(
+                                                (m) =>
+                                                    m.type == 'file_complete' &&
+                                                    (m.metadata?['outgoing']
+                                                                as bool? ??
+                                                            false) ==
+                                                        false,
+                                              )
+                                              .first ==
+                                          msg;
+
+                                  return CompletedFileCard(
+                                    message: msg,
+                                    isMine: isOutgoing,
+                                    savedPath: actualPath,
+                                    onOpen: (p, n) => _openFile(p, n),
+                                    onSaveAs: (p, n) => _saveAs(p, n),
+                                    showShowcase: isFirstReceivedFile,
+                                  );
+                                }
+                                if (msg.type == 'file_offer') {
+                                  return const SizedBox.shrink();
+                                }
+                                return MessageBubble(
+                                  message: msg,
+                                  isMine: isMine,
+                                );
+                              }
+                              final extra = index - _messages.length;
+                              final incomingKeys = _incomingProgress.keys
+                                  .toList();
+                              if (extra < incomingKeys.length) {
+                                final tId = incomingKeys[extra];
+                                return TransferProgressTile(
+                                  progress: _incomingProgress[tId]!,
+                                  onCancel: () {
+                                    _connectionService.cancelTransfer(tId);
+                                    setState(() {
+                                      _incomingProgress.remove(tId);
+                                      _outgoingProgress.remove(tId);
+                                    });
+                                  },
+                                  onResume: () async {
+                                    if (_incomingProgress.containsKey(tId)) {
+                                      await _connectionService.resumeIncoming(
+                                        tId,
+                                      );
+                                    } else if (_outgoingProgress.containsKey(
+                                      tId,
+                                    )) {
+                                      await _connectionService.requestResume(
+                                        tId,
+                                      );
+                                    }
+                                  },
+                                );
+                              }
+                              final outExtra = extra - incomingKeys.length;
+                              final outKeys = _outgoingProgress.keys.toList();
+                              if (outExtra < outKeys.length) {
+                                final tId = outKeys[outExtra];
+                                return TransferProgressTile(
+                                  progress: _outgoingProgress[tId]!,
+                                  onCancel: () {
+                                    _connectionService.cancelTransfer(tId);
+                                    setState(() {
+                                      _incomingProgress.remove(tId);
+                                      _outgoingProgress.remove(tId);
+                                    });
+                                  },
+                                  onResume: () async {
+                                    if (_incomingProgress.containsKey(tId)) {
+                                      await _connectionService.resumeIncoming(
+                                        tId,
+                                      );
+                                    } else if (_outgoingProgress.containsKey(
+                                      tId,
+                                    )) {
+                                      await _connectionService.requestResume(
+                                        tId,
+                                      );
+                                    }
+                                  },
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          );
+                        })(),
                       ),
-                    ],
-                  ),
+                    ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 1),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                      child:
+                          (isConnected &&
+                              MediaQuery.of(context).viewInsets.bottom == 0)
+                          ? Showcase(
+                              key: ShowcaseHelper.sendFileButtonKey,
+                              disableBarrierInteraction: false,
+                              targetPadding: const EdgeInsets.all(8),
+                              title: 'Send Files',
+                              description:
+                                  'Tap here to select and send files to the connected device.',
+                              tooltipBackgroundColor: Colors.white,
+                              textColor: Colors.black,
+                              descTextStyle: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.black87,
+                              ),
+                              titleTextStyle: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                                fontSize: 16,
+                              ),
+                              tooltipBorderRadius: BorderRadius.circular(12),
+                              targetBorderRadius: BorderRadius.circular(12),
+                              child: FileTaglineBar(
+                                onTapMain: _pickAndSendFile,
+                                onTapFab: _pickAndSendFile,
+                                pulseController: _fileIconPulse!,
+                                fileIcons: fileIcons,
+                                fileIconIndex: _fileIconIndex,
+                                slideFromLeft: _slideFromLeft,
+                                isLoading: _isPickingFile,
+                              ),
+                            )
+                          : const SizedBox.shrink(key: ValueKey('hidden')),
+                    ),
+                    if (_sharedFiles.isNotEmpty &&
+                        isConnected) // Auto-send enabled, banner disabled
+                      // print('ChatScreen: Showing shared files banner, files: ${_sharedFiles.length}, connected: $isConnected');
+                      SharedFilesBanner(
+                        files: _sharedFiles,
+                        onSend: _sendSharedFiles,
+                      ),
+
+                    MessageInputBar(
+                      controller: _messageController,
+                      focusNode: _inputFocus,
+                      onSend: _sendMessage,
+                      enabled: isConnected,
+                    ),
+                  ],
                 ),
               ),
-              // Drag overlay
-              ...(_dragging
-                  ? [
-                      DragOverlay(
-                        title: 'Drop files to send',
-                        subtitle: 'Release to send files to this device',
-                      ),
-                    ]
-                  : []),
-            ],
-          ),
+            ),
+            // Drag overlay
+            ...(_dragging
+                ? [
+                    DragOverlay(
+                      title: 'Drop files to send',
+                      subtitle: 'Release to send files to this device',
+                    ),
+                  ]
+                : []),
+          ],
         ),
       ),
     );
