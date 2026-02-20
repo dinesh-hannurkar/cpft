@@ -7,7 +7,13 @@ class ReceivedFilesSheet extends StatelessWidget {
   final Future<void> Function(String path, String name)? onOpen;
   final Future<void> Function(String path, String name)? onReveal;
   final Future<void> Function(String path, String name)? onSaveAs;
-  const ReceivedFilesSheet({super.key, required this.files, this.onOpen, this.onReveal, this.onSaveAs});
+  const ReceivedFilesSheet({
+    super.key,
+    required this.files,
+    this.onOpen,
+    this.onReveal,
+    this.onSaveAs,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +42,9 @@ class ReceivedFilesSheet extends StatelessWidget {
                 try {
                   final file = io.File(rf.path);
                   final parentDir = file.parent.path;
-                  debugPrint('[ReceivedFilesSheet] Revealing file in: $parentDir');
+                  debugPrint(
+                    '[ReceivedFilesSheet] Revealing file in: $parentDir',
+                  );
                   await onReveal?.call(parentDir, rf.name);
                 } catch (e) {
                   debugPrint('[ReceivedFilesSheet] Reveal error: $e');

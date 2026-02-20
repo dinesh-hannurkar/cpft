@@ -7,10 +7,12 @@ import 'package:fylooo/features/home/presentation/widgets/sheets/hotspot_qr_shee
 import 'package:fylooo/features/home/presentation/widgets/sheets/ios_hotspot_instruction_sheet.dart';
 import 'package:fylooo/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
 import 'package:fylooo/features/home/presentation/widgets/sheets/incoming_request_dialog.dart';
+import 'package:fylooo/features/settings/presentation/settings_screen.dart';
 import 'package:fylooo/features/webshare/presentation/widgets/web_rtc_connection_bottomsheet.dart';
 import 'package:fylooo/models/hotspot_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fylooo/features/home/presentation/connected_devices_screen.dart';
 
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
@@ -30,6 +32,7 @@ import 'package:fylooo/features/home/presentation/widgets/device_dot.dart';
 import 'package:fylooo/features/home/presentation/widgets/network_banner.dart';
 
 import 'package:fylooo/features/home/presentation/widgets/home_app_bar.dart';
+import 'package:fylooo/features/history/presentation/history_list_screen.dart';
 
 import 'package:fylooo/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:fylooo/shared/widgets/app_bottom_sheet.dart';
@@ -84,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<XFile> _droppedFiles = []; // Files waiting to be sent to a device
   bool _hotspotAutoConnectAttempted =
       false; // Track if we've tried auto-connect for current hotspot
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -669,6 +673,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _didStartShowcase = true;
     }
 
+    // Check if running on mobile (Android/iOS) to show bottom navigation
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -684,10 +691,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
         final deviceDots = _buildDeviceDots(devices);
 
+        // Define the pages for the bottom navigation
+        final List<Widget> pages = [
+          // 0: Home (Radar View)
+          _buildHomeBody(context, deviceDots),
+
+          // 1: History
+          if (widget.discoveryService.connectionManager != null)
+            HistoryListScreen(
+              connectionManager: widget.discoveryService.connectionManager!,
+              myDeviceName: widget.myDeviceName,
+              showAppBar: false,
+            )
+          else
+            const Center(child: Text("History unavailable")),
+
+          // 2: Connected Devices
+          if (widget.discoveryService.connectionManager != null)
+            ConnectedDevicesScreen(
+              connectionManager: widget.discoveryService.connectionManager!,
+              myDeviceName: widget.myDeviceName,
+              onFilesSent: () {},
+              showAppBar: false,
+            )
+          else
+            const Center(child: Text("Connection Manager unavailable")),
+
+          // 3: Settings
+          SettingsScreen(
+            currentDeviceName: widget.discoveryService.alias,
+            discoveryService: widget.discoveryService,
+            showAppBar: false,
+          ),
+        ];
+
+        /*
+         * Helper to get title for Mobile AppBar
+         */
+        String? getMobileTitle() {
+          if (!isMobile) return null;
+          switch (_selectedIndex) {
+            case 1:
+              return 'History';
+            case 2:
+              return 'Connected Devices';
+            case 3:
+              return 'Settings';
+            default:
+              return null; // Home shows logo
+          }
+        }
+
         return Scaffold(
           backgroundColor: Colors.transparent,
           extendBodyBehindAppBar: true,
           resizeToAvoidBottomInset: false,
+
           appBar: HomeAppBar(
             connectionManager: widget.discoveryService.connectionManager,
             discoveryService: widget.discoveryService,
@@ -696,163 +755,183 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onShowConnectedDevices: _showConnectedDevicesDialog,
             onQrScan: _handleQrScan,
             onOfflineP2P: () {},
-          ),
-          body: DropTarget(
-            onDragDone: (detail) async {
-              setState(() {
-                _dragging = false;
-              });
-
-              // Handle dropped files
-              if (detail.files.isNotEmpty) {
-                await _handleDroppedFiles(detail.files);
-              }
-            },
-            onDragEntered: (detail) {
-              setState(() {
-                _dragging = true;
-              });
-            },
-            onDragExited: (detail) {
-              setState(() {
-                _dragging = false;
-              });
-            },
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                  stops: [0.0, 1.0],
-                ),
-              ),
-              child: Stack(
-                children: [
-                  SafeArea(
-                    child: Column(
-                      children: [
-                        // Show shared content banner if available (only on mobile)
-                        if (!kIsWeb) const SharedContentBanner(),
-                        // Show dropped files banner if files are waiting
-                        if (_droppedFiles.isNotEmpty)
-                          _buildDroppedFilesBanner(),
-                        const SizedBox(height: AppSizes.spaceBtwSections),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSizes.md,
-                          ),
-                          child: Row(
-                            textDirection: TextDirection.rtl,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                icon: _isRestartingServices
-                                    ? SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                AppColors.primary,
-                                              ),
-                                        ),
-                                      )
-                                    : Icon(
-                                        Icons.refresh_rounded,
-                                        color: AppColors.primary,
-                                        size: 24,
-                                      ),
-                                onPressed: _isRestartingServices
-                                    ? null
-                                    : _handleServiceRestart,
-                                tooltip: 'Restart Services',
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  'Finding nearby devices....',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSizes.spaceBtwSections),
-                        Expanded(
-                          child: Center(
-                            child: AspectRatio(
-                              aspectRatio: 1,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSizes.sm,
-                                ),
-                                child: RadarView(
-                                  sweepAngle: controller.sweepAngle,
-                                  deviceDots: deviceDots,
-                                  center: _buildRadarCenter(),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppSizes.md),
-                        NetworkBanner(
-                          networkName: _networkName,
-                          hotspotActive:
-                              _hotspotInfo != null || _iosManualHotspotMode,
-                          hotspotStarting: _hotspotStarting,
-                          hotspotName:
-                              _hotspotInfo?.ssid ??
-                              (_iosManualHotspotMode
-                                  ? 'Personal Hotspot'
-                                  : null),
-                          iosPersonalHotspot: _iosManualHotspotMode,
-                          onSwitchToWifi:
-                              (_hotspotInfo != null || _iosManualHotspotMode)
-                              ? _switchToWifi
-                              : null,
-                          onShowQrCode: _hotspotInfo != null
-                              ? _showHotspotQrCode
-                              : null,
-                          onSwitchToHotspot:
-                              (_hotspotInfo == null && !_iosManualHotspotMode)
-                              ? _switchToHotspot
-                              : null,
-                        ),
-                        const SizedBox(height: AppSizes.lg),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSizes.lg),
-                          child: _buildShareOptionsSection(),
-                        ),
-                      ],
+            onHistory: () {
+              final cm = widget.discoveryService.connectionManager;
+              if (cm != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HistoryListScreen(
+                      connectionManager: cm,
+                      myDeviceName: widget.myDeviceName,
                     ),
                   ),
-                  // Drag overlay
-                  ...(_dragging
-                      ? [
-                          DragOverlay(
-                            title: 'Drop files to share',
-                            subtitle: 'Release to send files to nearby devices',
-                            iconSize: 48,
-                            showBorder: false,
+                );
+              }
+            },
+            isMobile: isMobile,
+            title: getMobileTitle(),
+          ),
+          body: isMobile
+              ? IndexedStack(index: _selectedIndex, children: pages)
+              : _buildHomeBody(context, deviceDots),
+          bottomNavigationBar: isMobile
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                  ),
+                  child: NavigationBar(
+                    backgroundColor: Colors.white,
+                    surfaceTintColor: Colors.transparent,
+                    indicatorColor: AppColors.primary.withOpacity(0.1),
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: (index) {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    },
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home),
+                        label: 'Home',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.history_outlined),
+                        selectedIcon: Icon(Icons.history),
+                        label: 'History',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.devices_outlined),
+                        selectedIcon: Icon(Icons.devices),
+                        label: 'Connected',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.settings_outlined),
+                        selectedIcon: Icon(Icons.settings),
+                        label: 'Settings',
+                      ),
+                    ],
+                  ),
+                )
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildHomeBody(BuildContext context, List<Widget> deviceDots) {
+    return DropTarget(
+      onDragDone: (detail) async {
+        setState(() {
+          _dragging = false;
+        });
+
+        // Handle dropped files
+        if (detail.files.isNotEmpty) {
+          await _handleDroppedFiles(detail.files);
+        }
+      },
+      onDragEntered: (detail) {
+        setState(() {
+          _dragging = true;
+        });
+      },
+      onDragExited: (detail) {
+        setState(() {
+          _dragging = false;
+        });
+      },
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+            stops: [0.0, 1.0],
+          ),
+        ),
+        child: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                children: [
+                  // Show shared content banner if available (only on mobile)
+                  if (!kIsWeb) const SharedContentBanner(),
+                  // Show dropped files banner if files are waiting
+                  if (_droppedFiles.isNotEmpty) _buildDroppedFilesBanner(),
+                  const SizedBox(height: AppSizes.sm),
+
+                  _buildScanningStatus(),
+                  const SizedBox(height: AppSizes.md),
+                  Expanded(
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSizes.sm,
                           ),
-                        ]
-                      : []),
+                          child: RadarView(
+                            deviceDots: deviceDots,
+                            center: _buildRadarCenter(),
+                            isPaused: controller.isPaused,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSizes.sm),
+                  NetworkBanner(
+                    networkName: _networkName,
+                    hotspotActive:
+                        _hotspotInfo != null || _iosManualHotspotMode,
+                    hotspotStarting: _hotspotStarting,
+                    hotspotName:
+                        _hotspotInfo?.ssid ??
+                        (_iosManualHotspotMode ? 'Personal Hotspot' : null),
+                    iosPersonalHotspot: _iosManualHotspotMode,
+                    onSwitchToWifi:
+                        (_hotspotInfo != null || _iosManualHotspotMode)
+                        ? _switchToWifi
+                        : null,
+                    onShowQrCode: _hotspotInfo != null
+                        ? _showHotspotQrCode
+                        : null,
+                    onSwitchToHotspot:
+                        (_hotspotInfo == null && !_iosManualHotspotMode)
+                        ? _switchToHotspot
+                        : null,
+                  ),
+                  const SizedBox(height: AppSizes.sm),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSizes.lg),
+                    child: _buildShareOptionsSection(),
+                  ),
                 ],
               ),
             ),
-          ),
-        );
-      },
+            // Drag overlay
+            ...(_dragging
+                ? [
+                    DragOverlay(
+                      title: 'Drop files to share',
+                      subtitle: 'Release to send files to nearby devices',
+                      iconSize: 48,
+                      showBorder: false,
+                    ),
+                  ]
+                : []),
+          ],
+        ),
+      ),
     );
   }
 
@@ -879,6 +958,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       dots.add(
         DeviceDot(
+          key: ValueKey('${device.ip}:${device.port}'),
           label: device.name,
           angle: position.angle,
           distanceFactor: position.distance,
@@ -1341,6 +1421,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             tooltip: 'Clear files',
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildScanningStatus() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 12),
+            Text(
+              'Searching nearby devices ...',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 1,
+              height: 16,
+              color: AppColors.primary.withValues(alpha: 0.2),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: _isRestartingServices
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded, size: 20),
+              onPressed: _isRestartingServices ? null : _handleServiceRestart,
+              color: AppColors.primary,
+              tooltip: 'Restart Services',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+          ],
+        ),
       ),
     );
   }

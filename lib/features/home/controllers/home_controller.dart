@@ -8,12 +8,12 @@ class HomeController extends ChangeNotifier {
   final String myDeviceName;
 
   Timer? _radarTimer;
-  double _sweepAngle = 0;
+  // Radar animation is now handled internally by RadarView
   bool _isPaused = false;
   final Set<String> _knownDevices = {};
 
   // Exposed state
-  double get sweepAngle => _sweepAngle;
+  // sweepAngle is no longer needed in controller
   Map<String, DeviceInfo> get devices => discoveryService.discoveredDevices;
   bool get isPaused => _isPaused;
 
@@ -33,13 +33,8 @@ class HomeController extends ChangeNotifier {
       notifyListeners();
     });
 
-    _radarTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
-      if (!_isPaused) {
-        _sweepAngle += 0.010; // ~25% slower sweep
-        if (_sweepAngle > 6.28318530718) _sweepAngle -= 6.28318530718; // 2*pi wrap
-      }
-      notifyListeners();
-    });
+    // Radar animation is now handled internally by RadarView
+    // No need for a timer here that rebuilds the whole screen
   }
 
   @override

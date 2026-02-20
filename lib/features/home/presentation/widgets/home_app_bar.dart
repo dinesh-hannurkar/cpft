@@ -17,6 +17,9 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onShowConnectedDevices;
   final VoidCallback onQrScan;
   final VoidCallback onOfflineP2P;
+  final VoidCallback onHistory;
+  final bool isMobile;
+  final String? title;
 
   const HomeAppBar({
     super.key,
@@ -27,6 +30,9 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onShowConnectedDevices,
     required this.onQrScan,
     required this.onOfflineP2P,
+    required this.onHistory,
+    this.isMobile = false,
+    this.title,
   });
 
   @override
@@ -54,37 +60,50 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             children: [
               const SizedBox(width: 16),
-              Image.asset(
-                'assets/images/web-app-logo.webp',
-                height: logoHeight,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-                isAntiAlias: true,
-                cacheHeight: logoCacheHeight,
-              ),
+              if (title != null)
+                Text(
+                  title!,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                )
+              else
+                Image.asset(
+                  'assets/images/web-app-logo.webp',
+                  height: logoHeight,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                  isAntiAlias: true,
+                  cacheHeight: logoCacheHeight,
+                ),
               const Spacer(),
-              Showcase(
-                key: ShowcaseHelper.connectedDevicesKey,
-                disableBarrierInteraction: false,
-                targetPadding: const EdgeInsets.all(8),
-                title: 'Connected Devices',
-                description:
-                    'View all currently connected devices and tap to start transferring files.',
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                descTextStyle: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black87,
+              if (!isMobile)
+                AppIconButton(icon: Icons.history, onPressed: onHistory),
+              const SizedBox(width: AppSizes.sm),
+              if (!isMobile)
+                Showcase(
+                  key: ShowcaseHelper.connectedDevicesKey,
+                  disableBarrierInteraction: false,
+                  targetPadding: const EdgeInsets.all(8),
+                  title: 'Connected Devices',
+                  description:
+                      'View all currently connected devices and tap to start transferring files.',
+                  tooltipBackgroundColor: Colors.white,
+                  textColor: Colors.black,
+                  descTextStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
+                  ),
+                  titleTextStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    fontSize: 16,
+                  ),
+                  tooltipBorderRadius: BorderRadius.circular(12),
+                  targetBorderRadius: BorderRadius.circular(12),
+                  child: _buildConnectedDevicesButton(),
                 ),
-                titleTextStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  fontSize: 16,
-                ),
-                tooltipBorderRadius: BorderRadius.circular(12),
-                targetBorderRadius: BorderRadius.circular(12),
-                child: _buildConnectedDevicesButton(),
-              ),
               const SizedBox(width: AppSizes.sm),
               // if (Theme.of(context).platform == TargetPlatform.android) ...[
               //   Showcase(
@@ -115,94 +134,98 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
               //   ),
               //   const SizedBox(width: AppSizes.sm),
               // ],
-              Showcase(
-                key: ShowcaseHelper.qrScannerKey,
-                disableBarrierInteraction: false,
-                targetPadding: const EdgeInsets.all(8),
-                title: 'Scan QR Code',
-                description:
-                    'Scan a QR code to quickly join a shared network and connect with nearby devices.',
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                descTextStyle: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black87,
+              if (!isMobile || title == null) ...[
+                Showcase(
+                  key: ShowcaseHelper.qrScannerKey,
+                  disableBarrierInteraction: false,
+                  targetPadding: const EdgeInsets.all(8),
+                  title: 'Scan QR Code',
+                  description:
+                      'Scan a QR code to quickly join a shared network and connect with nearby devices.',
+                  tooltipBackgroundColor: Colors.white,
+                  textColor: Colors.black,
+                  descTextStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
+                  ),
+                  titleTextStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    fontSize: 16,
+                  ),
+                  tooltipBorderRadius: BorderRadius.circular(12),
+                  targetBorderRadius: BorderRadius.circular(12),
+                  child: AppIconButton(
+                    icon: Icons.qr_code_scanner,
+                    onPressed: onQrScan,
+                  ),
                 ),
-                titleTextStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  fontSize: 16,
-                ),
-                tooltipBorderRadius: BorderRadius.circular(12),
-                targetBorderRadius: BorderRadius.circular(12),
-                child: AppIconButton(
-                  icon: Icons.qr_code_scanner,
-                  onPressed: onQrScan,
-                ),
-              ),
-              const SizedBox(width: AppSizes.sm),
-              Showcase(
-                key: ShowcaseHelper.settingsKey,
-                disableBarrierInteraction: false,
-                targetPadding: const EdgeInsets.all(8),
-                title: 'Settings',
-                description: 'Change your device name and app preferences.',
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                descTextStyle: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black87,
-                ),
-                titleTextStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  fontSize: 16,
-                ),
-                tooltipBorderRadius: BorderRadius.circular(12),
-                targetBorderRadius: BorderRadius.circular(12),
-                child: AppIconButton(
-                  icon: Icons.settings_outlined,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => SettingsScreen(
-                          currentDeviceName: discoveryService.alias,
-                          discoveryService: discoveryService,
+                const SizedBox(width: AppSizes.sm),
+              ],
+              if (!isMobile)
+                Showcase(
+                  key: ShowcaseHelper.settingsKey,
+                  disableBarrierInteraction: false,
+                  targetPadding: const EdgeInsets.all(8),
+                  title: 'Settings',
+                  description: 'Change your device name and app preferences.',
+                  tooltipBackgroundColor: Colors.white,
+                  textColor: Colors.black,
+                  descTextStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
+                  ),
+                  titleTextStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    fontSize: 16,
+                  ),
+                  tooltipBorderRadius: BorderRadius.circular(12),
+                  targetBorderRadius: BorderRadius.circular(12),
+                  child: AppIconButton(
+                    icon: Icons.settings_outlined,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SettingsScreen(
+                            currentDeviceName: discoveryService.alias,
+                            discoveryService: discoveryService,
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSizes.sm),
-              Showcase(
-                key: ShowcaseHelper.helpKey,
-                disableBarrierInteraction: false,
-                targetPadding: const EdgeInsets.all(8),
-                title: 'Help',
-                description: 'Replay this guide anytime.',
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                descTextStyle: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black87,
+              if (!isMobile) const SizedBox(width: AppSizes.sm),
+              if (!isMobile || title == null)
+                Showcase(
+                  key: ShowcaseHelper.helpKey,
+                  disableBarrierInteraction: false,
+                  targetPadding: const EdgeInsets.all(8),
+                  title: 'Help',
+                  description: 'Replay this guide anytime.',
+                  tooltipBackgroundColor: Colors.white,
+                  textColor: Colors.black,
+                  descTextStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
+                  ),
+                  titleTextStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    fontSize: 16,
+                  ),
+                  tooltipBorderRadius: BorderRadius.circular(12),
+                  targetBorderRadius: BorderRadius.circular(12),
+                  child: AppIconButton(
+                    icon: Icons.help_outline,
+                    onPressed: () {
+                      try {
+                        ShowcaseHelper.startForHome(context);
+                      } catch (_) {}
+                    },
+                  ),
                 ),
-                titleTextStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  fontSize: 16,
-                ),
-                tooltipBorderRadius: BorderRadius.circular(12),
-                targetBorderRadius: BorderRadius.circular(12),
-                child: AppIconButton(
-                  icon: Icons.help_outline,
-                  onPressed: () {
-                    try {
-                      ShowcaseHelper.startForHome(context);
-                    } catch (_) {}
-                  },
-                ),
-              ),
               const SizedBox(width: 16),
             ],
           ),

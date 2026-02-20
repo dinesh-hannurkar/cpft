@@ -126,66 +126,74 @@ class _DeviceDotState extends State<DeviceDot> with TickerProviderStateMixin {
           constraints.maxHeight - labelHeightEstimate,
         );
 
-        return Stack(
-          children: [
-            Positioned(
-              left: leftDot,
-              top: topDot,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: widget.onTap,
-                  child: Container(
-                    width: dotSize,
-                    height: dotSize,
-                    decoration: BoxDecoration(
-                      color: AppColors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.secondary, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.blackDark.withValues(alpha: 0.15),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+        return SizedBox(
+          width: constraints.maxWidth,
+          height: constraints.maxHeight,
+          child: Stack(
+            fit: StackFit.loose,
+            children: [
+              Positioned(
+                left: leftDot,
+                top: topDot,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onTap,
+                    child: Container(
+                      width: dotSize,
+                      height: dotSize,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.secondary,
+                          width: 2,
                         ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      widget.label.isNotEmpty
-                          ? widget.label[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.greyDark,
-                        fontSize: (dotSize * 0.36).clamp(11.0, 18.0),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.blackDark.withValues(alpha: 0.15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        widget.label.isNotEmpty
+                            ? widget.label[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.greyDark,
+                          fontSize: (dotSize * 0.36).clamp(11.0, 18.0),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: clampedLabelLeft,
-              top: clampedLabelTop,
-              width: labelWidth,
-              child: IgnorePointer(
-                child: Text(
-                  widget.label,
-                  textAlign: align,
-                  maxLines: 2,
-                  softWrap: true,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    height: 1.2,
-                    color: AppColors.greyDark,
+              Positioned(
+                left: clampedLabelLeft,
+                top: clampedLabelTop,
+                width: labelWidth,
+                child: IgnorePointer(
+                  child: Text(
+                    widget.label,
+                    textAlign: align,
+                    maxLines: 2,
+                    softWrap: true,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      height: 1.2,
+                      color: AppColors.greyDark,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

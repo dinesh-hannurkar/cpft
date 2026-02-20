@@ -12,6 +12,7 @@ import 'helpers/local_network_permission_helper.dart';
 import 'services/discovery_service.dart';
 import 'services/notification_service.dart';
 import 'services/sound_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/chat/presentation/chat_screen.dart';
 import 'features/chat/services/connection_service.dart';
@@ -51,8 +52,12 @@ void main() async {
     );
   }
 
-  // Initialize WindowManager for desktop
+  // Initialize WindowManager and Database FFI for desktop
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    // Initialize FFI for SQLite on desktop
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+
     await windowManager.ensureInitialized();
 
     // Set window height - works well on most screens

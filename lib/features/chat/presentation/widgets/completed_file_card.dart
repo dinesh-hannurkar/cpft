@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:fylooo/shared/showcase/showcase_helper.dart';
@@ -28,12 +29,15 @@ class CompletedFileCard extends StatelessWidget {
     final size = message.metadata?['size'] as int?;
     final mime = message.metadata?['mime'] as String?;
 
+    // Check if file exists
+    final bool fileExists = savedPath != null && File(savedPath!).existsSync();
+
     final cardWidget = Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Material(
         color: Colors.transparent,
         child: GestureDetector(
-          onTap: savedPath != null
+          onTap: fileExists && savedPath != null
               ? () => onOpen?.call(savedPath!, name)
               : null,
           child: Container(
@@ -48,7 +52,7 @@ class CompletedFileCard extends StatelessWidget {
               maxWidth: MediaQuery.of(context).size.width * 0.7,
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: !fileExists ? Colors.grey.shade50 : Colors.white,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(16),
                 topRight: const Radius.circular(16),
@@ -62,7 +66,9 @@ class CompletedFileCard extends StatelessWidget {
                   offset: const Offset(0, 2),
                 ),
               ],
-              border: Border.all(color: Colors.blue.shade50),
+              border: Border.all(
+                color: !fileExists ? Colors.grey.shade200 : Colors.blue.shade50,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -85,20 +91,30 @@ class CompletedFileCard extends StatelessWidget {
                                 ),
                                 margin: const EdgeInsets.only(right: 6),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE3F2FD),
+                                  color: !fileExists
+                                      ? Colors.grey.shade400
+                                      : const Color(0xFFE3F2FD),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: const Color(0xFFBBDEFB),
+                                    color: !fileExists
+                                        ? Colors.transparent
+                                        : const Color(0xFFBBDEFB),
                                   ),
                                 ),
                                 child: Text(
-                                  name.contains('.')
-                                      ? extensionTrim(name.split('.').last)
-                                      : 'FILE',
-                                  style: const TextStyle(
+                                  !fileExists
+                                      ? 'CLEARED'
+                                      : (name.contains('.')
+                                            ? extensionTrim(
+                                                name.split('.').last,
+                                              )
+                                            : 'FILE'),
+                                  style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1565C0),
+                                    color: !fileExists
+                                        ? Colors.white
+                                        : const Color(0xFF1565C0),
                                     letterSpacing: .5,
                                   ),
                                 ),
@@ -117,7 +133,19 @@ class CompletedFileCard extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 4),
-                          if (mime != null)
+                          if (!fileExists)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2.0),
+                              child: Text(
+                                'File no longer available',
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            )
+                          else if (mime != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 2.0),
                               child: Text(
@@ -155,7 +183,7 @@ class CompletedFileCard extends StatelessWidget {
                       ),
                     ),
                     // Show Save label for received files (not sent files)
-                    if (!isMine && savedPath != null)
+                    if (!isMine && fileExists && savedPath != null)
                       Builder(
                         builder: (context) {
                           // Only show Showcase if ShowcaseView is available in context

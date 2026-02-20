@@ -93,11 +93,22 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     }
 
     try {
-      await _service.connect(
+      final success = await _service.connect(
         widget.peerDeviceName,
         widget.peerIp,
         widget.p2pPort,
       );
+
+      if (!success) {
+        if (!_disposed) {
+          setState(() {
+            _status = ConnectionStatus.failed;
+            _error = 'Connection failed (Check firewall?)';
+          });
+        }
+        return;
+      }
+
       // After TCP connect, we wait for handshake to flip to connected.
       if (!_disposed) {
         setState(() {

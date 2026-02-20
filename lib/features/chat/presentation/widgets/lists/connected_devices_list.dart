@@ -59,10 +59,8 @@ class ConnectedDevicesList extends StatelessWidget {
                 return DeviceConnectionTile(
                   entry: entry,
                   isCurrentDevice: isCurrentDevice,
-                  onSwitchChat: () => onSwitchChat(
-                    entry.deviceId,
-                    entry.ipAddress,
-                  ),
+                  onSwitchChat: () =>
+                      onSwitchChat(entry.deviceId, entry.ipAddress),
                 );
               },
             ),

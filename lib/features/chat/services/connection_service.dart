@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import '../models/connection_state.dart';
 import 'package:crypto/crypto.dart';
@@ -14,6 +15,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:flutter/services.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/features/dpftp/dpftp_service.dart';
+import 'package:fylooo/services/database_service.dart';
 
 // 🔬 PERF: Global profiling state
 class _PerfMetrics {
@@ -130,9 +132,14 @@ class ConnectionService {
   String? _localWifiDirectName;
   String? _wifiDirectIpAddress; // Store the actual P2P IP address
   String? _remotePlatform; // Store remote OS for transfer optimization
+  final int _localWifiDirectTieBreaker = math.Random().nextInt(
+    1000000,
+  ); // For P2P role negotiation
 
   bool _wifiDirectPreparing = false;
   StreamSubscription<WiFiDirectConnectionEvent>? _wifiDirectConnSub;
+  // ... (skip lines) ...
+
   StreamSubscription<List<WiFiDirectPeer>>? _wifiDirectPeersSub;
   ServerSocket? _wifiDirectServer;
   Socket? _wifiDirectDataSocket;
@@ -521,6 +528,9 @@ class ConnectionService {
   }
 
   ConnectionService({required this.deviceName}) {
+    // Prune old messages on startup/service creation
+    DatabaseService().pruneOldMessages();
+
     debugPrint(
       '[ConnectionService] 🆕 NEW ConnectionService instance created for device: $deviceName ($hashCode)',
     );
@@ -579,7 +589,9 @@ class ConnectionService {
             DeviceMessage(
               type: 'file_complete',
               content: name,
-              senderName: deviceName,
+              senderName: p.isOutgoing
+                  ? deviceName
+                  : (_currentConnection?.deviceName ?? 'Unknown'),
               timestamp: DateTime.now(),
               metadata: {
                 'transferId': p.transferId,
@@ -1191,6 +1203,7 @@ class ConnectionService {
             'platform': 'android',
             if (_localWifiDirectPeerId != null) 'p2pId': _localWifiDirectPeerId,
             if (_localWifiDirectName != null) 'p2pName': _localWifiDirectName,
+            'tieBreaker': _localWifiDirectTieBreaker,
           },
         ),
       );
@@ -1537,6 +1550,13 @@ class ConnectionService {
       const historyTypes = {'text', 'file_complete', 'file_offer', 'goodbye'};
       if (historyTypes.contains(message.type)) {
         _messageHistory.add(message);
+        // Persist outgoing message to DB
+        if (_currentConnection != null) {
+          DatabaseService().insertMessage(
+            message,
+            _currentConnection!.deviceName,
+          );
+        }
       }
 
       if (_consecutiveErrors > 0) {
@@ -1730,12 +1750,13 @@ class ConnectionService {
       if (remoteP2pName != null) {
         _remoteWifiDirectName = remoteP2pName;
       }
+      final remoteTieBreaker = message.metadata?['tieBreaker'] as int? ?? 0;
 
       debugPrint(
-        '[ConnectionService] 📡 WiFi Direct: remote p2pId=$_remoteWifiDirectPeerId, p2pName=$_remoteWifiDirectName',
+        '[ConnectionService] 📡 WiFi Direct: remote p2pId=$_remoteWifiDirectPeerId, p2pName=$_remoteWifiDirectName, tieBreaker=$remoteTieBreaker',
       );
 
-      // If both Android, respond with acceptance
+      // If both Android, negotiate roles
       if (Platform.isAndroid) {
         await _wifiDirectService.initialize();
         if (_wifiDirectService.isSupported) {
@@ -1744,26 +1765,54 @@ class ConnectionService {
           _localWifiDirectName = self?.name;
         }
 
-        debugPrint(
-          '[ConnectionService] 📡 WiFi Direct: sending accept with local p2pId=$_localWifiDirectPeerId, p2pName=$_localWifiDirectName',
-        );
-        await sendMessage(
-          DeviceMessage(
-            type: 'wifi_direct_accept',
-            content: 'Accepted',
-            senderName: deviceName,
-            metadata: {
-              'platform': 'android',
-              if (_localWifiDirectPeerId != null)
-                'p2pId': _localWifiDirectPeerId,
-              if (_localWifiDirectName != null) 'p2pName': _localWifiDirectName,
-            },
-          ),
-        );
-        debugPrint('[ConnectionService] 📡 Sent WiFi Direct acceptance');
+        // --- Role Negotiation Tie-Breaker ---
+        // Determine who is the initiator (Group Owner). The initiator WAITS. The responder ACCEPTS and CONNECTS.
+        // We compare strings/ints to get a deterministic winner on both sides.
+        bool isInitiator = false;
 
-        // Prepare responder side (register receiver + wait for group formation).
-        unawaited(_prepareWiFiDirectUpgrade(initiator: false));
+        if (_localWifiDirectPeerId != null &&
+            remoteP2pId != null &&
+            _localWifiDirectPeerId != remoteP2pId) {
+          isInitiator = _localWifiDirectPeerId!.compareTo(remoteP2pId) > 0;
+          debugPrint('[ConnectionService] 📡 Negotiation by MAC: $isInitiator');
+        } else if (deviceName != message.senderName) {
+          isInitiator = deviceName.compareTo(message.senderName) > 0;
+          debugPrint(
+            '[ConnectionService] 📡 Negotiation by Device name: $isInitiator',
+          );
+        } else {
+          isInitiator = _localWifiDirectTieBreaker > remoteTieBreaker;
+          debugPrint(
+            '[ConnectionService] 📡 Negotiation by TieBreaker: $isInitiator',
+          );
+        }
+
+        if (isInitiator) {
+          // We are the initiator. We don't send an accept. We just wait for the other side to accept.
+          debugPrint(
+            '[ConnectionService] 📡 Role: INITIATOR (waiting for accept)',
+          );
+        } else {
+          // We are the responder. We send the accept and start listening.
+          debugPrint('[ConnectionService] 📡 Role: RESPONDER (sending accept)');
+          await sendMessage(
+            DeviceMessage(
+              type: 'wifi_direct_accept',
+              content: 'Accepted',
+              senderName: deviceName,
+              metadata: {
+                'platform': 'android',
+                if (_localWifiDirectPeerId != null)
+                  'p2pId': _localWifiDirectPeerId,
+                if (_localWifiDirectName != null)
+                  'p2pName': _localWifiDirectName,
+              },
+            ),
+          );
+
+          // Prepare responder side (register receiver + wait for group formation).
+          unawaited(_prepareWiFiDirectUpgrade(initiator: false));
+        }
       }
       return;
     }
@@ -3106,9 +3155,42 @@ class ConnectionService {
       info = info.copyWith(ipAddress: _currentConnection!.ipAddress);
     }
 
+    // Check for connection transition to load history
+    final wasConnected =
+        _currentConnection?.status == ConnectionStatus.connected;
+    final isConnected = info.status == ConnectionStatus.connected;
+
     _currentConnection = info;
+
+    if (!wasConnected && isConnected) {
+      _loadHistory(info.deviceName);
+    }
+
     for (final listener in List.of(_statusListeners)) {
       listener(info);
+    }
+  }
+
+  Future<void> _loadHistory(String deviceName) async {
+    try {
+      final history = await DatabaseService().getMessagesForDevice(deviceName);
+      _messageHistory.clear();
+      _messageHistory.addAll(history);
+      debugPrint(
+        '[ConnectionService] 📜 Loaded ${history.length} messages from history for $deviceName',
+      );
+
+      // Notify listeners to reload history in UI
+      _notifyMessageListeners(
+        DeviceMessage(
+          type: 'history_reload',
+          senderName: 'system',
+          timestamp: DateTime.now(),
+          content: 'reload',
+        ),
+      );
+    } catch (e) {
+      debugPrint('[ConnectionService] ⚠️ Failed to load history: $e');
     }
   }
 
@@ -3122,9 +3204,23 @@ class ConnectionService {
           // Skip storing duplicate completion event
         } else {
           _messageHistory.add(message);
+          // Persist incoming message to DB
+          if (_currentConnection != null) {
+            DatabaseService().insertMessage(
+              message,
+              _currentConnection!.deviceName,
+            );
+          }
         }
       } else {
         _messageHistory.add(message);
+        // Persist incoming message to DB
+        if (_currentConnection != null) {
+          DatabaseService().insertMessage(
+            message,
+            _currentConnection!.deviceName,
+          );
+        }
       }
     }
     for (final listener in _messageListeners) {
@@ -3180,6 +3276,22 @@ class ConnectionService {
 
     // NOTE: Status is purposefully NOT updated to disconnected here.
     // The caller (acceptConnection) will immediately set it to Connected/Connecting.
+  }
+
+  /// Clean up session files (received only) when disconnecting
+  Future<void> cleanupSessionFiles() async {
+    debugPrint('[ConnectionService] 🧹 Cleaning up session files...');
+
+    // On Desktop (macOS, Windows, Linux), files are saved to user-specified locations or Downloads.
+    // On Mobile (Android, iOS), files are saved to app docs dir.
+    // To preserve history, we should NOT delete them on disconnect.
+    // We only clean up if explicitly requested or if they are partial temps (handled elsewhere)
+
+    debugPrint('[ConnectionService] 🖥️ Session file cleanup disabled');
+
+    // Clear history so next session starts fresh
+    _messageHistory.clear();
+    debugPrint('[ConnectionService] 🧹 Cleared in-memory history');
   }
 
   /// Disconnect from current device
@@ -3261,6 +3373,9 @@ class ConnectionService {
     _localWifiDirectName = null;
     _wifiDirectAttempted = false;
     _usingWifiDirect = false;
+
+    // Perform session cleanup (delete temp files and clear history)
+    await cleanupSessionFiles();
 
     // Update status
     if (_currentConnection != null) {
@@ -3479,7 +3594,7 @@ class ConnectionService {
   /// This runs safely and does not block startup (call with .catchError to observe failures).
   static Future<void> cleanupTempFiles({int olderThanSeconds = 0}) async {
     try {
-      final tmp = await getApplicationDocumentsDirectory();
+      final tmp = await getTemporaryDirectory();
       final now = DateTime.now();
       int deletedCount = 0;
       int deletedBytes = 0;
@@ -3650,7 +3765,7 @@ class ConnectionService {
         DeviceMessage(
           type: 'file_complete',
           content: inc.offer.fileName,
-          senderName: deviceName,
+          senderName: _currentConnection?.deviceName ?? 'Unknown',
           timestamp: DateTime.now(),
           metadata: {
             'transferId': transferId,
@@ -3796,7 +3911,7 @@ class ConnectionService {
             DeviceMessage(
               type: 'file_complete',
               content: completedInc.offer.fileName,
-              senderName: deviceName,
+              senderName: _currentConnection?.deviceName ?? 'Unknown',
               timestamp: DateTime.now(),
               metadata: {
                 'transferId': transferId,

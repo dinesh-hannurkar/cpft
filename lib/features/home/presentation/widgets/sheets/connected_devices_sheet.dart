@@ -10,8 +10,17 @@ class ConnectedDevicesBottomSheet extends StatefulWidget {
   final ConnectionManager? connectionManager;
   final List<MapEntry<String, ConnectionService>>? staticConnections;
   final String? currentDeviceId;
-  final Function(String deviceId, [String? ipAddress, int? port, VoidCallback? onFilesSent])? onDeviceTap;
+  final Function(
+    String deviceId, [
+    String? ipAddress,
+    int? port,
+    VoidCallback? onFilesSent,
+  ])?
+  onDeviceTap;
   final VoidCallback? onFilesSent;
+  final bool shouldPop;
+  final bool isEmbedded;
+  final bool asSliver;
 
   const ConnectedDevicesBottomSheet({
     super.key,
@@ -20,6 +29,9 @@ class ConnectedDevicesBottomSheet extends StatefulWidget {
     this.currentDeviceId,
     this.onDeviceTap,
     this.onFilesSent,
+    this.shouldPop = true,
+    this.isEmbedded = false,
+    this.asSliver = false,
   }) : assert(
          connectionManager != null || staticConnections != null,
          'Either connectionManager or staticConnections must be provided',
@@ -48,27 +60,12 @@ class _ConnectedDevicesBottomSheetState
 
     // Setup live updates with ConnectionManager
     if (widget.connectionManager != null) {
-      debugPrint(
-        '[ConnectedDevicesSheet] ============ INIT STATE ============',
-      );
-      debugPrint(
-        '[ConnectedDevicesSheet] Active connections count: ${widget.connectionManager!.activeConnections.length}',
-      );
-      debugPrint(
-        '[ConnectedDevicesSheet] Connection keys: ${widget.connectionManager!.activeConnections.keys.join(", ")}',
-      );
-      for (final entry in widget.connectionManager!.activeConnections.entries) {
-        debugPrint(
-          '[ConnectedDevicesSheet]   - ${entry.key}: status=${entry.value.currentConnection?.status}, isConnected=${entry.value.isConnected}',
-        );
-      }
+      // Initialize immediately to avoid LateInitializationError
+      _entries = widget.connectionManager!.activeConnections.entries.toList();
       _updateEntries();
 
       // Listen for new connections
       _connectionListener = (deviceName, service, isIncoming) {
-        debugPrint(
-          '[ConnectedDevicesSheet] New connection listener fired for $deviceName',
-        );
         if (mounted) {
           _updateEntries();
           _addStatusListener(deviceName, service);
@@ -78,11 +75,10 @@ class _ConnectedDevicesBottomSheetState
 
       // Add status listeners for existing connections
       for (final entry in _entries) {
-        debugPrint(
-          '[ConnectedDevicesSheet] Adding status listener for existing connection: ${entry.key}',
-        );
         _addStatusListener(entry.key, entry.value);
       }
+    } else {
+      _entries = [];
     }
   }
 
@@ -90,9 +86,6 @@ class _ConnectedDevicesBottomSheetState
     if (_statusListeners.containsKey(deviceId)) return;
 
     void listener(ConnectionInfo info) {
-      debugPrint(
-        '[ConnectedDevicesSheet] Status changed for $deviceId: ${info.status}',
-      );
       if (mounted) {
         _updateEntries();
       }
@@ -104,15 +97,14 @@ class _ConnectedDevicesBottomSheetState
 
   void _updateEntries() {
     if (!mounted || widget.connectionManager == null) return;
-    setState(() {
-      _entries = widget.connectionManager!.activeConnections.entries.toList();
-      debugPrint(
-        '[ConnectedDevicesSheet] Updated entries: ${_entries.length} devices',
-      );
-      for (final entry in _entries) {
-        debugPrint(
-          '[ConnectedDevicesSheet]   Entry: ${entry.key}, status=${entry.value.currentConnection?.status}',
-        );
+
+    // Schedule update to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _entries = widget.connectionManager!.activeConnections.entries
+              .toList();
+        });
       }
     });
   }
@@ -134,56 +126,105 @@ class _ConnectedDevicesBottomSheetState
 
   @override
   Widget build(BuildContext context) {
+    if (widget.asSliver) {
+      if (_entries.isEmpty) {
+        return SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.devices_other, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text(
+                    'No devices connected',
+                    style: TextStyle(color: Colors.black54, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      return SliverList(
+        delegate: SliverChildBuilderDelegate((context, index) {
+          if (index >= _entries.length) return null;
+          final entry = _entries[index];
+          return _buildDeviceItem(entry);
+        }, childCount: _entries.length),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: widget.isEmbedded ? MainAxisSize.max : MainAxisSize.min,
       children: [
         if (_entries.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Center(
-              child: Text(
-                'No devices connected',
-                style: TextStyle(color: Colors.black54),
+          Expanded(
+            flex: widget.isEmbedded ? 1 : 0,
+            child: const Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Center(
+                child: Text(
+                  'No devices connected',
+                  style: TextStyle(color: Colors.black54),
+                ),
               ),
             ),
           )
         else
           Flexible(
             child: ListView.separated(
-              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
               itemCount: _entries.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (context, index) => const Divider(),
               itemBuilder: (context, index) {
-                final deviceId = _entries[index].key;
-                final connection = _entries[index].value;
-                final status = connection.currentConnection?.status;
-                final connected = connection.isConnected;
-                final isCurrentDevice = deviceId == widget.currentDeviceId;
-
-                return DeviceListTile(
-                  deviceId: deviceId,
-                  status: status,
-                  connected: connected,
-                  isCurrentDevice: isCurrentDevice,
-                  onTap: () {
-                    if (widget.onDeviceTap != null) {
-                      final ipAddress =
-                          connection.currentConnection?.ipAddress ?? '';
-                      Navigator.pop(context);
-                      // Support both callback signatures
-                      if (ipAddress.isNotEmpty) {
-                        widget.onDeviceTap!(deviceId, ipAddress, 53318, widget.onFilesSent);
-                      } else {
-                        widget.onDeviceTap!(deviceId, null, null, widget.onFilesSent);
-                      }
-                    }
-                  },
-                );
+                return _buildDeviceItem(_entries[index]);
               },
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildDeviceItem(MapEntry<String, ConnectionService> entry) {
+    final deviceId = entry.key;
+    final connection = entry.value;
+
+    // Get connection details
+    final status = connection.currentConnection?.status;
+    final connected = connection.isConnected;
+    final isCurrentDevice = deviceId == widget.currentDeviceId;
+
+    return DeviceListTile(
+      deviceId: deviceId,
+      status: status,
+      connected: connected,
+      isCurrentDevice: isCurrentDevice,
+      onTap: connected
+          ? () {
+              if (widget.onDeviceTap != null) {
+                final ipAddress = connection.currentConnection?.ipAddress ?? '';
+                if (widget.shouldPop) {
+                  Navigator.pop(context);
+                }
+                // Support both callback signatures
+                if (ipAddress.isNotEmpty) {
+                  widget.onDeviceTap!(
+                    deviceId,
+                    ipAddress,
+                    53318,
+                    widget.onFilesSent,
+                  );
+                } else {
+                  widget.onDeviceTap!(deviceId, null, null, widget.onFilesSent);
+                }
+              }
+            }
+          : null,
     );
   }
 }

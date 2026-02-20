@@ -29,10 +29,13 @@ class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
   final DiscoveryService? discoveryService;
 
+  final bool showAppBar;
+
   const SettingsScreen({
     super.key,
     required this.currentDeviceName,
     this.discoveryService,
+    this.showAppBar = true,
   });
 
   @override
@@ -389,11 +392,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: PrimaryAppBar(
-        leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
-        title: 'Settings',
-        centerTitle: true,
-      ),
+      appBar: widget.showAppBar
+          ? PrimaryAppBar(
+              leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
+              title: 'Settings',
+              centerTitle: true,
+            )
+          : null,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(

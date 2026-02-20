@@ -42,6 +42,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:fylooo/shared/widgets/drag_overlay.dart';
 import 'package:fylooo/utils/permissions.dart';
+import 'package:fylooo/services/database_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String deviceName;
@@ -52,6 +53,7 @@ class ChatScreen extends StatefulWidget {
   final String? initialDeviceId;
   final List<XFile>? droppedFiles;
   final VoidCallback? onFilesSent;
+  final bool isOffline;
 
   const ChatScreen({
     super.key,
@@ -63,6 +65,7 @@ class ChatScreen extends StatefulWidget {
     this.initialDeviceId,
     this.droppedFiles,
     this.onFilesSent,
+    this.isOffline = false,
   });
 
   @override
@@ -118,21 +121,45 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       targetDeviceName,
     );
 
-    // Preload existing messages (history)
-    _messages.addAll(_connectionService.getMessageHistory());
-
-    _connectionService.addStatusListener(_onStatusChanged);
-    _connectionService.addMessageListener(_onMessageReceived);
-
-    // Start connect if needed
-    if (_connectionService.isConnected) {
-      _connectionInfo = _connectionService.currentConnection;
-    } else if (_connectionService.currentConnection?.status ==
-        ConnectionStatus.connecting) {
-      // Already connecting (incoming) – do not start outgoing connect
-      _connectionInfo = _connectionService.currentConnection;
+    if (widget.isOffline) {
+      _loadOfflineHistory(targetDeviceName);
     } else {
-      _connectToDevice();
+      // Preload existing messages (history)
+      _messages.addAll(_connectionService.getMessageHistory());
+
+      // Populate _receivedFiles from history with deduplication
+      final Set<String> seenPaths = {};
+      for (final msg in _messages) {
+        if (msg.type == 'file_complete') {
+          final isOutgoing = msg.metadata?['outgoing'] as bool? ?? false;
+          final path = msg.metadata?['path'] as String?;
+
+          if (!isOutgoing && path != null && !seenPaths.contains(path)) {
+            seenPaths.add(path);
+            _receivedFiles.add(
+              ReceivedFile(
+                name: msg.content,
+                path: path,
+                timestamp: msg.timestamp,
+              ),
+            );
+          }
+        }
+      }
+
+      _connectionService.addStatusListener(_onStatusChanged);
+      _connectionService.addMessageListener(_onMessageReceived);
+
+      // Start connect if needed
+      if (_connectionService.isConnected) {
+        _connectionInfo = _connectionService.currentConnection;
+      } else if (_connectionService.currentConnection?.status ==
+          ConnectionStatus.connecting) {
+        // Already connecting (incoming) – do not start outgoing connect
+        _connectionInfo = _connectionService.currentConnection;
+      } else {
+        _connectToDevice();
+      }
     }
 
     // Animation for file icon pulse + cycling
@@ -199,7 +226,42 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _scrollController.dispose();
     _inputFocus.dispose();
     WakelockPlus.disable();
+
     super.dispose();
+  }
+
+  void _loadOfflineHistory(String deviceId) async {
+    final history = await DatabaseService().getMessagesForDevice(deviceId);
+    if (!mounted) return;
+    setState(() {
+      _messages.addAll(history);
+      for (final msg in _messages) {
+        if (msg.type == 'file_complete') {
+          final isOutgoing = msg.metadata?['outgoing'] as bool? ?? false;
+          final path = msg.metadata?['path'] as String?;
+          if (!isOutgoing && path != null) {
+            _receivedFiles.add(
+              ReceivedFile(
+                name: msg.content,
+                path: path,
+                timestamp: msg.timestamp,
+              ),
+            );
+          }
+        }
+      }
+
+      // Set offline status
+      _connectionInfo = ConnectionInfo(
+        deviceName: widget.deviceName,
+        ipAddress: widget.ipAddress,
+        port: widget.port,
+        status: ConnectionStatus.disconnected,
+      );
+    });
+
+    // Scroll to bottom after frame
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   Future<void> _connectToDevice() async {
@@ -299,6 +361,34 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _onMessageReceived(DeviceMessage message) {
     if (!mounted) return;
     switch (message.type) {
+      case 'history_reload':
+        print('ChatScreen: Reloading history from DB');
+        setState(() {
+          _messages.clear();
+          _messages.addAll(_connectionService.getMessageHistory());
+
+          // Rebuild received files list from history with deduplication
+          _receivedFiles.clear();
+          final Set<String> seenPaths = {};
+          for (final msg in _messages) {
+            if (msg.type == 'file_complete') {
+              final isOutgoing = msg.metadata?['outgoing'] as bool? ?? false;
+              final path = msg.metadata?['path'] as String?;
+
+              if (!isOutgoing && path != null && !seenPaths.contains(path)) {
+                seenPaths.add(path);
+                _receivedFiles.add(
+                  ReceivedFile(
+                    name: msg.content,
+                    path: path,
+                    timestamp: msg.timestamp,
+                  ),
+                );
+              }
+            }
+          }
+        });
+        break;
       case 'file_offer':
         _handleIncomingOffer(message);
         break;
@@ -394,12 +484,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         SoundService().playTransferComplete();
 
         setState(() {
-          if (!_messages.any(
-            (m) =>
-                m.timestamp == message.timestamp &&
-                m.content == message.content,
-          )) {
+          // 🛡️ Prevent UI duplicates
+          final alreadyExists = _messages.any((m) {
+            if (message.type == 'file_complete' && tId != null) {
+              return m.metadata?['transferId'] == tId;
+            }
+            return m.timestamp == message.timestamp &&
+                m.content == message.content;
+          });
+
+          if (!alreadyExists) {
             _messages.add(message);
+          } else {
+            debugPrint(
+              '[ChatScreen] ⚠️ Skipping duplicate message in UI: ${message.content}',
+            );
           }
           if (tId != null) {
             _incomingProgress.remove(tId);
@@ -960,8 +1059,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               showcaseKeys.add(ShowcaseHelper.downloadAllKey);
             }
 
-            ShowCaseWidget.of(context).startShowCase(showcaseKeys);
-            prefs.setBool('file_received_showcase_seen', true);
+            if (mounted) {
+              ShowCaseWidget.of(context).startShowCase(showcaseKeys);
+              prefs.setBool('file_received_showcase_seen', true);
+            }
           } catch (e) {
             debugPrint('[ChatScreen] Error starting file showcase: $e');
           }
@@ -982,10 +1083,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         if (mounted) {
           try {
             // Only show Download All showcase
-            ShowCaseWidget.of(
-              context,
-            ).startShowCase([ShowcaseHelper.downloadAllKey]);
-            prefs.setBool('file_received_showcase_seen', true);
+            if (mounted) {
+              ShowCaseWidget.of(
+                context,
+              ).startShowCase([ShowcaseHelper.downloadAllKey]);
+              prefs.setBool('file_received_showcase_seen', true);
+            }
           } catch (e) {
             debugPrint('[ChatScreen] Error starting download all showcase: $e');
           }
@@ -1132,8 +1235,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   showcaseKeys.add(ShowcaseHelper.disconnectKey);
                 }
 
-                ShowCaseWidget.of(context).startShowCase(showcaseKeys);
-                prefs.setBool('p2p_chat_showcase_seen', true);
+                if (mounted) {
+                  ShowCaseWidget.of(context).startShowCase(showcaseKeys);
+                  prefs.setBool('p2p_chat_showcase_seen', true);
+                }
               } catch (e) {
                 // Silently ignore showcase errors
                 debugPrint('Chat showcase initialization failed: $e');
@@ -1379,6 +1484,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                   final isOutgoing =
                                       msg.metadata?['outgoing'] as bool? ??
                                       isMine;
+
+                                  // DEBUG: Trace alignment logic
+                                  if (msg.type == 'file_complete') {
+                                    debugPrint(
+                                      'Msg: ${msg.content}, Sender: ${msg.senderName}, MyDevice: ${widget.myDeviceName}, IsMine: $isMine, MetaOut: ${msg.metadata?['outgoing']}, Res: $isOutgoing',
+                                    );
+                                  }
+
                                   final savedPath =
                                       msg.metadata?['path'] as String?;
                                   // Use updated path if file was saved

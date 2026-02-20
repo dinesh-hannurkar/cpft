@@ -555,36 +555,80 @@ class DiscoveryService {
     // Check if this is a new device or an update
     final isNewDevice = !_discoveredDevices.containsKey(key);
 
-    // Update or add the device
+    // Check if device info actually changed (name/port/ip)
+    // We must check this BEFORE overwriting the map entry!
+    DeviceInfo? oldDevice;
+    String? oldKey;
+
+    if (!isNewDevice) {
+      oldDevice = _discoveredDevices[key];
+    } else {
+      // Check if we have this device under a different key (IP changed)
+      for (final entry in _discoveredDevices.entries) {
+        if (entry.value.name == deviceName) {
+          oldKey = entry.key;
+          oldDevice = entry.value;
+          break;
+        }
+      }
+    }
+
+    // If we found an old entry with same name but different key, remove it
+    if (oldKey != null) {
+      _discoveredDevices.remove(oldKey);
+      print(
+        '[DiscoveryService] 🔄 Device Moved: $deviceName changed IP from ${oldDevice?.ip} to $ipAddress',
+      );
+    }
+
+    // Update or add the device, preserving P2P info if available
     _discoveredDevices[key] = DeviceInfo(
       name: deviceName,
       ip: ipAddress,
       port: port,
       lastSeen: DateTime.now(),
+      p2pPeerId: oldDevice?.p2pPeerId, // Preserve P2P ID
     );
 
     if (isNewDevice) {
-      print(
-        '[DiscoveryService] 🆕 New device discovered: $deviceName ($ipAddress:$port)',
-      );
+      if (oldKey == null) {
+        print(
+          '[DiscoveryService] 🆕 New device discovered: $deviceName ($ipAddress:$port)',
+        );
+      }
     } else {
-      print(
-        '[DiscoveryService] 🔄 Device updated: $deviceName ($ipAddress:$port)',
-      );
+      // debug print only if something changed
     }
-    // Always notify listeners (even for duplicates, so UI can update)
-    int notifiedCount = 0;
-    for (var listener in _discoveryListeners) {
-      try {
-        listener(deviceName, ipAddress, port);
-        notifiedCount++;
-      } catch (e) {
-        print('[DiscoveryService] ❌ Error notifying listener: $e');
+
+    var shouldNotify = isNewDevice;
+    if (oldKey != null) shouldNotify = true; // Key changed (IP/Port) -> Notify
+
+    if (!isNewDevice && oldDevice != null && oldKey == null) {
+      if (oldDevice.name != deviceName || oldDevice.port != port) {
+        shouldNotify = true;
+        print(
+          '[DiscoveryService] 🔄 Device updated: $deviceName ($ipAddress:$port) - Name/Port changed',
+        );
       }
     }
-    print(
-      '[DiscoveryService] ✅ Successfully notified $notifiedCount UI listeners',
-    );
+
+    if (shouldNotify) {
+      // Only notify listeners if meaningful data changed
+      int notifiedCount = 0;
+      for (var listener in _discoveryListeners) {
+        try {
+          listener(deviceName, ipAddress, port);
+          notifiedCount++;
+        } catch (e) {
+          print('[DiscoveryService] ❌ Error notifying listener: $e');
+        }
+      }
+      print(
+        '[DiscoveryService] ✅ Notified $notifiedCount UI listeners (Change detected)',
+      );
+    } else {
+      // print('[DiscoveryService] 🤫 Skipped notifying listeners (No change)');
+    }
   }
 
   /// Handle WiFi Direct peers found
