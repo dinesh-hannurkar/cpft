@@ -3,7 +3,6 @@ import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/shared/widgets/primary_app_bar.dart';
 import 'package:fylooo/shared/widgets/back_button_chip.dart';
 import 'package:fylooo/features/home/presentation/widgets/tiles/device_list_tile.dart';
-import 'package:showcaseview/showcaseview.dart';
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
 import 'package:fylooo/features/chat/services/connection_manager.dart';
 import 'package:fylooo/services/database_service.dart';
@@ -117,17 +116,14 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => ShowCaseWidget(
-                                    builder: (context) => ChatScreen(
-                                      deviceName: deviceId,
-                                      ipAddress: deviceId,
-                                      port: 0,
-                                      myDeviceName: widget.myDeviceName,
-                                      connectionManager:
-                                          widget.connectionManager,
-                                      initialDeviceId: deviceId,
-                                      isOffline: true,
-                                    ),
+                                  builder: (_) => ChatScreen(
+                                    deviceName: deviceId,
+                                    ipAddress: deviceId,
+                                    port: 0,
+                                    myDeviceName: widget.myDeviceName,
+                                    connectionManager: widget.connectionManager,
+                                    initialDeviceId: deviceId,
+                                    isOffline: true,
                                   ),
                                 ),
                               ).then((_) => _refreshHistory());

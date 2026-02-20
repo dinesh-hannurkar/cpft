@@ -147,6 +147,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         }
       }
 
+      // Scroll to bottom after frame
+      _scrollToBottom();
+
       _connectionService.addStatusListener(_onStatusChanged);
       _connectionService.addMessageListener(_onMessageReceived);
 
@@ -388,6 +391,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             }
           }
         });
+        // Scroll to bottom after frame
+        _scrollToBottom();
         break;
       case 'file_offer':
         _handleIncomingOffer(message);
@@ -1046,26 +1051,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (!hasSeenFileShowcase && mounted) {
       // Delay to ensure widgets are built
       Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) {
-          try {
-            final showcaseKeys = <GlobalKey>[];
+        if (!mounted) return;
+        try {
+          final showcaseKeys = <GlobalKey>[];
 
-            // Add file card showcase
-            showcaseKeys.add(ShowcaseHelper.receivedFileCardKey);
-            showcaseKeys.add(ShowcaseHelper.saveButtonKey);
+          // Add file card showcase
+          showcaseKeys.add(ShowcaseHelper.receivedFileCardKey);
+          showcaseKeys.add(ShowcaseHelper.saveButtonKey);
 
-            // Add download all if multiple files
-            if (_receivedFiles.length > 1) {
-              showcaseKeys.add(ShowcaseHelper.downloadAllKey);
-            }
-
-            if (mounted) {
-              ShowCaseWidget.of(context).startShowCase(showcaseKeys);
-              prefs.setBool('file_received_showcase_seen', true);
-            }
-          } catch (e) {
-            debugPrint('[ChatScreen] Error starting file showcase: $e');
+          // Add download all if multiple files
+          if (_receivedFiles.length > 1) {
+            showcaseKeys.add(ShowcaseHelper.downloadAllKey);
           }
+
+          if (mounted) {
+            final showcase = ShowCaseWidget.of(context);
+            showcase.startShowCase(showcaseKeys);
+            prefs.setBool('file_received_showcase_seen', true);
+          }
+        } catch (e) {
+          debugPrint('[ChatScreen] Error starting file showcase: $e');
         }
       });
     }
@@ -1080,18 +1085,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (!hasSeenFileShowcase && mounted) {
       // Delay to ensure Download All button is rendered
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          try {
-            // Only show Download All showcase
-            if (mounted) {
-              ShowCaseWidget.of(
-                context,
-              ).startShowCase([ShowcaseHelper.downloadAllKey]);
-              prefs.setBool('file_received_showcase_seen', true);
-            }
-          } catch (e) {
-            debugPrint('[ChatScreen] Error starting download all showcase: $e');
+        if (!mounted) return;
+        try {
+          // Only show Download All showcase
+          if (mounted) {
+            final showcase = ShowCaseWidget.of(context);
+            showcase.startShowCase([ShowcaseHelper.downloadAllKey]);
+            prefs.setBool('file_received_showcase_seen', true);
           }
+        } catch (e) {
+          debugPrint('[ChatScreen] Error starting download all showcase: $e');
         }
       });
     }
@@ -1501,19 +1504,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                       : null;
 
                                   // Show showcase on first received file only
+                                  final firstReceived = _messages
+                                      .cast<DeviceMessage?>()
+                                      .firstWhere(
+                                        (m) =>
+                                            m?.type == 'file_complete' &&
+                                            (m?.metadata?['outgoing']
+                                                        as bool? ??
+                                                    false) ==
+                                                false,
+                                        orElse: () => null,
+                                      );
+
                                   final isFirstReceivedFile =
-                                      !isOutgoing &&
-                                      _messages
-                                              .where(
-                                                (m) =>
-                                                    m.type == 'file_complete' &&
-                                                    (m.metadata?['outgoing']
-                                                                as bool? ??
-                                                            false) ==
-                                                        false,
-                                              )
-                                              .first ==
-                                          msg;
+                                      !isOutgoing && firstReceived == msg;
 
                                   return CompletedFileCard(
                                     message: msg,

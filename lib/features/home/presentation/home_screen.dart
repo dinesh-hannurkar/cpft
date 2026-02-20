@@ -50,6 +50,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:fylooo/services/database_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final DiscoveryService discoveryService;
@@ -88,6 +89,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hotspotAutoConnectAttempted =
       false; // Track if we've tried auto-connect for current hotspot
   int _selectedIndex = 0;
+  int _historyCount = 0;
+  int _connectedCount = 0;
+  Timer? _countRefreshTimer;
 
   @override
   void initState() {
@@ -103,6 +107,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
     _startNetworkStatusCheck();
     widget.discoveryService.addIncomingRequestListener(_onIncomingRequest);
+    _setupCountListeners();
+    _updateCounts();
+  }
+
+  void _setupCountListeners() {
+    // Listen to connection changes
+    final cm = widget.discoveryService.connectionManager;
+    if (cm != null) {
+      // We can't directly listen to the map changes, but we can hook into status changes
+      cm.addConnectionListener((deviceName, service, isIncoming) {
+        _updateCounts();
+        service.addStatusListener((_) => _updateCounts());
+      });
+
+      // Also listen to already existing connections
+      for (final service in cm.activeConnections.values) {
+        service.addStatusListener((_) => _updateCounts());
+      }
+    }
+
+    // Periodically refresh history count (and catch any connection missed updates)
+    _countRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _updateCounts();
+    });
+  }
+
+  Future<void> _updateCounts() async {
+    if (!mounted) return;
+
+    // Connected devices count
+    final cm = widget.discoveryService.connectionManager;
+    final int connectedCount =
+        cm?.activeConnections.values.where((s) => s.isConnected).length ?? 0;
+
+    // History devices count
+    final int historyCount = await DatabaseService().getRecentDevicesCount();
+
+    if (mounted &&
+        (_connectedCount != connectedCount || _historyCount != historyCount)) {
+      setState(() {
+        _connectedCount = connectedCount;
+        _historyCount = historyCount;
+      });
+    }
   }
 
   void _initializeController() {
@@ -214,6 +262,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _countRefreshTimer?.cancel();
     _networkCheckTimer?.cancel();
     _autoHotspotCooldown?.cancel();
     widget.discoveryService.removeIncomingRequestListener(_onIncomingRequest);
@@ -483,25 +532,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     try {
       final info = await LocalHotspotService.startHotspot();
-      if (info != null && mounted) {
-        setState(() {
-          _hotspotInfo = info;
-          _hotspotStarting = false;
-        });
+      if (mounted) {
+        if (info != null) {
+          setState(() {
+            _hotspotInfo = info;
+            _hotspotStarting = false;
+          });
 
-        // Resume radar when hotspot is active
-        controller.resumeRadar();
+          // Resume radar when hotspot is active
+          controller.resumeRadar();
 
-        // Enable auto-accept for incoming QR scan connections
-        widget.discoveryService.connectionManager?.setAutoAccept(true);
+          // Enable auto-accept for incoming QR scan connections
+          widget.discoveryService.connectionManager?.setAutoAccept(true);
 
-        // Auto-show QR code when manually switching to hotspot
-        if (autoShowQr && mounted) {
-          // Small delay to ensure UI is updated
-          await Future.delayed(const Duration(milliseconds: 300));
-          if (mounted) {
-            _showHotspotQrCode();
+          // Auto-show QR code when manually switching to hotspot
+          if (autoShowQr) {
+            // Small delay to ensure UI is updated
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (mounted) {
+                _showHotspotQrCode();
+              }
+            });
           }
+        } else {
+          // Hotspot failed to start or timed out
+          setState(() {
+            _hotspotStarting = false;
+          });
+          AppSnackbar.showError(
+            context,
+            'Failed to start temporary hotspot. Please check permissions or restart WiFi.',
+          );
         }
       }
     } catch (e) {
@@ -797,23 +858,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         _selectedIndex = index;
                       });
                     },
-                    destinations: const [
-                      NavigationDestination(
+                    destinations: [
+                      const NavigationDestination(
                         icon: Icon(Icons.home_outlined),
                         selectedIcon: Icon(Icons.home),
                         label: 'Home',
                       ),
                       NavigationDestination(
-                        icon: Icon(Icons.history_outlined),
-                        selectedIcon: Icon(Icons.history),
+                        icon: Badge(
+                          backgroundColor: Colors.red,
+                          label: _historyCount > 0
+                              ? Text('$_historyCount')
+                              : null,
+                          isLabelVisible: _historyCount > 0,
+                          child: const Icon(Icons.history_outlined),
+                        ),
+                        selectedIcon: Badge(
+                          backgroundColor: Colors.red,
+                          label: _historyCount > 0
+                              ? Text('$_historyCount')
+                              : null,
+                          isLabelVisible: _historyCount > 0,
+                          child: const Icon(Icons.history),
+                        ),
                         label: 'History',
                       ),
                       NavigationDestination(
-                        icon: Icon(Icons.devices_outlined),
-                        selectedIcon: Icon(Icons.devices),
+                        icon: Badge(
+                          backgroundColor: Colors.red,
+                          label: _connectedCount > 0
+                              ? Text('$_connectedCount')
+                              : null,
+                          isLabelVisible: _connectedCount > 0,
+                          child: const Icon(Icons.devices_outlined),
+                        ),
+                        selectedIcon: Badge(
+                          backgroundColor: Colors.red,
+                          label: _connectedCount > 0
+                              ? Text('$_connectedCount')
+                              : null,
+                          isLabelVisible: _connectedCount > 0,
+                          child: const Icon(Icons.devices),
+                        ),
                         label: 'Connected',
                       ),
-                      NavigationDestination(
+                      const NavigationDestination(
                         icon: Icon(Icons.settings_outlined),
                         selectedIcon: Icon(Icons.settings),
                         label: 'Settings',

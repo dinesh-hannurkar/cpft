@@ -42,7 +42,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE messages (
@@ -52,6 +52,10 @@ class DatabaseService {
             content TEXT,
             senderName TEXT,
             timestamp INTEGER,
+            isOutgoing INTEGER DEFAULT 0,
+            filePath TEXT,
+            fileSize INTEGER,
+            mimeType TEXT,
             metadata TEXT,
             deviceId TEXT NOT NULL
           )
@@ -74,6 +78,24 @@ class DatabaseService {
             'CREATE INDEX idx_messages_timestamp ON messages(timestamp)',
           );
         }
+        if (oldVersion < 3) {
+          // Version 3: Add isOutgoing column for reliable alignment
+          await db.execute(
+            'ALTER TABLE messages ADD COLUMN isOutgoing INTEGER DEFAULT 0',
+          );
+          debugPrint(
+            '[DatabaseService] 🛠️ Migrated to version 3: Added isOutgoing column',
+          );
+        }
+        if (oldVersion < 4) {
+          // Version 4: Add filePath, fileSize, mimeType columns
+          await db.execute('ALTER TABLE messages ADD COLUMN filePath TEXT');
+          await db.execute('ALTER TABLE messages ADD COLUMN fileSize INTEGER');
+          await db.execute('ALTER TABLE messages ADD COLUMN mimeType TEXT');
+          debugPrint(
+            '[DatabaseService] 🛠️ Migrated to version 4: Added file detail columns',
+          );
+        }
       },
     );
   }
@@ -86,6 +108,12 @@ class DatabaseService {
       debugPrint(
         '[DatabaseService] 📝 Attempting insert: type=${message.type}, device=$deviceId, ts=$ts',
       );
+
+      // Check for isOutgoing flag and path.
+      final outgoing = message.metadata?['outgoing'] as bool? ?? true;
+      final filePath = message.metadata?['path'] as String?;
+      final fileSize = message.metadata?['size'] as int?;
+      final mimeType = message.metadata?['mime'] as String?;
 
       // 🛡️ Prevent duplicates: Check if message already exists
       // For files, use transferId. For text, use (timestamp, content, deviceId).
@@ -118,17 +146,21 @@ class DatabaseService {
       }
 
       await db.insert('messages', {
-        'transferId': message.metadata?['transferId'], // Can be null
+        'transferId': transferId,
         'type': message.type,
         'content': message.content,
         'senderName': message.senderName,
         'timestamp': ts,
+        'isOutgoing': outgoing ? 1 : 0,
+        'filePath': filePath,
+        'fileSize': fileSize,
+        'mimeType': mimeType,
         'metadata': jsonEncode(message.metadata ?? {}),
         'deviceId': deviceId,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
 
       debugPrint(
-        '[DatabaseService] 💾 Saved message type ${message.type} for device $deviceId',
+        '[DatabaseService] 💾 Saved message type ${message.type} for device $deviceId (outgoing=$outgoing)',
       );
     } catch (e) {
       debugPrint('[DatabaseService] ❌ Insert failed: $e');
@@ -152,8 +184,12 @@ class DatabaseService {
           'content',
           'senderName',
           'timestamp',
+          'isOutgoing',
+          'filePath',
+          'fileSize',
+          'mimeType',
           'deviceId',
-          'metadata', // Restore metadata loading!
+          // 'metadata', // 🛡️ DO NOT load metadata for history to prevent crashes
         ],
         where: 'deviceId = ? AND CAST(timestamp AS INTEGER) > ?',
         whereArgs: [deviceId, cutoff],
@@ -169,21 +205,14 @@ class DatabaseService {
       final Set<String> seenContentHashes = {};
 
       for (final map in maps) {
-        Map<String, dynamic> metadata = {};
-
-        // Parse metadata json
-        if (map['metadata'] != null) {
-          try {
-            metadata = Map<String, dynamic>.from(jsonDecode(map['metadata']));
-          } catch (e) {
-            debugPrint('[DatabaseService] ❌ Failed to decode metadata: $e');
-          }
-        }
-
-        // Recover transferId from column if available (fallback)
-        if (map['transferId'] != null) {
-          metadata['transferId'] = map['transferId'];
-        }
+        // Use a standard map for offline metadata instead of parsing JSON
+        final Map<String, dynamic> metadata = {
+          'outgoing': (map['isOutgoing'] as int? ?? 0) == 1,
+          'path': map['filePath'],
+          'size': map['fileSize'],
+          'mime': map['mimeType'],
+          'transferId': map['transferId'],
+        };
 
         final transferId =
             map['transferId'] as String?; // usage of separate column
@@ -288,6 +317,30 @@ class DatabaseService {
     } catch (e) {
       debugPrint('[DatabaseService] ❌ Fetch recent devices failed: $e');
       return [];
+    }
+  }
+
+  /// Get the count of unique devices with history in the last 24 hours
+  Future<int> getRecentDevicesCount() async {
+    try {
+      final db = await database;
+      final cutoff = DateTime.now()
+          .subtract(const Duration(hours: 24))
+          .millisecondsSinceEpoch;
+
+      final List<Map<String, dynamic>> result = await db.rawQuery(
+        '''
+        SELECT COUNT(DISTINCT deviceId) as count
+        FROM messages
+        WHERE CAST(timestamp AS INTEGER) > ?
+      ''',
+        [cutoff],
+      );
+
+      return Sqflite.firstIntValue(result) ?? 0;
+    } catch (e) {
+      debugPrint('[DatabaseService] ❌ Fetch recent devices count failed: $e');
+      return 0;
     }
   }
 
