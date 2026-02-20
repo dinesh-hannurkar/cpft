@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:fylooo/core/constants/app_sizes.dart';
 
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -14,7 +15,6 @@ import 'package:fylooo/services/discovery_service.dart';
 
 import 'package:fylooo/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
-import 'dart:ui' as ui;
 
 class QrScannerScreen extends StatefulWidget {
   final DiscoveryService? discoveryService;
@@ -38,6 +38,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   ScannerState _scannerState = ScannerState.scanning;
   String _connectionStatus = '';
   late AnimationController _animationController;
+  int _currentStep = 0; // 0: Wifi, 1: Discovery, 2: Handshake
 
   @override
   void initState() {
@@ -393,6 +394,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
 
     setState(() {
       _scannerState = ScannerState.connecting;
+      _currentStep = 0;
     });
 
     if (code.startsWith('WIFI:')) {
@@ -442,6 +444,10 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         'Connected to WiFi! Searching for host...',
       );
 
+      setState(() {
+        _currentStep = 1;
+      });
+
       // Trigger discovery and navigation (same as Android)
       if (widget.discoveryService != null && widget.myDeviceName != null) {
         // Enable auto-accept for incoming connections from the host
@@ -450,9 +456,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         // Define the expected IP for WiFi Direct Group Owner (standard gateway)
         const groupOwnerIp = '192.168.49.1';
         bool found = false;
+        int attempts = 0;
 
         void navigateToChat(String name, int port) {
           if (!mounted) return;
+          setState(() => _currentStep = 2);
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => ChatScreen(
@@ -481,6 +489,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
             if (ip == groupOwnerIp) {
               widget.discoveryService!.removeDiscoveryListener(onDiscovered);
               navigateToChat(name, port);
+              found = true;
             }
           }
 
@@ -489,25 +498,18 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           // Force announcements to speed up discovery
           widget.discoveryService!.announce();
 
-          Future.delayed(const Duration(seconds: 10), () {
-            if (mounted) {
-              widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-              // Fallback navigation
-              if (!found) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => ChatScreen(
-                      deviceName: 'P2P Host',
-                      ipAddress: groupOwnerIp,
-                      port: 53317,
-                      myDeviceName: widget.myDeviceName!,
-                      connectionManager:
-                          widget.discoveryService!.connectionManager!,
-                    ),
-                  ),
-                );
+          // Poll/Announce cycle
+          Timer.periodic(const Duration(seconds: 2), (timer) {
+            if (!mounted || found || attempts > 5) {
+              timer.cancel();
+              if (!found && mounted) {
+                widget.discoveryService!.removeDiscoveryListener(onDiscovered);
+                _resetScanner('Discovery timed out. Please try again.');
               }
+              return;
             }
+            attempts++;
+            widget.discoveryService!.announce();
           });
         }
       } else {
@@ -516,9 +518,21 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      _showErrorDialog('Failed to connect: $e');
+      _resetScanner('Failed to connect: $e');
     }
+  }
+
+  void _resetScanner([String? error]) {
+    if (!mounted) return;
+    setState(() {
+      _isProcessing = false;
+      _scannerState = ScannerState.scanning;
+      _connectionStatus = '';
+      if (error != null) {
+        AppSnackbar.showError(context, error);
+      }
+    });
+    controller?.start();
   }
 
   Future<void> _autoConnectOnAndroid(Map<String, String> wifiData) async {
@@ -551,6 +565,10 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           'Connected! Waiting for device discovery...',
         );
 
+        setState(() {
+          _currentStep = 1;
+        });
+
         // Wait for mDNS to discover the device if we have the service
         if (widget.discoveryService != null && widget.myDeviceName != null) {
           // Define the expected IP for WiFi Direct Group Owner
@@ -558,10 +576,12 @@ class _QrScannerScreenState extends State<QrScannerScreen>
 
           // Check if already discovered
           bool found = false;
+          int attempts = 0;
 
           // Helper to navigate
           void navigateToChat(String name, int port) {
             if (!mounted) return;
+            setState(() => _currentStep = 2);
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (_) => ChatScreen(
@@ -592,34 +612,32 @@ class _QrScannerScreenState extends State<QrScannerScreen>
               if (ip == groupOwnerIp) {
                 widget.discoveryService!.removeDiscoveryListener(onDiscovered);
                 navigateToChat(name, port);
+                found = true;
               }
             }
 
             widget.discoveryService!.addDiscoveryListener(onDiscovered);
+            widget.discoveryService!.announce();
 
-            // Timeout after 10 seconds (mDNS can be slow)
-            Future.delayed(const Duration(seconds: 10), () {
-              if (mounted) {
-                widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-                // Fallback if not discovered: Just go back or try to connect assuming defaults
-                // But without port/name it's hard.
-                // We can try default port 53317 and generic name.
-                if (!found) {
-                  // Don't navigate if already found
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => ChatScreen(
-                        deviceName: 'P2P Host',
-                        ipAddress: groupOwnerIp,
-                        port: 53317,
-                        myDeviceName: widget.myDeviceName!,
-                        connectionManager:
-                            widget.discoveryService!.connectionManager!,
-                      ),
-                    ),
+            setState(() {
+              _currentStep = 1;
+            });
+            widget.discoveryService!.announce();
+
+            // Active discovery loop
+            Timer.periodic(const Duration(seconds: 2), (timer) {
+              if (!mounted || found || attempts > 5) {
+                timer.cancel();
+                if (!found && mounted) {
+                  widget.discoveryService!.removeDiscoveryListener(
+                    onDiscovered,
                   );
+                  _resetScanner('Discovery timed out. Please try again.');
                 }
+                return;
               }
+              attempts++;
+              widget.discoveryService!.announce();
             });
           }
         } else {
@@ -630,16 +648,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           }
         }
       } else {
-        _isProcessing = false;
-        AppSnackbar.showError(
-          context,
-          'Failed to connect to WiFi Direct group',
-        );
+        _resetScanner('Failed to connect to WiFi Direct group');
       }
     } catch (e) {
       if (!mounted) return;
-      _isProcessing = false;
-      AppSnackbar.showError(context, 'Connection failed: $e');
+      _resetScanner('Connection failed: $e');
     }
   }
 
@@ -695,11 +708,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   Widget _buildCompactConnectionSteps() {
     return Column(
       children: [
-        _buildStep('Connecting to WiFi Direct', true),
+        _buildStep('Connecting to WiFi Network', _currentStep >= 0),
         const SizedBox(height: 12),
-        _buildStep('Discovering device', true),
+        _buildStep('Discovering Device', _currentStep >= 1),
         const SizedBox(height: 12),
-        _buildStep('Establishing secure link', false),
+        _buildStep('Finalizing Connection', _currentStep >= 2),
       ],
     );
   }
@@ -855,9 +868,33 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 32),
                   // Centered compact steps
                   Center(child: _buildCompactConnectionSteps()),
+                  const SizedBox(height: 24),
+                  // Cancel Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        _resetScanner('Connection cancelled by user');
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: Colors.red, width: 1.5),
+                        foregroundColor: Colors.red,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel Connection',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 16),
               ],
