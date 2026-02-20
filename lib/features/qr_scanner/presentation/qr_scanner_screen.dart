@@ -13,7 +13,6 @@ import 'package:fylooo/shared/widgets/app_snackbar.dart';
 
 import 'package:fylooo/services/discovery_service.dart';
 
-import 'package:fylooo/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
 
 class QrScannerScreen extends StatefulWidget {
@@ -211,6 +210,24 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         child: SafeArea(
           child: Stack(
             children: [
+              // Global Close Button
+              Positioned(
+                top: AppSizes.md,
+                right: AppSizes.md,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.darkPrimary,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ),
               _errorMessage != null
                   ? Center(
                       child: Padding(
@@ -354,19 +371,6 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                                   // Connection Progress Overlay
                                   if (_scannerState != ScannerState.scanning)
                                     _buildConnectionOverlay(),
-                                  // Close Button
-                                  Positioned(
-                                    top: AppSizes.sm,
-                                    // left: 0,
-                                    right: AppSizes.lg,
-                                    child: Center(
-                                      child: AppIconButton(
-                                        onPressed: () =>
-                                            Navigator.of(context).pop(),
-                                        icon: Icons.close_rounded,
-                                      ),
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
