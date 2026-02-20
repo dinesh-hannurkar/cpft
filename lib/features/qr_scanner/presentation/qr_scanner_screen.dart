@@ -14,6 +14,7 @@ import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import 'package:fylooo/services/discovery_service.dart';
 
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
+import 'dart:ui' as ui;
 
 class QrScannerScreen extends StatefulWidget {
   final DiscoveryService? discoveryService;
@@ -722,187 +723,186 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   }
 
   Widget _buildStep(String label, bool isActive) {
-    return Row(
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: isActive
-                ? AppColors.primary.withValues(alpha: 0.1)
-                : Colors.grey[100],
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isActive ? AppColors.primary : Colors.grey[300]!,
-              width: 2,
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.primary.withValues(alpha: 0.2)
+                  : Colors.grey.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Center(
+              child: AnimatedScale(
+                scale: isActive ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 400),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: AppColors.primary,
+                  size: 16,
+                ),
+              ),
             ),
           ),
-          child: isActive
-              ? Center(
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                )
-              : null,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isActive ? AppColors.darkPrimary : Colors.grey[500],
-              fontSize: 14,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-              height: 1.2,
+          const SizedBox(width: 16),
+          Expanded(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 300),
+              style: TextStyle(
+                color: isActive
+                    ? AppColors.darkPrimary
+                    : Colors.grey.withValues(alpha: 0.6),
+                fontSize: 15,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                letterSpacing: 0.2,
+              ),
+              child: Text(label),
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildConnectionOverlay() {
     return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 16,
-              spreadRadius: 4,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Drag Handle
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+      bottom: 24,
+      left: 24,
+      right: 24,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.5),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 8),
                 ),
-                const SizedBox(height: 24),
-
-                if (_scannerState == ScannerState.detected) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.green.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_rounded,
-                          color: AppColors.green,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'QR Code Detected',
-                            style: TextStyle(
-                              color: AppColors.darkPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Establishing connection...',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ] else if (_scannerState == ScannerState.connecting) ...[
-                  // Connecting State Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.primary,
-                          ),
-                          strokeWidth: 3,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      const Text(
-                        'Connecting...',
-                        style: TextStyle(
-                          color: AppColors.darkPrimary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Centered compact steps
-                  Center(child: _buildCompactConnectionSteps()),
-                  const SizedBox(height: 24),
-                  // Cancel Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        _resetScanner('Connection cancelled by user');
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Colors.red, width: 1.5),
-                        foregroundColor: Colors.red,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Cancel Connection',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
               ],
             ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_scannerState == ScannerState.detected) ...[
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.green.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.qr_code_scanner_rounded,
+                            color: AppColors.green,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Code Detected',
+                              style: TextStyle(
+                                color: AppColors.darkPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Processing link...',
+                              style: TextStyle(
+                                color: Colors.blueGrey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ] else if (_scannerState == ScannerState.connecting) ...[
+                    Row(
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Text(
+                          'Connecting',
+                          style: TextStyle(
+                            color: AppColors.darkPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        _buildCancelButton(),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _buildCompactConnectionSteps(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCancelButton() {
+    return GestureDetector(
+      onTap: () => _resetScanner('Connection cancelled'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Cancel',
+          style: TextStyle(
+            color: Colors.red,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
