@@ -14,7 +14,6 @@ import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import 'package:fylooo/services/discovery_service.dart';
 
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
-import 'dart:ui' as ui;
 
 class QrScannerScreen extends StatefulWidget {
   final DiscoveryService? discoveryService;
@@ -783,30 +782,24 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   Widget _buildConnectionOverlay() {
     return Positioned(
       bottom: 24,
-      left: 24,
-      right: 24,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.5),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 20,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+      left: 16,
+      right: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 15,
+              spreadRadius: 0,
+              offset: const Offset(0, 5),
             ),
-            child: Padding(
+          ],
+        ),
+        child: Stack(
+          children: [
+            Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -821,7 +814,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
-                            Icons.qr_code_scanner_rounded,
+                            Icons.check_circle_rounded,
                             color: AppColors.green,
                             size: 24,
                           ),
@@ -831,7 +824,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Code Detected',
+                              'QR Code Detected',
                               style: TextStyle(
                                 color: AppColors.darkPrimary,
                                 fontSize: 18,
@@ -840,7 +833,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Processing link...',
+                              'Establishing connection...',
                               style: TextStyle(
                                 color: Colors.blueGrey,
                                 fontSize: 13,
@@ -854,26 +847,24 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                     Row(
                       children: [
                         const SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: 18,
+                          height: 18,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
+                            strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(
                               AppColors.primary,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 12),
                         const Text(
-                          'Connecting',
+                          'Connecting...',
                           style: TextStyle(
                             color: AppColors.darkPrimary,
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const Spacer(),
-                        _buildCancelButton(),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -882,28 +873,19 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCancelButton() {
-    return GestureDetector(
-      onTap: () => _resetScanner('Connection cancelled'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Text(
-          'Cancel',
-          style: TextStyle(
-            color: Colors.red,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-          ),
+            // Close / Cancel in top right
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                color: Colors.grey.shade600,
+                onPressed: () => _resetScanner('Connection cancelled'),
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ),
+          ],
         ),
       ),
     );
