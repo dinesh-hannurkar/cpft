@@ -782,6 +782,22 @@ class DiscoveryService {
   /// Clear discovered devices
   void clearDevices() {
     _discoveredDevices.clear();
+    // Notify listeners that devices were cleared
+    _notifyListeners();
+  }
+
+  /// Remove devices appearing on a specific IP (useful for clearing P2P stale entries)
+  void removeDeviceByIp(String ip) {
+    _discoveredDevices.removeWhere((key, info) => info.ip == ip);
+    _notifyListeners();
+  }
+
+  void _notifyListeners() {
+    for (var listener in _discoveryListeners) {
+      try {
+        listener('', '', 0);
+      } catch (_) {}
+    }
   }
 
   /// Dispose all services
