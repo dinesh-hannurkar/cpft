@@ -1168,6 +1168,23 @@ class ConnectionService {
       return;
     }
 
+    // Skip if we already know the remote platform is not Android
+    if (_remotePlatform != null && _remotePlatform != 'android') {
+      debugPrint(
+        '[ConnectionService] 📡 WiFi Direct: Remote peer is $_remotePlatform, not Android. Skipping upgrade.',
+      );
+      return;
+    }
+
+    // If we don't know the remote platform yet, we'll try again after handshake
+    if (_remotePlatform == null) {
+      debugPrint(
+        '[ConnectionService] 📡 WiFi Direct: Remote platform unknown. Deferring upgrade.',
+      );
+      _wifiDirectAttempted = false; // Allow retry after handshake
+      return;
+    }
+
     wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
 
     // ⏰ Timeout fallback: If not connected within 60s, revert status so UI doesn't hang
@@ -1340,7 +1357,11 @@ class ConnectionService {
 
     _wifiDirectPreparing = true;
     _wifiDirectRetryTimer?.cancel();
-    wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
+
+    // Only set connecting status if we're on Android (to show banner)
+    if (Platform.isAndroid && _remotePlatform == 'android') {
+      wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
+    }
 
     try {
       if (isGroupOwner) {
@@ -1661,6 +1682,12 @@ class ConnectionService {
       } else if (_remotePlatform != 'android') {
         // Explicitly disable WiFi Direct optimizations for non-Android peers
         _usingWifiDirect = false;
+
+        // Reset status if it was stuck in "connecting"
+        if (wifiDirectStatusNotifier.value == WifiDirectStatus.connecting) {
+          wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
+        }
+
         debugPrint(
           '[ConnectionService] ℹ️ Peer is $_remotePlatform, disabling WiFi Direct mode',
         );
