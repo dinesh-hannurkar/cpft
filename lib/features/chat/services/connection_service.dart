@@ -137,6 +137,7 @@ class ConnectionService {
   ); // For P2P role negotiation
 
   bool _wifiDirectPreparing = false;
+  bool _isDisconnecting = false;
   StreamSubscription<WiFiDirectConnectionEvent>? _wifiDirectConnSub;
   // ... (skip lines) ...
 
@@ -241,7 +242,7 @@ class ConnectionService {
     Uint8List payload, {
     bool forceFlush = false,
   }) async {
-    if (_primarySocket == null) return;
+    if (_primarySocket == null || _isDisconnecting) return;
 
     // frame = [MAGIC:4][payloadLen:int32][type:1][payload]
     final payloadLen = 1 + payload.length;
@@ -285,6 +286,7 @@ class ConnectionService {
     buffer.add([type & 0xFF]);
     buffer.add(payload);
     try {
+      if (_isDisconnecting) return;
       socket.add(buffer.takeBytes());
       if (forceFlush) {
         await socket.flush();
@@ -405,8 +407,10 @@ class ConnectionService {
         final combined = BytesBuilder(copy: false);
         combined.add(header);
         combined.add(bytes);
-        targetSocket.add(combined.takeBytes());
-        if (flush) {
+        if (!_isDisconnecting) {
+          targetSocket.add(combined.takeBytes());
+        }
+        if (flush && !_isDisconnecting) {
           await targetSocket.flush();
         }
       } catch (e) {
@@ -722,6 +726,7 @@ class ConnectionService {
     debugPrint(
       '[ConnectionService] 🔌 Connecting to $deviceName at $ipAddress:$port (P2P: $p2pPeerId)',
     );
+    _isDisconnecting = false;
 
     if (currentConnection?.status == ConnectionStatus.connecting) return false;
     if (currentConnection?.status == ConnectionStatus.connected) return true;
@@ -3296,6 +3301,8 @@ class ConnectionService {
 
   /// Disconnect from current device
   Future<void> disconnect() async {
+    _isDisconnecting = true;
+    debugPrint('[ConnectionService] 🔌 Disconnect requested');
     if (_primarySocket != null &&
         _currentConnection?.status == ConnectionStatus.connected) {
       try {

@@ -520,11 +520,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _maybeStartHotspot({bool autoShowQr = false}) async {
-    if (!_autoHotspotEnabled) return;
-    if (_hotspotStarting || _hotspotInfo != null) return;
-    if (!mounted) return;
-    if (!Platform.isAndroid) return;
+  Future<HotspotInfo?> _maybeStartHotspot({bool autoShowQr = false}) async {
+    if (!_autoHotspotEnabled) return null;
+    if (_hotspotStarting || _hotspotInfo != null) return _hotspotInfo;
+    if (!mounted) return null;
+    if (!Platform.isAndroid) return null;
 
     setState(() {
       _hotspotStarting = true;
@@ -554,6 +554,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               }
             });
           }
+          return info;
         } else {
           // Hotspot failed to start or timed out
           setState(() {
@@ -572,6 +573,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
       }
     }
+    return null;
   }
 
   Future<void> _switchToWifi() async {
@@ -582,7 +584,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
     }
     await _maybeStopHotspot();
-    await WifiService.openWifiSettings();
+    if (!Platform.isAndroid) {
+      await WifiService.openWifiSettings();
+    }
     if (mounted) setState(() {});
 
     // Re-enable auto hotspot after a short cooldown if still offline
@@ -596,11 +600,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _regenerateHotspot() async {
+  Future<HotspotInfo?> _regenerateHotspot() async {
     await _maybeStopHotspot();
     // Wait a bit before restarting
     await Future.delayed(const Duration(seconds: 1));
-    await _maybeStartHotspot();
+    return await _maybeStartHotspot();
   }
 
   void _showHotspotQrCode() {
@@ -613,7 +617,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context) => HotspotQrSheet(
         hotspotInfo: _hotspotInfo!,
         onStop: () {
-          Navigator.pop(context);
           _maybeStopHotspot();
         },
         onRegenerate: _regenerateHotspot,

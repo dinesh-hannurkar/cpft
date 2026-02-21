@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
@@ -43,6 +45,9 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
     final dpr = MediaQuery.devicePixelRatioOf(context);
     const logoHeight = 48.0;
     final logoCacheHeight = (logoHeight * dpr).round();
+
+    final isDesktop =
+        !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
     return PreferredSize(
       preferredSize: preferredSize,
@@ -134,7 +139,7 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
               //   ),
               //   const SizedBox(width: AppSizes.sm),
               // ],
-              if (!isMobile || title == null) ...[
+              if (!isDesktop && (!isMobile || title == null)) ...[
                 Showcase(
                   key: ShowcaseHelper.qrScannerKey,
                   disableBarrierInteraction: false,

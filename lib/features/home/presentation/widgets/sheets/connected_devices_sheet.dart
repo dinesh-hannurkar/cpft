@@ -1,3 +1,4 @@
+import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/features/home/presentation/widgets/tiles/device_list_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:fylooo/features/chat/models/connection_state.dart';
@@ -153,40 +154,62 @@ class _ConnectedDevicesBottomSheetState
         delegate: SliverChildBuilderDelegate((context, index) {
           if (index >= _entries.length) return null;
           final entry = _entries[index];
-          return _buildDeviceItem(entry);
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDeviceItem(entry),
+              if (index < _entries.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: AppColors.skyBlue.withValues(alpha: 0.1),
+                ),
+            ],
+          );
         }, childCount: _entries.length),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: widget.isEmbedded ? MainAxisSize.max : MainAxisSize.min,
-      children: [
-        if (_entries.isEmpty)
-          Expanded(
-            flex: widget.isEmbedded ? 1 : 0,
-            child: const Padding(
-              padding: EdgeInsets.all(24.0),
-              child: Center(
-                child: Text(
-                  'No devices connected',
-                  style: TextStyle(color: Colors.black54),
+    return SafeArea(
+      top: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: widget.isEmbedded ? MainAxisSize.max : MainAxisSize.min,
+        children: [
+          if (_entries.isEmpty)
+            Expanded(
+              flex: widget.isEmbedded ? 1 : 0,
+              child: const Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Center(
+                  child: Text(
+                    'No devices connected',
+                    style: TextStyle(color: Colors.black54),
+                  ),
                 ),
               ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+                itemCount: _entries.length,
+                separatorBuilder: (context, index) => Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: AppColors.skyBlue.withValues(alpha: 0.1),
+                ),
+                itemBuilder: (context, index) {
+                  return _buildDeviceItem(_entries[index]);
+                },
+              ),
             ),
-          )
-        else
-          Flexible(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
-              itemCount: _entries.length,
-              separatorBuilder: (context, index) => const Divider(),
-              itemBuilder: (context, index) {
-                return _buildDeviceItem(_entries[index]);
-              },
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 

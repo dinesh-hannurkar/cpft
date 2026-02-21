@@ -3,6 +3,8 @@ import 'package:fylooo/features/chat/services/connection_manager.dart';
 import 'package:fylooo/features/home/presentation/widgets/sheets/connected_devices_sheet.dart';
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
 import 'package:fylooo/services/discovery_service.dart';
+import 'package:fylooo/shared/widgets/primary_app_bar.dart';
+import 'package:fylooo/shared/widgets/back_button_chip.dart';
 
 class ConnectedDevicesScreen extends StatelessWidget {
   final ConnectionManager connectionManager;
@@ -22,62 +24,58 @@ class ConnectedDevicesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: showAppBar
-          ? AppBar(
-              title: const Text('Connected Devices'),
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              elevation: 1,
-              automaticallyImplyLeading: false,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.history),
-                  onPressed: () {
-                    // Navigate to history screen
-                    // Use standard navigator push
-                    // But first we need verify HistoryListScreen import and usage
-                    // Assuming HistoryListScreen is available or needs import
-                  },
-                ),
-              ],
+          ? PrimaryAppBar(
+              leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
+              title: 'Connected Devices',
+              centerTitle: true,
             )
           : null,
-      body: CustomScrollView(
-        slivers: [
-          SliverSafeArea(
-            bottom: false,
-            sliver: SliverPadding(
-              padding: EdgeInsets.only(
-                top: showAppBar ? 0 : 0, // SliverSafeArea handles status bar
-              ),
-              sliver: ConnectedDevicesBottomSheet(
-                connectionManager: connectionManager,
-                currentDeviceId: myDeviceName,
-                onFilesSent: onFilesSent,
-                shouldPop: false,
-                isEmbedded: true,
-                asSliver: true,
-                onDeviceTap:
-                    (deviceId, [ipAddress, port, onFilesSentCallback]) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            deviceName: deviceId,
-                            ipAddress: ipAddress ?? '',
-                            port: port ?? DiscoveryService.p2pPort,
-                            myDeviceName: myDeviceName,
-                            connectionManager: connectionManager,
-                            initialDeviceId: deviceId,
-                            onFilesSent: onFilesSentCallback,
-                          ),
-                        ),
-                      );
-                    },
-              ),
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+            stops: [0.0, 1.0],
           ),
-        ],
+        ),
+        child: SafeArea(
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.only(top: 8),
+                sliver: ConnectedDevicesBottomSheet(
+                  connectionManager: connectionManager,
+                  currentDeviceId: myDeviceName,
+                  onFilesSent: onFilesSent,
+                  shouldPop: false,
+                  isEmbedded: true,
+                  asSliver: true,
+                  onDeviceTap:
+                      (deviceId, [ipAddress, port, onFilesSentCallback]) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(
+                              deviceName: deviceId,
+                              ipAddress: ipAddress ?? '',
+                              port: port ?? DiscoveryService.p2pPort,
+                              myDeviceName: myDeviceName,
+                              connectionManager: connectionManager,
+                              initialDeviceId: deviceId,
+                              onFilesSent: onFilesSentCallback,
+                            ),
+                          ),
+                        );
+                      },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

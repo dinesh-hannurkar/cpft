@@ -11,8 +11,8 @@ import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/shared/widgets/app_snackbar.dart';
 
 import 'package:fylooo/services/discovery_service.dart';
+import 'package:fylooo/shared/widgets/app_bottom_sheet.dart';
 
-import 'package:fylooo/features/home/presentation/widgets/buttons/settings_button.dart';
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
 import 'dart:ui' as ui;
 
@@ -26,7 +26,7 @@ class QrScannerScreen extends StatefulWidget {
   State<QrScannerScreen> createState() => _QrScannerScreenState();
 }
 
-enum ScannerState { scanning, detected, connecting, connected }
+enum ScannerState { scanning, detected, connecting, connected, timeout }
 
 class _QrScannerScreenState extends State<QrScannerScreen>
     with SingleTickerProviderStateMixin {
@@ -60,8 +60,10 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           controller = MobileScannerController(
             detectionSpeed: DetectionSpeed.noDuplicates,
             facing: CameraFacing.back,
+            autoStart: false,
           );
         });
+        _startScanner();
       } else {
         debugPrint('QR Scanner: Permission not granted or widget unmounted');
       }
@@ -79,6 +81,21 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     _animationController.dispose();
     controller?.dispose();
     super.dispose();
+  }
+
+  Future<void> _startScanner() async {
+    if (controller == null) return;
+    try {
+      await controller!.start();
+    } on MobileScannerException catch (e) {
+      if (e.errorCode == MobileScannerErrorCode.controllerInitializing) {
+        debugPrint('QR Scanner: Controller is still initializing, wait...');
+      } else {
+        debugPrint('QR Scanner: Failed to start scanner: $e');
+      }
+    } catch (e) {
+      debugPrint('QR Scanner: Unexpected error starting scanner: $e');
+    }
   }
 
   Future<void> _checkCameraPermission() async {
@@ -210,6 +227,39 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         child: SafeArea(
           child: Stack(
             children: [
+              // Top-level Close Button
+              Positioned(
+                top: AppSizes.md,
+                right: AppSizes.lg,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.darkPrimary,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Branding Logo at the top
+              Positioned(
+                top: AppSizes.md,
+                left: AppSizes.lg,
+                child: Opacity(
+                  opacity: 0.8,
+                  child: Image.asset(
+                    'assets/images/web-app-logo.webp',
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
               _errorMessage != null
                   ? Center(
                       child: Padding(
@@ -261,116 +311,159 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                         ],
                       ),
                     )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  : Stack(
                       children: [
+                        // Scanning View (Header + Scanner Box)
                         if (_scannerState == ScannerState.scanning)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: 32.0,
-                              left: 24,
-                              right: 24,
-                            ),
+                          Center(
                             child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  'Scan to Connect',
-                                  style: TextStyle(
-                                    color: AppColors.darkPrimary,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: 32.0,
+                                    left: 24,
+                                    right: 24,
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Point your camera at the QR code\nshown on the other device',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.blueGrey.shade600,
-                                    fontSize: 15,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        Center(
-                          child: Container(
-                            width: 300,
-                            height: 300,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(24),
-                              child: Stack(
-                                children: [
-                                  MobileScanner(
-                                    controller: controller!,
-                                    onDetect: (capture) {
-                                      if (_isProcessing) {
-                                        debugPrint(
-                                          'QR Scanner: Already processing, ignoring detection',
-                                        );
-                                        return;
-                                      }
-
-                                      final List<Barcode> barcodes =
-                                          capture.barcodes;
-                                      for (final barcode in barcodes) {
-                                        if (barcode.rawValue != null &&
-                                            barcode.rawValue!.isNotEmpty) {
-                                          setState(() => _isProcessing = true);
-                                          _handleScannedCode(barcode.rawValue!);
-                                          break;
-                                        }
-                                      }
-                                    },
-                                  ),
-
-                                  // Premium Scanner Overlay
-                                  CustomPaint(
-                                    painter: ScannerOverlayPainter(
-                                      animation: _animationController,
-                                      borderColor: AppColors.skyBlue,
-                                      borderRadius: 24,
-                                      borderLength: 40,
-                                      cutOutWidth:
-                                          260, // Slightly smaller than container
-                                      cutOutHeight: 260,
-                                    ),
-                                    child: Container(),
-                                  ),
-
-                                  // Connection Progress Overlay
-                                  if (_scannerState != ScannerState.scanning)
-                                    _buildConnectionOverlay(),
-                                  // Close Button
-                                  Positioned(
-                                    top: AppSizes.sm,
-                                    // left: 0,
-                                    right: AppSizes.lg,
-                                    child: Center(
-                                      child: AppIconButton(
-                                        onPressed: () =>
-                                            Navigator.of(context).pop(),
-                                        icon: Icons.close_rounded,
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'Scan to Connect',
+                                        style: TextStyle(
+                                          color: AppColors.darkPrimary,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                        ),
                                       ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Point your camera at the QR code\nshown on the other device',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.blueGrey.shade600,
+                                          fontSize: 15,
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  width: 300,
+                                  height: 300,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(24),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Stack(
+                                      children: [
+                                        MobileScanner(
+                                          controller: controller!,
+                                          onDetect: (capture) {
+                                            if (_isProcessing) {
+                                              debugPrint(
+                                                'QR Scanner: Already processing, ignoring detection',
+                                              );
+                                              return;
+                                            }
+
+                                            final List<Barcode> barcodes =
+                                                capture.barcodes;
+                                            for (final barcode in barcodes) {
+                                              if (barcode.rawValue != null &&
+                                                  barcode
+                                                      .rawValue!
+                                                      .isNotEmpty) {
+                                                setState(
+                                                  () => _isProcessing = true,
+                                                );
+                                                _handleScannedCode(
+                                                  barcode.rawValue!,
+                                                );
+                                                break;
+                                              }
+                                            }
+                                          },
+                                        ),
+
+                                        // Premium Scanner Overlay
+                                        CustomPaint(
+                                          painter: ScannerOverlayPainter(
+                                            animation: _animationController,
+                                            borderColor: AppColors.skyBlue,
+                                            borderRadius: 24,
+                                            borderLength: 40,
+                                            cutOutWidth:
+                                                260, // Slightly smaller than container
+                                            cutOutHeight: 260,
+                                          ),
+                                          child: Container(),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
+
+                        // Connection Success View (when scanner is hidden)
+                        if (_scannerState != ScannerState.scanning)
+                          Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(32),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.green.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _scannerState == ScannerState.connected
+                                        ? Icons.cloud_done_rounded
+                                        : _scannerState == ScannerState.timeout
+                                        ? Icons.error_outline_rounded
+                                        : Icons.qr_code_scanner_rounded,
+                                    color: _scannerState == ScannerState.timeout
+                                        ? Colors.orange
+                                        : AppColors.green,
+                                    size: 80,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  _scannerState == ScannerState.detected
+                                      ? 'Device Detected!'
+                                      : _scannerState == ScannerState.timeout
+                                      ? 'Connection Help'
+                                      : 'Connecting Devices',
+                                  style: const TextStyle(
+                                    color: AppColors.darkPrimary,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        // Full-width Connection Overlay
+                        if (_scannerState != ScannerState.scanning)
+                          _buildConnectionOverlay(),
                       ],
                     ),
             ],
@@ -411,7 +504,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           _isProcessing = false;
           _scannerState = ScannerState.scanning;
         });
-        controller?.start();
+        WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
       }
     } else {
       debugPrint(
@@ -444,16 +537,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
 
       // Trigger discovery and navigation (same as Android)
       if (widget.discoveryService != null && widget.myDeviceName != null) {
-        // Define the expected IP for WiFi Direct Group Owner (standard gateway)
-        const groupOwnerIp = '192.168.49.1';
-
-        // 🛡️ CRITICAL: Clear any stale discovery entries for this IP from previous sessions
-        // This prevents the scanner from immediately "finding" a dead device and navigating
-        // with old connection parameters.
-        widget.discoveryService!.removeDeviceByIp(groupOwnerIp);
-
         // Enable auto-accept for incoming connections from the host
         widget.discoveryService!.connectionManager?.setAutoAccept(true);
+
+        // Define the expected IP for WiFi Direct Group Owner (standard gateway)
+        const groupOwnerIp = '192.168.49.1';
         bool found = false;
 
         void navigateToChat(String name, int port) {
@@ -494,23 +582,30 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           // Force announcements to speed up discovery
           widget.discoveryService!.announce();
 
-          Future.delayed(const Duration(seconds: 10), () {
-            if (mounted) {
+          // Increase discovery timeout to 6 seconds to allow slow devices some time to settle
+          Future.delayed(const Duration(seconds: 6), () async {
+            if (mounted && _scannerState == ScannerState.connecting) {
               widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-              // Fallback navigation
+
               if (!found) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => ChatScreen(
-                      deviceName: 'P2P Host',
-                      ipAddress: groupOwnerIp,
-                      port: 53317,
-                      myDeviceName: widget.myDeviceName!,
-                      connectionManager:
-                          widget.discoveryService!.connectionManager!,
-                    ),
-                  ),
+                // Check if this device is the one that should be the host (prevent self-connect)
+                final ownIp = await widget.discoveryService!
+                    .getLocalIpAddress();
+                if (ownIp == groupOwnerIp) {
+                  setState(() {
+                    _scannerState = ScannerState.timeout;
+                    _errorMessage =
+                        "Self-connection detected. You are likely the host device.";
+                  });
+                  return;
+                }
+
+                debugPrint(
+                  'QR Scanner: Discovery timed out, showing choice to user',
                 );
+                setState(() {
+                  _scannerState = ScannerState.timeout;
+                });
               }
             }
           });
@@ -521,6 +616,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       }
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+        _scannerState = ScannerState.scanning;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       _showErrorDialog('Failed to connect: $e');
     }
@@ -536,13 +636,6 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       // Import WiFiDirectService at the top of the file
       final wifiDirectService = WiFiDirectService();
       await wifiDirectService.initialize();
-
-      // 🛡️ CRITICAL: Ensure we are fully disconnected from any previous P2P group first
-      // and clear stale discovery data for the gateway IP.
-      await wifiDirectService.disconnect();
-      if (widget.discoveryService != null) {
-        widget.discoveryService!.removeDeviceByIp('192.168.49.1');
-      }
 
       // Show connecting message using AppSnackbar
       AppSnackbar.showInfo(context, 'Connecting to $ssid via WiFi Direct...');
@@ -609,27 +702,30 @@ class _QrScannerScreenState extends State<QrScannerScreen>
 
             widget.discoveryService!.addDiscoveryListener(onDiscovered);
 
-            // Timeout after 10 seconds (mDNS can be slow)
-            Future.delayed(const Duration(seconds: 10), () {
-              if (mounted) {
+            // Timeout after 6 seconds (mDNS can be slow, especially after newly joining a network)
+            Future.delayed(const Duration(seconds: 6), () async {
+              if (mounted && _scannerState == ScannerState.connecting) {
                 widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-                // Fallback if not discovered: Just go back or try to connect assuming defaults
-                // But without port/name it's hard.
-                // We can try default port 53317 and generic name.
+
                 if (!found) {
-                  // Don't navigate if already found
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => ChatScreen(
-                        deviceName: 'P2P Host',
-                        ipAddress: groupOwnerIp,
-                        port: 53317,
-                        myDeviceName: widget.myDeviceName!,
-                        connectionManager:
-                            widget.discoveryService!.connectionManager!,
-                      ),
-                    ),
+                  // Check if this device is the one that should be the host (prevent self-connect)
+                  final ownIp = await widget.discoveryService!
+                      .getLocalIpAddress();
+                  if (ownIp == groupOwnerIp) {
+                    setState(() {
+                      _scannerState = ScannerState.timeout;
+                      _errorMessage =
+                          "Self-connection detected. You are likely the host device.";
+                    });
+                    return;
+                  }
+
+                  debugPrint(
+                    'QR Scanner: Discovery timed out on Android, showing choice to user',
                   );
+                  setState(() {
+                    _scannerState = ScannerState.timeout;
+                  });
                 }
               }
             });
@@ -642,7 +738,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           }
         }
       } else {
-        _isProcessing = false;
+        setState(() {
+          _isProcessing = false;
+          _scannerState = ScannerState.scanning;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
         AppSnackbar.showError(
           context,
           'Failed to connect to WiFi Direct group',
@@ -650,7 +750,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      _isProcessing = false;
+      setState(() {
+        _isProcessing = false;
+        _scannerState = ScannerState.scanning;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
       AppSnackbar.showError(context, 'Connection failed: $e');
     }
   }
@@ -699,7 +803,9 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                 _isProcessing = false;
                 _scannerState = ScannerState.scanning;
               });
-              controller?.start();
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _startScanner(),
+              );
             },
             child: const Text('Try Again'),
           ),
@@ -711,22 +817,35 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   Widget _buildCompactConnectionSteps() {
     return Column(
       children: [
-        _buildStep('Connecting to WiFi Direct', true),
-        const SizedBox(height: 12),
-        _buildStep('Discovering device', true),
-        const SizedBox(height: 12),
-        _buildStep('Establishing secure link', false),
+        _buildStep(
+          'Connecting to WiFi Direct',
+          true,
+          isCurrent: _scannerState == ScannerState.detected,
+        ),
+        const SizedBox(height: 20),
+        _buildStep(
+          'Discovering device',
+          _scannerState == ScannerState.connecting ||
+              _scannerState == ScannerState.connected,
+          isCurrent: _scannerState == ScannerState.connecting,
+        ),
+        const SizedBox(height: 20),
+        _buildStep(
+          'Establishing secure link',
+          _scannerState == ScannerState.connected,
+          isCurrent: false,
+        ),
       ],
     );
   }
 
-  Widget _buildStep(String label, bool isActive) {
+  Widget _buildStep(String label, bool isActive, {bool isCurrent = false}) {
     return Row(
       children: [
         AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 24,
-          height: 24,
+          duration: const Duration(milliseconds: 500),
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
             color: isActive
                 ? AppColors.primary.withValues(alpha: 0.1)
@@ -736,32 +855,47 @@ class _QrScannerScreenState extends State<QrScannerScreen>
               color: isActive ? AppColors.primary : Colors.grey[300]!,
               width: 2,
             ),
-          ),
-          child: isActive
-              ? Center(
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
+            boxShadow: isCurrent
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      spreadRadius: 2,
                     ),
-                  ),
-                )
-              : null,
+                  ]
+                : null,
+          ),
+          child: Center(
+            child: isActive
+                ? (isCurrent
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primary,
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.primary,
+                          size: 18,
+                        ))
+                : null,
+          ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 16),
         Expanded(
           child: Text(
             label,
             style: TextStyle(
-              color: isActive ? AppColors.darkPrimary : Colors.grey[500],
-              fontSize: 14,
+              color: isActive ? AppColors.darkPrimary : Colors.grey[400],
+              fontSize: 16,
               fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
               height: 1.2,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -769,116 +903,166 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   }
 
   Widget _buildConnectionOverlay() {
+    String? title;
+    if (_scannerState == ScannerState.detected ||
+        _scannerState == ScannerState.connecting) {
+      title = _scannerState == ScannerState.detected
+          ? 'Device Detected'
+          : 'Connecting...';
+    } else if (_scannerState == ScannerState.timeout) {
+      title = 'Connection Help';
+    }
+
     return Positioned(
       bottom: 0,
       left: 0,
       right: 0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 16,
-              spreadRadius: 4,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Drag Handle
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
+      child: AppBottomSheet(
+        title: title,
+        showCloseButton: false,
+        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_scannerState == ScannerState.detected ||
+                _scannerState == ScannerState.connecting) ...[
+              const SizedBox(height: 16),
+              // Connecting Spinner and State
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
+                      strokeWidth: 2.5,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _scannerState == ScannerState.detected
+                        ? 'Starting link...'
+                        : 'Discovering...',
+                    style: TextStyle(
+                      color: AppColors.primary.withOpacity(0.8),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Centered compact steps
+              Center(child: _buildCompactConnectionSteps()),
+            ] else if (_scannerState == ScannerState.timeout) ...[
+              // Timeout State UI
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.1),
                   ),
                 ),
-                const SizedBox(height: 24),
-
-                if (_scannerState == ScannerState.detected) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.green.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_rounded,
-                          color: AppColors.green,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.orange,
                           size: 28,
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'QR Code Detected',
-                            style: TextStyle(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _errorMessage ??
+                                'Discovery is taking longer than usual.',
+                            style: const TextStyle(
                               color: AppColors.darkPrimary,
-                              fontSize: 18,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Establishing connection...',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Identity could not be verified automatically. You can try connecting anyway if you are sure about the host.',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        setState(() {
+                          _scannerState = ScannerState.scanning;
+                          _isProcessing = false;
+                          _errorMessage = null;
+                        });
+                        WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => _startScanner(),
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Retry Scan'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        // Fallback navigation
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(
+                              deviceName: 'P2P Host',
+                              ipAddress: '192.168.49.1',
+                              port: 53318,
+                              myDeviceName: widget.myDeviceName!,
+                              connectionManager:
+                                  widget.discoveryService!.connectionManager!,
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ] else if (_scannerState == ScannerState.connecting) ...[
-                  // Connecting State Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.primary,
-                          ),
-                          strokeWidth: 3,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      const Text(
-                        'Connecting...',
-                        style: TextStyle(
-                          color: AppColors.darkPrimary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                      child: const Text('Connect Anyways'),
+                    ),
                   ),
-                  const SizedBox(height: 32),
-                  // Centered compact steps
-                  Center(child: _buildCompactConnectionSteps()),
                 ],
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
+              ),
+            ],
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );

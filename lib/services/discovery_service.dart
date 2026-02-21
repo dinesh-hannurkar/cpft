@@ -710,7 +710,7 @@ class DiscoveryService {
   Future<void> _checkConnectivityAndStartDiscovery() async {
     if (!_isInitialized) return;
 
-    final localIp = await _getLocalIpAddress();
+    final localIp = await getLocalIpAddress();
     final isConnectedToWifi = localIp != null && localIp != '127.0.0.1';
 
     if (isConnectedToWifi == _wasConnectedToWifi && _isInitialized) {
@@ -782,22 +782,6 @@ class DiscoveryService {
   /// Clear discovered devices
   void clearDevices() {
     _discoveredDevices.clear();
-    // Notify listeners that devices were cleared
-    _notifyListeners();
-  }
-
-  /// Remove devices appearing on a specific IP (useful for clearing P2P stale entries)
-  void removeDeviceByIp(String ip) {
-    _discoveredDevices.removeWhere((key, info) => info.ip == ip);
-    _notifyListeners();
-  }
-
-  void _notifyListeners() {
-    for (var listener in _discoveryListeners) {
-      try {
-        listener('', '', 0);
-      } catch (_) {}
-    }
   }
 
   /// Dispose all services
@@ -939,7 +923,7 @@ class DiscoveryService {
   Future<void> _scanLocalNetwork() async {
     try {
       // Get local IP address
-      final localIp = await _getLocalIpAddress();
+      final localIp = await getLocalIpAddress();
       if (localIp == null) {
         return;
       }
@@ -1113,14 +1097,14 @@ class DiscoveryService {
     }
 
     // Get local IP address
-    final ipAddress = await _getLocalIpAddress();
+    final ipAddress = await getLocalIpAddress();
     if (ipAddress == null) return null;
 
     return _webServer!.getWebLink(ipAddress);
   }
 
   /// Get local IP address
-  Future<String?> _getLocalIpAddress() async {
+  Future<String?> getLocalIpAddress() async {
     try {
       final interfaces = await NetworkInterface.list(
         includeLoopback: false,
@@ -1140,7 +1124,7 @@ class DiscoveryService {
         }
       }
     } catch (e) {
-      print('[DiscoveryService] Error getting local IP: $e');
+      AppLogger.w('[DiscoveryService] Error getting local IP: $e');
     }
     return null;
   }

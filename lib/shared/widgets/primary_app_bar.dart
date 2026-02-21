@@ -36,7 +36,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
       bottom: false,
       child: Container(
         decoration: BoxDecoration(
-          color: backgroundColor,
+          color: backgroundColor ?? Colors.white.withValues(alpha: 0.96),
           border: Border(
             bottom: BorderSide(
               color: AppColors.skyBlue.withValues(alpha: 0.2),

@@ -58,102 +58,151 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
               centerTitle: true,
             )
           : null,
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _devicesFuture,
-        builder: (context, snapshot) {
-          debugPrint(
-            '[HistoryListScreen] 🔄 Builder Update: ${snapshot.connectionState}, hasData=${snapshot.hasData}, hasError=${snapshot.hasError}, dataLen=${snapshot.data?.length}',
-          );
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+            stops: [0.0, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _devicesFuture,
+            builder: (context, snapshot) {
+              debugPrint(
+                '[HistoryListScreen] 🔄 Builder Update: ${snapshot.connectionState}, hasData=${snapshot.hasData}, hasError=${snapshot.hasError}, dataLen=${snapshot.data?.length}',
+              );
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
-          final devices = snapshot.data ?? [];
-
-          if (devices.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'No recent history',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+              if (snapshot.hasError) {
+                return RefreshIndicator(
+                  onRefresh: _refreshHistory,
+                  backgroundColor: AppColors.white,
+                  color: AppColors.primary,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.7,
+                        child: Center(child: Text('Error: ${snapshot.error}')),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }
+                );
+              }
 
-          return CustomScrollView(
-            slivers: [
-              // Ensure content starts below the AppBar (Status Bar + Toolbar)
-              SliverSafeArea(
-                bottom: false,
-                sliver: SliverPadding(
-                  padding: const EdgeInsets.only(top: 0),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final device = devices[index];
-                      final deviceId = device['deviceId'] as String;
-                      final lastTime = DateTime.fromMillisecondsSinceEpoch(
-                        device['lastMessageTime'] as int,
-                      );
+              final devices = snapshot.data ?? [];
 
-                      // Add top padding to the first item for visual spacing (8px)
-                      // Use Column to add spacing if it's the first item?
-                      // Better: Use SliverPadding around the list.
-                      return Column(
-                        children: [
-                          DeviceListTile(
-                            deviceId: deviceId,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ChatScreen(
-                                    deviceName: deviceId,
-                                    ipAddress: deviceId,
-                                    port: 0,
-                                    myDeviceName: widget.myDeviceName,
-                                    connectionManager: widget.connectionManager,
-                                    initialDeviceId: deviceId,
-                                    isOffline: true,
+              if (devices.isEmpty) {
+                return RefreshIndicator(
+                  onRefresh: _refreshHistory,
+                  backgroundColor: AppColors.white,
+                  color: AppColors.primary,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.7,
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.history, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text(
+                                'No recent history',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return RefreshIndicator(
+                onRefresh: _refreshHistory,
+                backgroundColor: AppColors.white,
+                color: AppColors.primary,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.only(top: 8),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final device = devices[index];
+                          final deviceId = device['deviceId'] as String;
+                          final lastTime = DateTime.fromMillisecondsSinceEpoch(
+                            device['lastMessageTime'] as int,
+                          );
+
+                          return Column(
+                            children: [
+                              DeviceListTile(
+                                deviceId: deviceId,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ChatScreen(
+                                        deviceName: deviceId,
+                                        ipAddress: deviceId,
+                                        port: 0,
+                                        myDeviceName: widget.myDeviceName,
+                                        connectionManager:
+                                            widget.connectionManager,
+                                        initialDeviceId: deviceId,
+                                        isOffline: true,
+                                      ),
+                                    ),
+                                  ).then((_) => _refreshHistory());
+                                },
+                                leadingOverride: CircleAvatar(
+                                  backgroundColor: AppColors.primary,
+                                  child: Text(
+                                    deviceId.isNotEmpty
+                                        ? deviceId[0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(color: Colors.white),
                                   ),
                                 ),
-                              ).then((_) => _refreshHistory());
-                            },
-                            leadingOverride: CircleAvatar(
-                              backgroundColor: AppColors.primary,
-                              child: Text(
-                                deviceId.isNotEmpty
-                                    ? deviceId[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(color: Colors.white),
+                                subtitleOverride:
+                                    'Last active: ${_formatTime(lastTime)}',
+                                subtitleColorOverride: Colors.grey,
                               ),
-                            ),
-                            subtitleOverride:
-                                'Last active: ${_formatTime(lastTime)}',
-                            subtitleColorOverride: Colors.grey,
-                          ),
-                          if (index < devices.length - 1)
-                            const Divider(height: 1),
-                          if (index == devices.length - 1)
-                            const SizedBox(height: 16),
-                        ],
-                      );
-                    }, childCount: devices.length),
-                  ),
+                              if (index < devices.length - 1)
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  indent: 16,
+                                  endIndent: 16,
+                                  color: AppColors.skyBlue.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                ),
+                              if (index == devices.length - 1)
+                                const SizedBox(height: 16),
+                            ],
+                          );
+                        }, childCount: devices.length),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
