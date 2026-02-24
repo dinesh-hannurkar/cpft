@@ -44,12 +44,33 @@ class ConnectionHandler {
       final connectionDeviceName =
           existingConnection.currentConnection?.deviceName ?? device.name;
 
-      // If connected or connecting, navigate directly
-      if (status == ConnectionStatus.connected ||
-          status == ConnectionStatus.connecting) {
+      // If connected or connecting to the EXACT same IP, navigate directly
+      if ((status == ConnectionStatus.connected ||
+              status == ConnectionStatus.connecting) &&
+          existingConnection.currentConnection?.ipAddress == device.ip) {
         debugPrint(
-          '[ConnectionHandler] ✅ Already connected/connecting to $connectionDeviceName, navigating to chat',
+          '[ConnectionHandler] ✅ Already connected/connecting to $connectionDeviceName exactly at ${device.ip}, navigating to chat',
         );
+        _navigateToChat(
+          context: context,
+          deviceName: connectionDeviceName,
+          ipAddress: device.ip,
+          myDeviceName: myDeviceName,
+          connectionManager: connectionManager,
+          droppedFiles: droppedFiles,
+          onFilesSent: onFilesSent,
+        );
+        return;
+      } else if (status == ConnectionStatus.connected ||
+          status == ConnectionStatus.connecting) {
+        // We are "connected" according to the old socket, but the IP we are
+        // trying to reach now (e.g. 192.168.49.1) is DIFFERENT.
+        // This happens during Hotspot Handover — the old WiFi socket hasn't
+        // timed out yet, but we need to force a reconnection on the new IP.
+        debugPrint(
+          '[ConnectionHandler] 🔄 IP changed during handover (Old: ${existingConnection.currentConnection?.ipAddress}, New: ${device.ip}). Forcing disconnect to allow reconnect.',
+        );
+        existingConnection.disconnect(); // Force kill the stale socket
         _navigateToChat(
           context: context,
           deviceName: connectionDeviceName,

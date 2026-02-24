@@ -83,7 +83,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       false; // Track if iOS user manually enabled hotspot
   late WebRTCFileTransferService _webrtcService;
   late WebShareService _webShareService;
-  bool _didStartShowcase = false;
   bool _dragging = false;
   List<XFile> _droppedFiles = []; // Files waiting to be sent to a device
   bool _hotspotAutoConnectAttempted =
@@ -109,6 +108,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     widget.discoveryService.addIncomingRequestListener(_onIncomingRequest);
     _setupCountListeners();
     _updateCounts();
+    _checkAndShowShowcase();
+  }
+
+  void _checkAndShowShowcase() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeenShowcase = prefs.getBool('home_showcase_seen') ?? false;
+
+      if (!hasSeenShowcase && mounted) {
+        // Small delay to ensure everything is rendered
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (mounted) {
+          try {
+            ShowcaseHelper.startForHome(context);
+            await prefs.setBool('home_showcase_seen', true);
+          } catch (e) {
+            debugPrint('[HomeScreen] Error starting showcase: $e');
+          }
+        }
+      }
+    });
   }
 
   void _setupCountListeners() {
@@ -334,6 +355,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _networkCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       final oldNetworkName = _networkName;
       await _initializeNetworkName();
+      await _initializeLocalIp(); // Ensure local IP is fresh for hotspot auto-connect checks
 
       final isNowDisconnected = _networkName == 'Not Connected';
       final wasDisconnected = oldNetworkName == 'Not Connected';
@@ -447,18 +469,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     bool found = false;
 
-    void navigateToChat(String name, int port) {
+    void navigateToChat(String name, int port, String ip) {
       if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChatScreen(
-            deviceName: name,
-            ipAddress: groupOwnerIp,
-            port: port,
-            myDeviceName: widget.myDeviceName,
-            connectionManager: widget.discoveryService.connectionManager!,
-          ),
+
+      // Use ConnectionHandler to properly route into the existing connection
+      // instead of blindly pushing a new ChatScreen stack, which conflicts
+      // with ChatScreen's own hotspot handover reconnection logic.
+      ConnectionHandler.handleDeviceTap(
+        context: context,
+        device: DeviceInfo(
+          name: name,
+          ip: ip,
+          port: port,
+          lastSeen: DateTime.now(),
         ),
+        connectionManager: widget.discoveryService.connectionManager!,
+        discoveryService: widget.discoveryService,
+        myDeviceName: widget.myDeviceName,
       );
     }
 
@@ -469,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         debugPrint(
           '[HomeScreen] 🔗 Auto-connecting to ${device.name} at $groupOwnerIp',
         );
-        navigateToChat(device.name, device.port);
+        navigateToChat(device.name, device.port, groupOwnerIp);
         found = true;
         return;
       }
@@ -485,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           debugPrint(
             '[HomeScreen] 🔗 Auto-connecting to $name at $groupOwnerIp',
           );
-          navigateToChat(name, port);
+          navigateToChat(name, port, groupOwnerIp);
           found = true;
         }
       }
@@ -717,26 +744,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Trigger showcase only on first app launch
-    if (!_didStartShowcase) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final prefs = await SharedPreferences.getInstance();
-        final hasSeenShowcase = prefs.getBool('home_showcase_seen') ?? false;
-
-        if (!hasSeenShowcase && mounted) {
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) {
-              try {
-                ShowcaseHelper.startForHome(context);
-                prefs.setBool('home_showcase_seen', true);
-              } catch (_) {}
-            }
-          });
-        }
-      });
-      _didStartShowcase = true;
-    }
-
     // Check if running on mobile (Android/iOS) to show bottom navigation
     final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
@@ -796,7 +803,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (!isMobile) return null;
           switch (_selectedIndex) {
             case 1:
-              return 'History';
+              return 'History (24hrs)';
             case 2:
               return 'Connected Devices';
             case 3:
@@ -1002,9 +1009,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ? _switchToHotspot
                         : null,
                   ),
-                  const SizedBox(height: AppSizes.sm),
+                  // const SizedBox(height: AppSizes.xs * 0.8),
                   Padding(
-                    padding: const EdgeInsets.only(bottom: AppSizes.lg),
+                    padding: const EdgeInsets.only(bottom: AppSizes.md),
                     child: _buildShareOptionsSection(),
                   ),
                 ],
@@ -1173,7 +1180,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               key: ShowcaseHelper.linkShareKey,
               disableBarrierInteraction: false,
               targetPadding: const EdgeInsets.all(8),
-              title: 'Web Share',
+              title: 'Share via Link',
               description: 'Share files via web without application.',
               tooltipBackgroundColor: Colors.white,
               textColor: Colors.black,
@@ -1280,7 +1287,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                   showAppBottomSheet(
                     context: context,
-                    title: 'Web Share',
+                    title: 'Share via Link',
                     subtitle:
                         'Establish direct web connection for file sharing.',
                     showCloseButton: true,
@@ -1309,9 +1316,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: Text(
             'Share files via link or create a local hotspot for direct connection',
             textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.greyLight),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.greyLight,
+              fontSize: AppSizes.fontSizeSm * 0.8,
+            ),
           ),
         ),
       ],

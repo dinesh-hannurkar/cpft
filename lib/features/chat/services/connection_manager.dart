@@ -436,7 +436,41 @@ class ConnectionManager {
             // Continue to create new connection
             remoteName = foundKey;
           } else {
-            // Connection is disconnected - keep it and navigate to existing chat
+            // Connection is disconnected.
+            // Special case: if the new socket is coming from the Android hotspot
+            // subnet (192.168.49.x), this is a hotspot handover reconnection.
+            // Accept it into the existing service instead of closing the socket.
+            final isHotspotHandover = ip.startsWith('192.168.49.');
+            if (isHotspotHandover) {
+              AppLogger.d(
+                'Hotspot handover reconnection from $ip — re-accepting into existing service ($foundKey)',
+                tag: 'ConnMgr',
+              );
+              final success = await foundService.acceptConnection(
+                socket,
+                foundKey,
+              );
+              if (success) {
+                AppLogger.i(
+                  'Hotspot handover: re-accepted connection for $foundKey',
+                  tag: 'ConnMgr',
+                );
+                _notifyConnectionListeners(
+                  foundKey,
+                  foundService,
+                  isIncoming: true,
+                );
+              } else {
+                AppLogger.w(
+                  'Hotspot handover: failed to re-accept for $foundKey, creating fresh service',
+                  tag: 'ConnMgr',
+                );
+                // Fall through to create a new service below
+              }
+              return;
+            }
+
+            // Normal disconnected case — keep it and navigate to existing chat
             AppLogger.d(
               'Connection to $foundKey disconnected (retaining)',
               tag: 'ConnMgr',

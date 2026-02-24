@@ -74,6 +74,11 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   late ConnectionService _connectionService;
+  StreamSubscription? _highSpeedSub;
+  StreamSubscription? _credentialsSub;
+  StreamSubscription? _hotspotHandoverSub;
+  StreamSubscription? _hotspotCredentialsSentSub;
+  bool _isHighSpeedDialogShowing = false;
   final List<DeviceMessage> _messages = [];
   final Map<String, TransferProgress> _incomingProgress = {};
   final Map<String, TransferProgress> _outgoingProgress = {};
@@ -217,20 +222,123 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (widget.droppedFiles != null && widget.droppedFiles!.isNotEmpty) {
       _handleDroppedFiles(widget.droppedFiles!);
     }
+
+    _highSpeedSub = _connectionService.highSpeedRequestStream.listen(
+      _onHighSpeedRequest,
+    );
+    _credentialsSub = _connectionService.highSpeedCredentialsStream.listen(
+      _onHighSpeedCredentials,
+    );
+    // Listen for hotspot handover: reconnect via ConnectionManager,
+    // mirroring the scan-and-connect flow.
+    _hotspotHandoverSub = _connectionService.hotspotHandoverStream.listen(
+      _onHotspotHandover,
+    );
+    // On Device A (Android): enable auto-accept when credentials are sent
+    // so Device B can reconnect via the hotspot without a request dialog.
+    _hotspotCredentialsSentSub = _connectionService.hotspotCredentialsSentStream
+        .listen((_) => _onHotspotCredentialsSent());
+
+    // Rebuild when WiFi Direct status changes so canShowHighSpeedManualOption
+    // re-evaluates and the banner hides/shows correctly.
+    _connectionService.wifiDirectStatusNotifier.addListener(
+      _onWifiDirectStatusChanged,
+    );
   }
 
   @override
   void dispose() {
     _connectionService.removeStatusListener(_onStatusChanged);
     _connectionService.removeMessageListener(_onMessageReceived);
+    _connectionService.wifiDirectStatusNotifier.removeListener(
+      _onWifiDirectStatusChanged,
+    );
     _fileIconTimer?.cancel();
     _fileIconPulse?.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _inputFocus.dispose();
+    _highSpeedSub?.cancel();
+    _credentialsSub?.cancel();
+    _hotspotHandoverSub?.cancel();
+    _hotspotCredentialsSentSub?.cancel();
     WakelockPlus.disable();
 
     super.dispose();
+  }
+
+  void _onWifiDirectStatusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Called when the hotspot gateway becomes reachable (non-Android side).
+  /// Reconnects using the same scan-and-connect flow as the home screen,
+  /// going through ConnectionManager so the session is properly tracked.
+  Future<void> _onHotspotHandover(String gatewayIp) async {
+    if (!mounted) return;
+    debugPrint(
+      '[ChatScreen] 🚀 Hotspot handover: reconnecting to $gatewayIp via ConnectionManager',
+    );
+
+    // The remote device name may already be in the current connection info.
+    final remoteDeviceName =
+        _connectionService.currentConnection?.deviceName ?? widget.deviceName;
+    final port = _connectionService.currentConnection?.port ?? widget.port;
+
+    // Mark the old status as connecting on this service's notifier so the UI
+    // shows the "Optimizing..." banner while the new connection is being made.
+    _connectionService.wifiDirectStatusNotifier.value =
+        WifiDirectStatus.connecting;
+
+    // Use the same scan-and-connect flow: get/create service via ConnectionManager,
+    // then connect. This ensures the session is tracked and Device A will accept
+    // the incoming socket (not close it as a disconnected duplicate).
+    try {
+      final newService = widget.connectionManager.getOrCreateConnection(
+        remoteDeviceName,
+      );
+      final success = await newService.connect(
+        remoteDeviceName,
+        gatewayIp,
+        port,
+      );
+      if (success) {
+        debugPrint('[ChatScreen] 🚀 Hotspot handover: connected to $gatewayIp');
+      } else {
+        debugPrint(
+          '[ChatScreen] ⚠️  Hotspot handover: connect() returned false',
+        );
+        _connectionService.wifiDirectStatusNotifier.value =
+            WifiDirectStatus.failed;
+      }
+    } catch (e) {
+      debugPrint('[ChatScreen] ⚠️  Hotspot handover error: $e');
+      if (mounted) {
+        _connectionService.wifiDirectStatusNotifier.value =
+            WifiDirectStatus.failed;
+      }
+    }
+  }
+
+  /// Called on Device A (Android) after hotspot credentials are sent.
+  /// Enables auto-accept on ConnectionManager for 90 seconds so Device B
+  /// can reconnect via the hotspot without triggering a request dialog —
+  /// exactly like QR host mode enables auto-accept for the scanner.
+  void _onHotspotCredentialsSent() {
+    if (!mounted) return;
+    debugPrint(
+      '[ChatScreen] 🚀 Credentials sent — enabling auto-accept for hotspot reconnection',
+    );
+    widget.connectionManager.setAutoAccept(true);
+
+    // Disable auto-accept after 90 seconds (enough time for Device B to
+    // switch WiFi and reconnect).
+    Future.delayed(const Duration(seconds: 90), () {
+      if (mounted) {
+        widget.connectionManager.setAutoAccept(false);
+        debugPrint('[ChatScreen] 🏁 Auto-accept disabled after hotspot window');
+      }
+    });
   }
 
   void _loadOfflineHistory(String deviceId) async {
@@ -567,6 +675,99 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           }
         });
     }
+  }
+
+  void _onHighSpeedRequest(String senderName) {
+    if (!mounted || _isHighSpeedDialogShowing) return;
+    _isHighSpeedDialogShowing = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('High-Speed Transfer Request'),
+        content: Text(
+          '$senderName is requesting high-speed transfer mode. This will start an Android WiFi Hotspot.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _isHighSpeedDialogShowing = false;
+              Navigator.pop(context);
+              _connectionService.enableHighSpeedHotspot();
+            },
+            child: const Text('Start Hotspot'),
+          ),
+        ],
+      ),
+    ).then((_) => _isHighSpeedDialogShowing = false);
+  }
+
+  void _onHighSpeedCredentials(Map<String, String> creds) {
+    if (!mounted || _isHighSpeedDialogShowing) return;
+    _isHighSpeedDialogShowing = true;
+    final ssid = creds['ssid'];
+    final password = creds['password'];
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Connect to High-Speed Hotspot'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Please connect your computer to this WiFi network for maximum transfer speeds:',
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SSID: $ssid',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Password: $password',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'The app will automatically detect and switch to high-speed mode once connected.',
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              _isHighSpeedDialogShowing = false;
+              Navigator.pop(context);
+            },
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    ).then((_) => _isHighSpeedDialogShowing = false);
   }
 
   void _handleIncomingOffer(DeviceMessage message) async {
@@ -1338,11 +1539,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       statusNotifier:
                           _connectionService.wifiDirectStatusNotifier,
                       canConnect: _connectionService.canConnectWifiDirect,
+                      canRequest:
+                          _connectionService.canShowHighSpeedManualOption,
+                      isAndroid: io.Platform.isAndroid,
                       onConnect: () async {
                         await _connectionService.connectWifiDirect();
-                        if (mounted) {
-                          setState(() {});
+                        if (mounted) setState(() {});
+                      },
+                      onRequest: () async {
+                        if (io.Platform.isAndroid) {
+                          await _connectionService.enableHighSpeedHotspot();
+                        } else {
+                          await _connectionService.requestHighSpeed();
                         }
+                        if (mounted) setState(() {});
                       },
                       onInfo: () {
                         if (!mounted) return;

@@ -109,6 +109,7 @@ class ConnectionService {
   final ValueNotifier<WifiDirectStatus> wifiDirectStatusNotifier =
       ValueNotifier(WifiDirectStatus.disconnected);
   bool _wifiDirectAttempted = false;
+  bool _highSpeedManualAttempted = false;
   bool _usingWifiDirect = false;
 
   // Track WiFi Direct connection details
@@ -139,6 +140,29 @@ class ConnectionService {
   bool _wifiDirectPreparing = false;
   bool _isDisconnecting = false;
   StreamSubscription<WiFiDirectConnectionEvent>? _wifiDirectConnSub;
+
+  // Cross-platform high-speed transfer state
+  final _highSpeedRequestController = StreamController<String>.broadcast();
+  Stream<String> get highSpeedRequestStream =>
+      _highSpeedRequestController.stream;
+
+  final _highSpeedCredentialsController =
+      StreamController<Map<String, String>>.broadcast();
+  Stream<Map<String, String>> get highSpeedCredentialsStream =>
+      _highSpeedCredentialsController.stream;
+
+  /// Emits the hotspot gateway IP when the gateway is reachable and the
+  /// handover is ready. ChatScreen handles this by reconnecting via
+  /// ConnectionManager — the same flow as scan-and-connect.
+  final _hotspotHandoverController = StreamController<String>.broadcast();
+  Stream<String> get hotspotHandoverStream => _hotspotHandoverController.stream;
+
+  /// Emitted on Device A (Android) when hotspot credentials have been sent
+  /// to the non-Android peer. ChatScreen on Device A enables auto-accept on
+  /// ConnectionManager so Device B can reconnect without a request dialog.
+  final _hotspotCredentialsSentController = StreamController<void>.broadcast();
+  Stream<void> get hotspotCredentialsSentStream =>
+      _hotspotCredentialsSentController.stream;
   // ... (skip lines) ...
 
   StreamSubscription<List<WiFiDirectPeer>>? _wifiDirectPeersSub;
@@ -682,6 +706,16 @@ class ConnectionService {
       !_usingWifiDirect &&
       !_wifiDirectAttempted;
 
+  /// Check if manual high-speed transfer option should be shown (cross-platform)
+  bool get canShowHighSpeedManualOption =>
+      isConnected &&
+      !_usingWifiDirect &&
+      !_highSpeedManualAttempted &&
+      wifiDirectStatusNotifier.value == WifiDirectStatus.disconnected &&
+      _remotePlatform != null &&
+      ((Platform.isAndroid && _remotePlatform != 'android') ||
+          (!Platform.isAndroid && _remotePlatform == 'android'));
+
   /// Manually trigger WiFi Direct connection attempt
   Future<void> connectWifiDirect() async {
     if (!Platform.isAndroid || !isConnected || _wifiDirectAttempted) {
@@ -1152,10 +1186,11 @@ class ConnectionService {
   /// Attempt to upgrade connection to WiFi Direct for faster transfers
   Future<void> _attemptWiFiDirectUpgrade() async {
     if (_wifiDirectAttempted) return;
-    _wifiDirectAttempted = true;
+
     // return;
     // Only attempt WiFi Direct on Android
     if (!Platform.isAndroid) {
+      _wifiDirectAttempted = true;
       debugPrint('[ConnectionService] 📡 WiFi Direct: Not Android, skipping');
       return;
     }
@@ -1173,6 +1208,8 @@ class ConnectionService {
       debugPrint(
         '[ConnectionService] 📡 WiFi Direct: Remote peer is $_remotePlatform, not Android. Skipping upgrade.',
       );
+      // Don't set _wifiDirectAttempted = true here!
+      // This allows the manual "Request High Speed" option to show up.
       return;
     }
 
@@ -1200,16 +1237,10 @@ class ConnectionService {
       }
     });
 
+    _wifiDirectAttempted = true;
     try {
       debugPrint('[ConnectionService] 📡 Attempting WiFi Direct upgrade...');
-
-      // Pre-fetch our local P2P id/name so we can exchange it.
-      await _wifiDirectService.initialize();
-      if (_wifiDirectService.isSupported) {
-        final self = await _wifiDirectService.getThisDevice();
-        _localWifiDirectPeerId = self?.id;
-        _localWifiDirectName = self?.name;
-      }
+      await _prepareWiFiDirectUpgrade(initiator: true);
 
       debugPrint(
         '[ConnectionService] 📡 WiFi Direct: local p2pId=$_localWifiDirectPeerId, p2pName=$_localWifiDirectName',
@@ -1258,6 +1289,25 @@ class ConnectionService {
             _teardownWifiDirectDataSocket();
             return;
           }
+
+          // If we are the group owner, we might need to share credentials with non-Android peers
+          if (event.isGroupOwner &&
+              event.ssid != null &&
+              event.password != null) {
+            if (_remotePlatform != 'android' && _remotePlatform != null) {
+              debugPrint(
+                '[ConnectionService] 📡 Sharing high-speed credentials with $_remotePlatform peer',
+              );
+              _sendHighSpeedCredentials(event.ssid!, event.password!);
+              // Android is the group owner — the hotspot IS the high-speed
+              // connection. Mark as connected immediately so the UI shows
+              // "High Speed Connection Active" instead of "Enable" option.
+              _highSpeedManualAttempted = true;
+              _usingWifiDirect = true;
+              wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+            }
+          }
+
           final ip = event.ipAddress;
           final port = event.port;
           if (ip == null || port == null) return;
@@ -1680,17 +1730,32 @@ class ConnectionService {
           '[ConnectionService] 📡 Confirmed WiFi Direct P2P connection with Android peer',
         );
       } else if (_remotePlatform != 'android') {
-        // Explicitly disable WiFi Direct optimizations for non-Android peers
-        _usingWifiDirect = false;
+        // Check if the non-Android peer is connecting via the Android hotspot subnet.
+        // If so, we ARE the hotspot owner and this IS a high-speed connection.
+        final peerIp = _currentConnection?.ipAddress ?? '';
+        final isOnHotspotSubnet = peerIp.startsWith('192.168.49.');
 
-        // Reset status if it was stuck in "connecting"
-        if (wifiDirectStatusNotifier.value == WifiDirectStatus.connecting) {
-          wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
+        if (Platform.isAndroid && isOnHotspotSubnet) {
+          // Non-Android peer connected via our Android hotspot — mark as high-speed.
+          _usingWifiDirect = true;
+          _highSpeedManualAttempted = true;
+          wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+          debugPrint(
+            '[ConnectionService] 📡 Non-Android peer ($peerIp) connected via Android hotspot — high-speed active',
+          );
+        } else {
+          // Genuinely not on hotspot / P2P network — disable WiFi Direct optimizations.
+          _usingWifiDirect = false;
+
+          // Reset status if it was stuck in "connecting"
+          if (wifiDirectStatusNotifier.value == WifiDirectStatus.connecting) {
+            wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
+          }
+
+          debugPrint(
+            '[ConnectionService] ℹ️ Peer is $_remotePlatform, disabling WiFi Direct mode',
+          );
         }
-
-        debugPrint(
-          '[ConnectionService] ℹ️ Peer is $_remotePlatform, disabling WiFi Direct mode',
-        );
       }
 
       if (_currentConnection != null &&
@@ -1739,6 +1804,30 @@ class ConnectionService {
 
     if (message.type == 'parallel_ack') {
       _parallelAckCompleter?.complete();
+      return;
+    }
+
+    if (message.type == 'high_speed_request') {
+      debugPrint(
+        '[ConnectionService] 📥 Received high_speed_request from ${message.senderName}',
+      );
+      _highSpeedManualAttempted = true;
+      _highSpeedRequestController.add(message.senderName);
+      return;
+    }
+
+    if (message.type == 'high_speed_credentials') {
+      debugPrint('[ConnectionService] 📥 Received high_speed_credentials');
+      final creds = {
+        'ssid': message.metadata?['ssid'] as String? ?? '',
+        'password': message.metadata?['password'] as String? ?? '',
+      };
+      _highSpeedCredentialsController.add(creds);
+
+      // Start automatic handover monitoring on non-Android platforms
+      if (!Platform.isAndroid) {
+        startHotspotHandover();
+      }
       return;
     }
 
@@ -2261,7 +2350,7 @@ class ConnectionService {
                   ? "Linux"
                   : isRemoteMacOS
                   ? "macOS"
-                  : "Standard"} | Connections: $parallelConns | Chunk: ${chunkSizeMB ~/ (1024 * 1024)}MB | Window: ${windowMB ~/ (1024 * 1024)}MB)',
+                  : "Standard"} | Connections: $parallelConns | Chunk: ${chunkSizeMB ~/ (1024 * 1024)}MB | Window: ${windowMB ~/ (1024 * 1024)}MB',
             );
 
             debugPrint(
@@ -4440,4 +4529,110 @@ class _PendingBinaryChunk {
   final bool isLast;
 
   _PendingBinaryChunk(this.index, this.data, this.isLast);
+}
+
+extension HighSpeedTransferExtension on ConnectionService {
+  /// Request high-speed transfer from the remote peer
+  Future<void> requestHighSpeed() async {
+    debugPrint('[ConnectionService] 🚀 Requesting high-speed mode');
+    _highSpeedManualAttempted = true;
+    await _sendControlMessage(
+      DeviceMessage(
+        type: 'high_speed_request',
+        content: 'Requesting high-speed transfer mode',
+        senderName: deviceName,
+      ),
+    );
+  }
+
+  /// Start the high-speed hotspot on Android
+  Future<void> enableHighSpeedHotspot() async {
+    if (!Platform.isAndroid) return;
+    debugPrint('[ConnectionService] 🚀 Enabling high-speed hotspot');
+
+    _highSpeedManualAttempted = true;
+    // Set status to connecting to show progress in UI
+    wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
+
+    _wifiDirectAttempted = true;
+    await _prepareWiFiDirectUpgrade(
+      initiator: false,
+    ); // false because we want to be Group Owner
+    await _wifiDirectService.createGroup();
+  }
+
+  /// Send high-speed credentials to the remote peer
+  Future<void> _sendHighSpeedCredentials(String ssid, String password) async {
+    debugPrint('[ConnectionService] 🚀 Sending high-speed credentials');
+    await _sendControlMessage(
+      DeviceMessage(
+        type: 'high_speed_credentials',
+        content: 'WiFi Direct Hotspot Credentials',
+        senderName: deviceName,
+        metadata: {'ssid': ssid, 'password': password},
+      ),
+    );
+    // Notify ChatScreen on Device A to enable auto-accept so Device B can
+    // reconnect via the hotspot without triggering an accept dialog.
+    _hotspotCredentialsSentController.add(null);
+  }
+
+  /// Start monitoring for the Android hotspot gateway to switch connection.
+  /// When reachable, emits the gateway IP via [hotspotHandoverStream].
+  /// ChatScreen listens and triggers a fresh connection via ConnectionManager
+  /// (same flow as scan-and-connect).
+  Future<void> startHotspotHandover() async {
+    if (Platform.isAndroid) return;
+
+    debugPrint('[ConnectionService] 🚀 Starting hotspot handover monitor...');
+    wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
+
+    // Capture port NOW before any disconnect clears _currentConnection.
+    final port = _currentConnection?.port ?? 53317;
+
+    // We'll poll the standard Android P2P gateway IP
+    const gatewayIp = '192.168.49.1';
+    int attempts = 0;
+    const maxAttempts = 45; // 45 seconds — extra time for user to switch WiFi
+
+    Timer.periodic(const Duration(seconds: 1), (timer) async {
+      attempts++;
+
+      // Stop only on timeout or if we already upgraded to WiFi Direct.
+      // Do NOT stop on !isConnected — the old WiFi connection is expected to
+      // drop when Device B switches to the Android hotspot network.
+      if (attempts > maxAttempts || _usingWifiDirect) {
+        debugPrint(
+          '[ConnectionService] 🚀 Handover monitor stopping (timeout=${attempts > maxAttempts}, established=$_usingWifiDirect)',
+        );
+        if (!_usingWifiDirect &&
+            wifiDirectStatusNotifier.value == WifiDirectStatus.connecting) {
+          wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
+        }
+        timer.cancel();
+        return;
+      }
+
+      try {
+        final socket = await Socket.connect(
+          gatewayIp,
+          port,
+          timeout: const Duration(milliseconds: 500),
+        );
+        await socket.close();
+
+        debugPrint(
+          '[ConnectionService] 🚀 Hotspot gateway REACHABLE — emitting handover event for ChatScreen',
+        );
+        timer.cancel();
+
+        // Emit the gateway IP. ChatScreen will trigger the reconnect using
+        // connectionManager.getOrCreateConnection() + service.connect(),
+        // mirroring the scan-and-connect flow exactly.
+        _hotspotHandoverController.add(gatewayIp);
+      } catch (_) {
+        // Not reachable yet, continue polling
+      }
+    });
+  }
 }

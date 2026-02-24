@@ -180,7 +180,7 @@ class NetworkBanner extends StatelessWidget {
                 minimumSize: const Size(0, 32),
               ),
               child: const Text(
-                'Connect Non-Android Devices',
+                'Start Receiver Mode',
                 style: TextStyle(fontSize: 12),
               ),
             ),

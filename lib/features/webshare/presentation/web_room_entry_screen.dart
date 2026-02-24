@@ -226,7 +226,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
       // Prepare friendly error message for missing codes (web is join-only)
       final message = e.toString();
       final friendly = message.contains('not found')
-          ? 'Code not found or expired. Start Web Share from the mobile app and try again.'
+          ? 'Code not found or expired. Start Share via Link from the mobile app and try again.'
           : 'Failed to join: $message';
       if (mounted) {
         debugPrint('[WebRoomEntry] First error: Setting _isJoining=false');
@@ -366,345 +366,338 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
     return PopScope(
       canPop:
           !kIsWeb, // On web, prevent back navigation since this is the home page
-      child: ShowCaseWidget(
-        builder: (context) => Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: PrimaryAppBar(
-            titleWidget: GestureDetector(
-              onTap: () {
-                if (kIsWeb) {
-                  // Navigate to home by popping all routes and going to root
-                  Navigator.of(
-                    context,
-                  ).pushNamedAndRemoveUntil('/', (_) => false);
-                }
-              },
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: Image.asset(
-                  'assets/images/web-app-logo.webp',
-                  height: logoHeight,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.high,
-                  isAntiAlias: true,
-                  cacheHeight: logoCacheHeight,
-                ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: PrimaryAppBar(
+          titleWidget: GestureDetector(
+            onTap: () {
+              if (kIsWeb) {
+                // Navigate to home by popping all routes and going to root
+                Navigator.of(
+                  context,
+                ).pushNamedAndRemoveUntil('/', (_) => false);
+              }
+            },
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Image.asset(
+                'assets/images/web-app-logo.webp',
+                height: logoHeight,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+                isAntiAlias: true,
+                cacheHeight: logoCacheHeight,
               ),
             ),
-            centerTitle: false,
-            trailing: [
-              Showcase(
-                key: ShowcaseHelper.settingsIconKey,
-                disableBarrierInteraction: false,
-                targetPadding: const EdgeInsets.all(8),
-                title: 'Settings',
-                description: 'Change your device name and app preferences.',
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                descTextStyle: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black87,
-                ),
-                titleTextStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  fontSize: 16,
-                ),
-                tooltipBorderRadius: BorderRadius.circular(12),
-                targetBorderRadius: BorderRadius.circular(12),
-                child: AppIconButton(
-                  onPressed: () {
-                    Navigator.of(context)
-                        .push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                SettingsScreen(currentDeviceName: _deviceName),
-                          ),
-                        )
-                        .then((_) => _loadDeviceName());
-                  },
-                  icon: Icons.settings,
-                ),
-              ),
-              AppIconButton(
-                onPressed: () {
-                  try {
-                    ShowcaseHelper.startForWebEntry(context);
-                  } catch (_) {}
-                },
-                icon: Icons.help_outline,
-              ),
-            ],
           ),
-          body: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                stops: [0.0, 1.0],
+          centerTitle: false,
+          trailing: [
+            Showcase(
+              key: ShowcaseHelper.settingsIconKey,
+              disableBarrierInteraction: false,
+              targetPadding: const EdgeInsets.all(8),
+              title: 'Settings',
+              description: 'Change your device name and app preferences.',
+              tooltipBackgroundColor: Colors.white,
+              textColor: Colors.black,
+              descTextStyle: const TextStyle(
+                fontSize: 12,
+                color: Colors.black87,
+              ),
+              titleTextStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+                fontSize: 16,
+              ),
+              tooltipBorderRadius: BorderRadius.circular(12),
+              targetBorderRadius: BorderRadius.circular(12),
+              child: AppIconButton(
+                onPressed: () {
+                  Navigator.of(context)
+                      .push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              SettingsScreen(currentDeviceName: _deviceName),
+                        ),
+                      )
+                      .then((_) => _loadDeviceName());
+                },
+                icon: Icons.settings,
               ),
             ),
-            child: SafeArea(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSizes.lg),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: Container(
-                      padding: const EdgeInsets.all(AppSizes.lg),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Tip helper moved to class scope
-                          Row(
-                            children: const [
-                              Icon(Icons.link, color: AppColors.primary),
-                              SizedBox(width: AppSizes.sm),
-                              Text(
-                                'Join with Code',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSizes.sm),
-                          const Text(
-                            'Enter a code to join an existing session and start sharing files directly between devices.',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: AppSizes.md),
-                          if (_errorText != null) ...[
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(AppSizes.md),
-                              margin: const EdgeInsets.only(
-                                bottom: AppSizes.sm,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.red.shade200),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    color: Colors.red.shade700,
-                                  ),
-                                  const SizedBox(width: AppSizes.sm),
-                                  Expanded(
-                                    child: Text(
-                                      _errorText!,
-                                      style: TextStyle(
-                                        color: Colors.red.shade800,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed: () =>
-                                        setState(() => _errorText = null),
-                                    icon: const Icon(Icons.close),
-                                    color: Colors.red.shade700,
-                                    tooltip: 'Dismiss',
-                                  ),
-                                ],
+            AppIconButton(
+              onPressed: () {
+                try {
+                  ShowcaseHelper.startForWebEntry(context);
+                } catch (_) {}
+              },
+              icon: Icons.help_outline,
+            ),
+          ],
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+              stops: [0.0, 1.0],
+            ),
+          ),
+          child: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSizes.lg),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSizes.lg),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Tip helper moved to class scope
+                        Row(
+                          children: const [
+                            Icon(Icons.link, color: AppColors.primary),
+                            SizedBox(width: AppSizes.sm),
+                            Text(
+                              'Join with Code',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
                               ),
                             ),
                           ],
-                          Showcase(
-                            key: ShowcaseHelper.joinCodeFieldKey,
-                            disableBarrierInteraction: false,
-                            targetPadding: const EdgeInsets.all(8),
-                            title: 'Join Code',
-                            description:
-                                'Enter the code you received to join the session.',
-                            tooltipBackgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            descTextStyle: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black87,
-                            ),
-                            titleTextStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                              fontSize: 16,
-                            ),
-                            tooltipBorderRadius: BorderRadius.circular(12),
-                            targetBorderRadius: BorderRadius.circular(12),
-                            child: TextField(
-                              controller: _roomIdController,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                color: Colors.black87,
-                              ),
-                              decoration: InputDecoration(
-                                labelText: 'Code',
-                                hintText: 'Enter code (e.g., ABC123)',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.primary,
-                                    width: 2,
-                                  ),
-                                ),
-                                filled: true,
-                                fillColor: Colors.white,
-                                prefixIcon: const Icon(
-                                  Icons.key,
-                                  color: AppColors.primary,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: AppSizes.md,
-                                  vertical: AppSizes.sm * 1.5,
-                                ),
-                              ),
-                              textCapitalization: TextCapitalization.characters,
-                              enabled: !_isJoining,
-                              onSubmitted: (_) {
-                                final roomId = _roomIdController.text.trim();
-                                if (roomId.isNotEmpty) {
-                                  _joinWebRTCRoom(roomId);
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: AppSizes.md),
-                          Showcase(
-                            key: ShowcaseHelper.joinButtonKey,
-                            disableBarrierInteraction: false,
-                            targetPadding: const EdgeInsets.all(8),
-                            title: 'Join',
-                            description:
-                                'Tap to join your session using the code.',
-                            tooltipBackgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            descTextStyle: const TextStyle(
-                              fontSize: AppSizes.sm * 1.5,
-                              color: Colors.black87,
-                            ),
-                            titleTextStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                              fontSize: AppSizes.md,
-                            ),
-                            tooltipBorderRadius: BorderRadius.circular(12),
-                            targetBorderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              width: double.infinity,
-                              height: 48,
-                              child: ElevatedButton.icon(
-                                onPressed: _isJoining
-                                    ? null
-                                    : () {
-                                        final roomId = _roomIdController.text
-                                            .trim();
-                                        if (roomId.isNotEmpty) {
-                                          _joinWebRTCRoom(roomId);
-                                        } else {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Please enter a code',
-                                              ),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
-                                        }
-                                      },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: AppColors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                icon: _isJoining
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Colors.white,
-                                              ),
-                                        ),
-                                      )
-                                    : const Icon(Icons.login, size: 22),
-                                label: Text(
-                                  _isJoining ? 'Joining…' : 'Join',
-                                  style: const TextStyle(
-                                    fontSize: AppSizes.md,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: AppSizes.md),
+                        ),
+                        const SizedBox(height: AppSizes.sm),
+                        const Text(
+                          'Enter a code to join an existing session and start sharing files directly between devices.',
+                          style: TextStyle(fontSize: 15, color: Colors.black87),
+                        ),
+                        const SizedBox(height: AppSizes.md),
+                        if (_errorText != null) ...[
                           Container(
+                            width: double.infinity,
                             padding: const EdgeInsets.all(AppSizes.md),
+                            margin: const EdgeInsets.only(bottom: AppSizes.sm),
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
+                              color: Colors.red.shade50,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.blue.shade200),
+                              border: Border.all(color: Colors.red.shade200),
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Icon(
-                                  Icons.info_outline,
-                                  color: AppColors.primary,
+                                  Icons.error_outline,
+                                  color: Colors.red.shade700,
                                 ),
                                 const SizedBox(width: AppSizes.sm),
                                 Expanded(
                                   child: Text(
-                                    'Ensure both devices are on the same Wi‑Fi or Personal Hotspot.',
+                                    _errorText!,
                                     style: TextStyle(
-                                      fontSize: AppSizes.sm * 1.5,
-                                      color: AppColors.primary,
-                                      height: 1.4,
+                                      color: Colors.red.shade800,
                                     ),
                                   ),
+                                ),
+                                IconButton(
+                                  onPressed: () =>
+                                      setState(() => _errorText = null),
+                                  icon: const Icon(Icons.close),
+                                  color: Colors.red.shade700,
+                                  tooltip: 'Dismiss',
                                 ),
                               ],
                             ),
                           ),
                         ],
-                      ),
+                        Showcase(
+                          key: ShowcaseHelper.joinCodeFieldKey,
+                          disableBarrierInteraction: false,
+                          targetPadding: const EdgeInsets.all(8),
+                          title: 'Join Code',
+                          description:
+                              'Enter the code you received to join the session.',
+                          tooltipBackgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          descTextStyle: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black87,
+                          ),
+                          titleTextStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            fontSize: 16,
+                          ),
+                          tooltipBorderRadius: BorderRadius.circular(12),
+                          targetBorderRadius: BorderRadius.circular(12),
+                          child: TextField(
+                            controller: _roomIdController,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Code',
+                              hintText: 'Enter code (e.g., ABC123)',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              prefixIcon: const Icon(
+                                Icons.key,
+                                color: AppColors.primary,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: AppSizes.md,
+                                vertical: AppSizes.sm * 1.5,
+                              ),
+                            ),
+                            textCapitalization: TextCapitalization.characters,
+                            enabled: !_isJoining,
+                            onSubmitted: (_) {
+                              final roomId = _roomIdController.text.trim();
+                              if (roomId.isNotEmpty) {
+                                _joinWebRTCRoom(roomId);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: AppSizes.md),
+                        Showcase(
+                          key: ShowcaseHelper.joinButtonKey,
+                          disableBarrierInteraction: false,
+                          targetPadding: const EdgeInsets.all(8),
+                          title: 'Join',
+                          description:
+                              'Tap to join your session using the code.',
+                          tooltipBackgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          descTextStyle: const TextStyle(
+                            fontSize: AppSizes.sm * 1.5,
+                            color: Colors.black87,
+                          ),
+                          titleTextStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            fontSize: AppSizes.md,
+                          ),
+                          tooltipBorderRadius: BorderRadius.circular(12),
+                          targetBorderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: _isJoining
+                                  ? null
+                                  : () {
+                                      final roomId = _roomIdController.text
+                                          .trim();
+                                      if (roomId.isNotEmpty) {
+                                        _joinWebRTCRoom(roomId);
+                                      } else {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Please enter a code',
+                                            ),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: AppColors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              icon: _isJoining
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : const Icon(Icons.login, size: 22),
+                              label: Text(
+                                _isJoining ? 'Joining…' : 'Join',
+                                style: const TextStyle(
+                                  fontSize: AppSizes.md,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSizes.md),
+                        Container(
+                          padding: const EdgeInsets.all(AppSizes.md),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: AppSizes.sm),
+                              Expanded(
+                                child: Text(
+                                  'Ensure both devices are on the same Wi‑Fi or Personal Hotspot.',
+                                  style: TextStyle(
+                                    fontSize: AppSizes.sm * 1.5,
+                                    color: AppColors.primary,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

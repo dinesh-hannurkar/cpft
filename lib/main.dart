@@ -118,70 +118,72 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // On web, skip ShowCaseWidget entirely to avoid layout issues
+    // On web, use ShowCaseWidget but with specific initial route
     if (kIsWeb) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Fylooo',
-        theme: AppTheme.lightTheme,
-        navigatorKey: navigatorKey,
-        // On web, only show the WebShare (WebRTC) screen
-        initialRoute: '/webshare',
-        onGenerateRoute: (settings) {
-          // On web, redirect mobile-only routes to webshare
-          if (kIsWeb) {
-            final allowedWebRoutes = ['/webshare', '/privacy', '/termsofuse'];
-            if (!allowedWebRoutes.contains(settings.name)) {
-              return MaterialPageRoute(
-                builder: (context) => const WebRoomEntryScreen(),
-                settings: const RouteSettings(name: '/webshare'),
-              );
+      return ShowCaseWidget(
+        builder: (context) => MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Fylooo',
+          theme: AppTheme.lightTheme,
+          navigatorKey: navigatorKey,
+          // On web, only show the WebShare (WebRTC) screen
+          initialRoute: '/webshare',
+          onGenerateRoute: (settings) {
+            // On web, redirect mobile-only routes to webshare
+            if (kIsWeb) {
+              final allowedWebRoutes = ['/webshare', '/privacy', '/termsofuse'];
+              if (!allowedWebRoutes.contains(settings.name)) {
+                return MaterialPageRoute(
+                  builder: (context) => const WebRoomEntryScreen(),
+                  settings: const RouteSettings(name: '/webshare'),
+                );
+              }
             }
-          }
 
-          // Use default routes
-          switch (settings.name) {
-            case '/webshare':
-              return MaterialPageRoute(
-                builder: (context) => const WebRoomEntryScreen(),
-                settings: settings,
-              );
-            case '/privacy':
-              return MaterialPageRoute(
-                builder: (context) => const PrivacyPolicyScreen(),
-                settings: settings,
-              );
-            case '/termsofuse':
-              return MaterialPageRoute(
-                builder: (context) => const TermsOfUseScreen(),
-                settings: settings,
-              );
-            default:
-              return MaterialPageRoute(
-                builder: (context) => const WebRoomEntryScreen(),
-                settings: settings,
-              );
-          }
-        },
-        builder: (context, child) {
-          final content = Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                stops: [0.0, 1.0],
+            // Use default routes
+            switch (settings.name) {
+              case '/webshare':
+                return MaterialPageRoute(
+                  builder: (context) => const WebRoomEntryScreen(),
+                  settings: settings,
+                );
+              case '/privacy':
+                return MaterialPageRoute(
+                  builder: (context) => const PrivacyPolicyScreen(),
+                  settings: settings,
+                );
+              case '/termsofuse':
+                return MaterialPageRoute(
+                  builder: (context) => const TermsOfUseScreen(),
+                  settings: settings,
+                );
+              default:
+                return MaterialPageRoute(
+                  builder: (context) => const WebRoomEntryScreen(),
+                  settings: settings,
+                );
+            }
+          },
+          builder: (context, child) {
+            final content = Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                  stops: [0.0, 1.0],
+                ),
               ),
-            ),
-            child: child,
-          );
-          return Stack(
-            children: [
-              content,
-              // FirebaseStatusBanner(),
-            ],
-          );
-        },
+              child: child,
+            );
+            return Stack(
+              children: [
+                content,
+                // FirebaseStatusBanner(),
+              ],
+            );
+          },
+        ),
       );
     }
 
@@ -380,6 +382,7 @@ class _PermissionWrapperState extends State<PermissionWrapper>
   bool _locationServiceDisabled = false;
   String? _deviceName;
   bool _postPermissionInitDone = false;
+  DiscoveryService? _discoveryService;
 
   @override
   void initState() {
@@ -491,11 +494,32 @@ class _PermissionWrapperState extends State<PermissionWrapper>
     }
 
     if (mounted) {
+      if (granted && _deviceName != null && _discoveryService == null) {
+        _initializeDiscovery();
+      }
       setState(() {
         _permissionsGranted = granted;
         _isCheckingPermissions = false;
       });
     }
+  }
+
+  void _initializeDiscovery() {
+    if (_deviceName == null || _discoveryService != null) return;
+
+    final platformName = kIsWeb
+        ? 'web'
+        : defaultTargetPlatform.name.toLowerCase();
+    _discoveryService = DiscoveryService(
+      alias: _deviceName!,
+      deviceModel: platformName,
+      port: 53317,
+    );
+    // Store globally for notification handler
+    globalDiscoveryService = _discoveryService;
+    globalDeviceName = _deviceName;
+    // Set up notification handler
+    _setupNotificationHandler();
   }
 
   Future<String?> _getDeviceName() async {
@@ -528,26 +552,12 @@ class _PermissionWrapperState extends State<PermissionWrapper>
 
     // If device name is set, show home screen
     if (_deviceName != null) {
-      AppLogger.i(
-        'Creating HomeScreen with device name: $_deviceName',
-        tag: 'PermWrap',
-      );
-      final platformName = kIsWeb
-          ? 'web'
-          : defaultTargetPlatform.name.toLowerCase();
-      final discovery = DiscoveryService(
-        alias: _deviceName!,
-        deviceModel: platformName,
-        port: 53317,
-      );
-      // Store globally for notification handler
-      globalDiscoveryService = discovery;
-      globalDeviceName = _deviceName;
-      // Set up notification handler
-      _setupNotificationHandler();
+      if (_discoveryService == null) {
+        _initializeDiscovery();
+      }
 
       return HomeScreen(
-        discoveryService: discovery,
+        discoveryService: _discoveryService!,
         myDeviceName: _deviceName!,
       );
     }

@@ -907,10 +907,9 @@ packages:
   showcaseview:
     dependency: "direct main"
     description:
-      name: showcaseview
-      sha256: "59e5edf33cbe3afb56edcbf25de553211409a576cbbbdda226c574410a314a71"
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/showcaseview"
+      relative: true
+    source: path
     version: "5.0.1"
   sky_engine:
     dependency: transitive

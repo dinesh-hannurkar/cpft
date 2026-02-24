@@ -1,0 +1,40 @@
+Analyzing 3 items...                                            
+
+   info • The import of 'package:cross_file/cross_file.dart' is unnecessary because all of the used elements are also provided by the import of 'package:share_plus/share_plus.dart' • lib/features/chat/presentation/chat_screen.dart:41:8 • unnecessary_import
+   info • The imported package 'cross_file' isn't a dependency of the importing package • lib/features/chat/presentation/chat_screen.dart:41:8 • depend_on_referenced_packages
+warning • The value of the field '_lastTransferEndTime' isn't used • lib/features/chat/presentation/chat_screen.dart:110:13 • unused_field
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:198:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:202:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:212:7 • avoid_print
+   info • Don't use 'BuildContext's across async gaps • lib/features/chat/presentation/chat_screen.dart:369:31 • use_build_context_synchronously
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:379:9 • avoid_print
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/chat/presentation/chat_screen.dart:629:36 • deprecated_member_use
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:777:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:798:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:803:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:809:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:901:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:905:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:913:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:915:7 • avoid_print
+   info • Don't use 'BuildContext's across async gaps • lib/features/chat/presentation/chat_screen.dart:1070:28 • use_build_context_synchronously
+   info • 'of' is deprecated and shouldn't be used. This will be removed in v6.0.0. please use `ShowcaseView.get()` instead • lib/features/chat/presentation/chat_screen.dart:1165:45 • deprecated_member_use
+   info • 'startShowCase' is deprecated and shouldn't be used. This will be removed in v6.0.0. please use `ShowcaseView.get().startShowCase` instead • lib/features/chat/presentation/chat_screen.dart:1166:22 • deprecated_member_use
+   info • 'of' is deprecated and shouldn't be used. This will be removed in v6.0.0. please use `ShowcaseView.get()` instead • lib/features/chat/presentation/chat_screen.dart:1189:45 • deprecated_member_use
+   info • 'startShowCase' is deprecated and shouldn't be used. This will be removed in v6.0.0. please use `ShowcaseView.get().startShowCase` instead • lib/features/chat/presentation/chat_screen.dart:1190:22 • deprecated_member_use
+   info • 'of' is deprecated and shouldn't be used. This will be removed in v6.0.0. please use `ShowcaseView.get()` instead • lib/features/chat/presentation/chat_screen.dart:1339:34 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/features/chat/presentation/chat_screen.dart:1339:37 • use_build_context_synchronously
+   info • 'startShowCase' is deprecated and shouldn't be used. This will be removed in v6.0.0. please use `ShowcaseView.get().startShowCase` instead • lib/features/chat/presentation/chat_screen.dart:1339:46 • deprecated_member_use
+   info • Don't invoke 'print' in production code • lib/features/chat/presentation/chat_screen.dart:1371:5 • avoid_print
+   info • The private field _sockets could be 'final' • lib/features/chat/services/connection_service.dart:77:16 • prefer_final_fields
+   info • The private field _socketSubscriptions could be 'final' • lib/features/chat/services/connection_service.dart:83:28 • prefer_final_fields
+   info • The private field _sendChains could be 'final' • lib/features/chat/services/connection_service.dart:101:22 • prefer_final_fields
+   info • The private field _incomingChains could be 'final' • lib/features/chat/services/connection_service.dart:102:22 • prefer_final_fields
+   info • The variable name '_SOL_SOCKET' isn't a lowerCamelCase identifier • lib/features/chat/services/connection_service.dart:178:18 • non_constant_identifier_names
+   info • The variable name '_SO_RCVBUF' isn't a lowerCamelCase identifier • lib/features/chat/services/connection_service.dart:179:18 • non_constant_identifier_names
+   info • The variable name '_SO_SNDBUF' isn't a lowerCamelCase identifier • lib/features/chat/services/connection_service.dart:180:18 • non_constant_identifier_names
+   info • The constant name '_BUFFER_SIZE' isn't a lowerCamelCase identifier • lib/features/chat/services/connection_service.dart:181:20 • constant_identifier_names
+   info • Statements in an if should be enclosed in a block • lib/features/chat/services/connection_service.dart:1343:13 • curly_braces_in_flow_control_structures
+   info • The 'if' statement could be replaced by a null-aware assignment • lib/features/chat/services/connection_service.dart:1396:9 • prefer_conditional_assignment
+
+36 issues found. (ran in 1.3s)

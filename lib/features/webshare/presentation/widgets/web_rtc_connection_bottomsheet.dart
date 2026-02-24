@@ -513,7 +513,7 @@ class _WebRTCConnectionBottomSheetState
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    'Failed to start web sharing: $e',
+                                    'Failed to start Share via Link: $e',
                                   ),
                                   backgroundColor: Colors.red.shade700,
                                 ),
@@ -569,7 +569,7 @@ class _WebRTCConnectionBottomSheetState
                                 ),
                                 const SizedBox(height: AppSizes.sm * 1.5),
                                 const Text(
-                                  'Start Web Sharing',
+                                  'Share via Link',
                                   style: TextStyle(
                                     fontSize: AppSizes.md,
                                     fontWeight: FontWeight.bold,
@@ -649,7 +649,7 @@ class _WebRTCConnectionBottomSheetState
                 // Mobile: Show QR code for web sharing
                 SizedBox(height: AppSizes.lg),
                 const Text(
-                  'Web Sharing Active!',
+                  'Share via Link Active!',
                   style: TextStyle(
                     fontSize: AppSizes.md,
                     fontWeight: FontWeight.bold,

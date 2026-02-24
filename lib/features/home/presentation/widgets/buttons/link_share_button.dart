@@ -31,14 +31,14 @@ class LinkShareButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Web Share',
+              'Share via Link',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
             SizedBox(width: AppSizes.sm),
-            Icon(Icons.arrow_outward, color: AppColors.primary, size: 20),
+            Icon(Icons.link, color: AppColors.primary, size: 20),
           ],
         ),
       ),

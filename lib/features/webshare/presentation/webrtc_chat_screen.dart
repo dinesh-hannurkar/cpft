@@ -122,11 +122,17 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // Initialize share intent service for handling shared files
     _shareIntentService = ShareIntentService();
     _shareIntentService.sharedFilesStream.listen((files) {
-      print('WebRTCChatScreen: Stream listener received ${files.length} shared files');
+      print(
+        'WebRTCChatScreen: Stream listener received ${files.length} shared files',
+      );
       if (mounted) {
-        print('WebRTCChatScreen: Received ${files.length} shared files from external app');
+        print(
+          'WebRTCChatScreen: Received ${files.length} shared files from external app',
+        );
         setState(() => _sharedFiles = List<SharedMediaFile>.from(files));
-        print('WebRTCChatScreen: Updated _sharedFiles to ${files.length} files');
+        print(
+          'WebRTCChatScreen: Updated _sharedFiles to ${files.length} files',
+        );
       } else {
         print('WebRTCChatScreen: Not mounted, skipping setState');
       }
@@ -135,9 +141,13 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
     // Also check for any existing shared files that might have been received before init
     final existingFiles = _shareIntentService.getCurrentSharedFiles();
     if (existingFiles.isNotEmpty) {
-      print('WebRTCChatScreen: Found ${existingFiles.length} existing shared files on init');
+      print(
+        'WebRTCChatScreen: Found ${existingFiles.length} existing shared files on init',
+      );
       setState(() => _sharedFiles = List<SharedMediaFile>.from(existingFiles));
-      print('WebRTCChatScreen: Set _sharedFiles from existing files: ${existingFiles.length}');
+      print(
+        'WebRTCChatScreen: Set _sharedFiles from existing files: ${existingFiles.length}',
+      );
     } else {
       print('WebRTCChatScreen: No existing shared files found on init');
     }
@@ -681,15 +691,19 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
             mimeType = 'application/octet-stream';
         }
 
-        sharedMediaFiles.add(SharedMediaFile(
-          path: filePath,
-          type: mimeType.contains('image') ? SharedMediaType.image :
-                mimeType.contains('video') ? SharedMediaType.video :
-                SharedMediaType.file,
-          mimeType: mimeType,
-          duration: null, // Not needed for dropped files
-          thumbnail: null, // Not needed for dropped files
-        ));
+        sharedMediaFiles.add(
+          SharedMediaFile(
+            path: filePath,
+            type: mimeType.contains('image')
+                ? SharedMediaType.image
+                : mimeType.contains('video')
+                ? SharedMediaType.video
+                : SharedMediaType.file,
+            mimeType: mimeType,
+            duration: null, // Not needed for dropped files
+            thumbnail: null, // Not needed for dropped files
+          ),
+        );
 
         // Store file bytes for web
         if (kIsWeb && fileBytes != null) {
@@ -712,7 +726,10 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
         }
       });
       if (mounted) {
-        AppSnackbar.showSuccess(context, 'Files ready to send. Tap send button.');
+        AppSnackbar.showSuccess(
+          context,
+          'Files ready to send. Tap send button.',
+        );
       }
     }
   }
@@ -753,7 +770,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
           successCount++;
           print('WebRTCChatScreen: Successfully sent file: ${sharedFile.path}');
         } catch (fileError) {
-          print('WebRTCChatScreen: Failed to send file ${sharedFile.path}: $fileError');
+          print(
+            'WebRTCChatScreen: Failed to send file ${sharedFile.path}: $fileError',
+          );
           failedFiles.add(sharedFile.path.split('/').last); // Add filename only
         }
       }
@@ -769,11 +788,20 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       // Show appropriate message based on results
       if (mounted) {
         if (failedFiles.isEmpty) {
-          AppSnackbar.showSuccess(context, '$successCount file${successCount > 1 ? 's' : ''} sent successfully');
+          AppSnackbar.showSuccess(
+            context,
+            '$successCount file${successCount > 1 ? 's' : ''} sent successfully',
+          );
         } else if (successCount > 0) {
-          AppSnackbar.showInfo(context, '$successCount sent, ${failedFiles.length} failed: ${failedFiles.join(', ')}');
+          AppSnackbar.showInfo(
+            context,
+            '$successCount sent, ${failedFiles.length} failed: ${failedFiles.join(', ')}',
+          );
         } else {
-          AppSnackbar.showError(context, 'Failed to send files: ${failedFiles.join(', ')}');
+          AppSnackbar.showError(
+            context,
+            'Failed to send files: ${failedFiles.join(', ')}',
+          );
         }
       }
     } catch (e) {
@@ -899,7 +927,9 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
               }
             }
           } catch (sendError) {
-            print('WebRTCChatScreen: Error sending file ${file.name}: $sendError');
+            print(
+              'WebRTCChatScreen: Error sending file ${file.name}: $sendError',
+            );
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -1277,288 +1307,290 @@ class _WebRTCChatScreenState extends State<WebRTCChatScreen>
       _didStartShowcase = true;
     }
 
-    return ShowCaseWidget(
-      builder: (context) => PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (bool didPop, dynamic result) {
-          if (didPop) return;
-          _onWillPop().then((shouldPop) {
-            if (shouldPop && mounted) {
-              Navigator.of(context).pop();
-            }
-          });
-        },
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: PrimaryAppBar(
-            leading: BackButtonChip(
-              onPressed: () async {
-                final shouldPop = await _onWillPop();
-                if (shouldPop && mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-            logo: kIsWeb
-                ? Image.asset(
-                    'assets/images/web-app-logo.webp',
-                    height: logoHeight,
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
-                    isAntiAlias: true,
-                    cacheHeight: logoCacheHeight,
-                  )
-                : null,
-            titleWidget: Padding(
-              padding: const EdgeInsets.only(left: AppSizes.sm),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    (_peerName?.isNotEmpty == true
-                        ? _peerName!
-                              .split(RegExp(r'\s+'))
-                              .map(
-                                (w) => w.isEmpty
-                                    ? w
-                                    : '${w[0].toUpperCase()}${w.substring(1)}',
-                              )
-                              .join(' ')
-                        : AppStrings.directShare),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  Text(
-                    _isConnected
-                        ? '${widget.roomId} • Connected'
-                        : '${widget.roomId} • Disconnected',
-                    style: const TextStyle(fontSize: 11, color: Colors.black54),
-                  ),
-                ],
-              ),
-            ),
-            centerTitle: false,
-            trailing: [
-              if (widget.webShareService != null)
-                Showcase(
-                  key: ShowcaseHelper.receivedListKey,
-                  disableBarrierInteraction: false,
-                  targetPadding: const EdgeInsets.all(8),
-                  title: 'Received Files',
-                  description:
-                      'Open the list of received files to download or open.',
-                  tooltipBackgroundColor: Colors.white,
-                  textColor: Colors.black,
-                  descTextStyle: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black87,
-                  ),
-                  titleTextStyle: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                    fontSize: 16,
-                  ),
-                  tooltipBorderRadius: BorderRadius.circular(12),
-                  targetBorderRadius: BorderRadius.circular(12),
-                  child: AppIconButton(
-                    onPressed: _showReceivedFiles,
-                    icon: Icons.folder_open,
-                  ),
-                ),
-
-              AppIconButton(
-                onPressed: _showConnectionInfo,
-                icon: _isConnected ? Icons.wifi : Icons.wifi_off,
-              ),
-              AppIconButton(
-                onPressed: () {
-                  try {
-                    ShowcaseHelper.startForWebRTCChat(context);
-                  } catch (_) {}
-                },
-                icon: Icons.help_outline,
-              ),
-            ],
-            backgroundColor: Colors.transparent,
-          ),
-          body: DropTarget(
-            onDragDone: (detail) async {
-              setState(() {
-                _dragging = false;
-              });
-
-              // Handle dropped files
-              if (detail.files.isNotEmpty) {
-                await _handleDroppedFiles(detail.files);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
+        _onWillPop().then((shouldPop) {
+          if (shouldPop && mounted) {
+            Navigator.of(context).pop();
+          }
+        });
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: PrimaryAppBar(
+          leading: BackButtonChip(
+            onPressed: () async {
+              final shouldPop = await _onWillPop();
+              if (shouldPop && mounted) {
+                Navigator.of(context).pop();
               }
             },
-            onDragEntered: (detail) {
-              setState(() {
-                _dragging = true;
-              });
-            },
-            onDragExited: (detail) {
-              setState(() {
-                _dragging = false;
-              });
-            },
-            child: Stack(
-              children: [
-                Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                      stops: [0.0, 1.0],
-                    ),
-                  ),
-                  child: SafeArea(
-                    child: Column(
-                      children: [
-                        const TemporaryFilesWarningBanner(),
-                        Expanded(
-                          child: (() {
-                            final totalItems =
-                                _messages.length +
-                                _incomingProgress.length +
-                                _outgoingProgress.length;
-                            if (totalItems == 0) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                size: 64,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No messages yet',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Send files to start sharing',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSizes.sm,
-                        ),
-                        itemCount: totalItems,
-                        itemBuilder: (context, index) {
-                          if (index < _messages.length) {
-                            final msg = _messages[index];
-                            return _buildMessageBubble(msg);
-                          }
-                          final extra = index - _messages.length;
-                          // First render incoming progress tiles
-                          final incomingKeys = _incomingProgress.keys.toList();
-                          if (extra < incomingKeys.length) {
-                            final tId = incomingKeys[extra];
-                            return TransferProgressTile(
-                              progress: _incomingProgress[tId]!,
-                              onCancel: () {
-                                setState(() {
-                                  _incomingProgress.remove(tId);
-                                });
-                              },
-                            );
-                          }
-                          // Then render outgoing tiles
-                          final outExtra = extra - incomingKeys.length;
-                          final outKeys = _outgoingProgress.keys.toList();
-                          if (outExtra < outKeys.length) {
-                            final tId = outKeys[outExtra];
-                            return TransferProgressTile(
-                              progress: _outgoingProgress[tId]!,
-                              onCancel: () {
-                                // Remove from local progress list
-                                setState(() {
-                                  _outgoingProgress.remove(tId);
-                                });
-                              },
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      );
-                    })(),
-                  ),
-                  if (_isConnected)
-                    Showcase(
-                      key: ShowcaseHelper.sendFileButtonKey,
-                      disableBarrierInteraction: false,
-                      targetPadding: const EdgeInsets.all(8),
-                      title: 'Send Files',
-                      description:
-                          'Tap here to select and send files to the connected device.',
-                      tooltipBackgroundColor: Colors.white,
-                      textColor: Colors.black,
-                      descTextStyle: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black87,
-                      ),
-                      titleTextStyle: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                        fontSize: 16,
-                      ),
-                      tooltipBorderRadius: BorderRadius.circular(12),
-                      targetBorderRadius: BorderRadius.circular(12),
-                      child: FileTaglineBar(
-                        onTapMain: _pickAndSendFile,
-                        onTapFab: _pickAndSendFile,
-                        pulseController: _fileIconPulse!,
-                        fileIcons: _fileIcons,
-                        fileIconIndex: _fileIconIndex,
-                        slideFromLeft: _slideFromLeft,
-                        isLoading: _isPickingFile,
-                      ),
-                    ),
-                  if (_sharedFiles.isNotEmpty)
-                    SharedFilesBanner(
-                      files: _sharedFiles,
-                      onSend: _sendSharedFiles,
-                      enabled: _isConnected,
-                    ),
-                  MessageInputBar(
-                    controller: _messageController,
-                    focusNode: _inputFocus,
-                    onSend: _handleSendPressed,
-                    enabled: _isConnected,
-                  ),
-                ],
-              ),
-            ),
           ),
-                // Drag overlay
-                ...(_dragging ? [
-                  DragOverlay(
-                    title: 'Drop files to send',
-                    subtitle: 'Release to send files to the connected device',
+          logo: kIsWeb
+              ? Image.asset(
+                  'assets/images/web-app-logo.webp',
+                  height: logoHeight,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                  isAntiAlias: true,
+                  cacheHeight: logoCacheHeight,
+                )
+              : null,
+          titleWidget: Padding(
+            padding: const EdgeInsets.only(left: AppSizes.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  (_peerName?.isNotEmpty == true
+                      ? _peerName!
+                            .split(RegExp(r'\s+'))
+                            .map(
+                              (w) => w.isEmpty
+                                  ? w
+                                  : '${w[0].toUpperCase()}${w.substring(1)}',
+                            )
+                            .join(' ')
+                      : AppStrings.directShare),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
                   ),
-                ] : []),
+                ),
+                Text(
+                  _isConnected
+                      ? '${widget.roomId} • Connected'
+                      : '${widget.roomId} • Disconnected',
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
               ],
             ),
+          ),
+          centerTitle: false,
+          trailing: [
+            if (widget.webShareService != null)
+              Showcase(
+                key: ShowcaseHelper.receivedListKey,
+                disableBarrierInteraction: false,
+                targetPadding: const EdgeInsets.all(8),
+                title: 'Received Files',
+                description:
+                    'Open the list of received files to download or open.',
+                tooltipBackgroundColor: Colors.white,
+                textColor: Colors.black,
+                descTextStyle: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black87,
+                ),
+                titleTextStyle: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                  fontSize: 16,
+                ),
+                tooltipBorderRadius: BorderRadius.circular(12),
+                targetBorderRadius: BorderRadius.circular(12),
+                child: AppIconButton(
+                  onPressed: _showReceivedFiles,
+                  icon: Icons.folder_open,
+                ),
+              ),
+
+            AppIconButton(
+              onPressed: _showConnectionInfo,
+              icon: _isConnected ? Icons.wifi : Icons.wifi_off,
+            ),
+            AppIconButton(
+              onPressed: () {
+                try {
+                  ShowcaseHelper.startForWebRTCChat(context);
+                } catch (_) {}
+              },
+              icon: Icons.help_outline,
+            ),
+          ],
+          backgroundColor: Colors.transparent,
+        ),
+        body: DropTarget(
+          onDragDone: (detail) async {
+            setState(() {
+              _dragging = false;
+            });
+
+            // Handle dropped files
+            if (detail.files.isNotEmpty) {
+              await _handleDroppedFiles(detail.files);
+            }
+          },
+          onDragEntered: (detail) {
+            setState(() {
+              _dragging = true;
+            });
+          },
+          onDragExited: (detail) {
+            setState(() {
+              _dragging = false;
+            });
+          },
+          child: Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+                    stops: [0.0, 1.0],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      const TemporaryFilesWarningBanner(),
+                      Expanded(
+                        child: (() {
+                          final totalItems =
+                              _messages.length +
+                              _incomingProgress.length +
+                              _outgoingProgress.length;
+                          if (totalItems == 0) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.chat_bubble_outline,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No messages yet',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Send files to start sharing',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppSizes.sm,
+                            ),
+                            itemCount: totalItems,
+                            itemBuilder: (context, index) {
+                              if (index < _messages.length) {
+                                final msg = _messages[index];
+                                return _buildMessageBubble(msg);
+                              }
+                              final extra = index - _messages.length;
+                              // First render incoming progress tiles
+                              final incomingKeys = _incomingProgress.keys
+                                  .toList();
+                              if (extra < incomingKeys.length) {
+                                final tId = incomingKeys[extra];
+                                return TransferProgressTile(
+                                  progress: _incomingProgress[tId]!,
+                                  onCancel: () {
+                                    setState(() {
+                                      _incomingProgress.remove(tId);
+                                    });
+                                  },
+                                );
+                              }
+                              // Then render outgoing tiles
+                              final outExtra = extra - incomingKeys.length;
+                              final outKeys = _outgoingProgress.keys.toList();
+                              if (outExtra < outKeys.length) {
+                                final tId = outKeys[outExtra];
+                                return TransferProgressTile(
+                                  progress: _outgoingProgress[tId]!,
+                                  onCancel: () {
+                                    // Remove from local progress list
+                                    setState(() {
+                                      _outgoingProgress.remove(tId);
+                                    });
+                                  },
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          );
+                        })(),
+                      ),
+                      if (_isConnected)
+                        Showcase(
+                          key: ShowcaseHelper.sendFileButtonKey,
+                          disableBarrierInteraction: false,
+                          targetPadding: const EdgeInsets.all(8),
+                          title: 'Send Files',
+                          description:
+                              'Tap here to select and send files to the connected device.',
+                          tooltipBackgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          descTextStyle: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black87,
+                          ),
+                          titleTextStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            fontSize: 16,
+                          ),
+                          tooltipBorderRadius: BorderRadius.circular(12),
+                          targetBorderRadius: BorderRadius.circular(12),
+                          child: FileTaglineBar(
+                            onTapMain: _pickAndSendFile,
+                            onTapFab: _pickAndSendFile,
+                            pulseController: _fileIconPulse!,
+                            fileIcons: _fileIcons,
+                            fileIconIndex: _fileIconIndex,
+                            slideFromLeft: _slideFromLeft,
+                            isLoading: _isPickingFile,
+                          ),
+                        ),
+                      if (_sharedFiles.isNotEmpty)
+                        SharedFilesBanner(
+                          files: _sharedFiles,
+                          onSend: _sendSharedFiles,
+                          enabled: _isConnected,
+                        ),
+                      MessageInputBar(
+                        controller: _messageController,
+                        focusNode: _inputFocus,
+                        onSend: _handleSendPressed,
+                        enabled: _isConnected,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Drag overlay
+              ...(_dragging
+                  ? [
+                      DragOverlay(
+                        title: 'Drop files to send',
+                        subtitle:
+                            'Release to send files to the connected device',
+                      ),
+                    ]
+                  : []),
+            ],
           ),
         ),
       ),
