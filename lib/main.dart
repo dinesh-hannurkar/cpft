@@ -62,7 +62,7 @@ void main() async {
 
     // Set window height - works well on most screens
     // Users can resize manually if needed
-    const windowHeight = 750.0;
+    const windowHeight = 680.0;
 
     WindowOptions windowOptions = WindowOptions(
       size: Size(450, windowHeight),
@@ -339,12 +339,14 @@ class _HomeWrapperState extends State<HomeWrapper> {
           if (context != null) {
             Navigator.of(context).push(
               MaterialPageRoute(
+                settings: const RouteSettings(name: '/chat'),
                 builder: (_) => ChatScreen(
                   deviceName: deviceName,
                   ipAddress: connection.currentConnection?.ipAddress ?? '',
                   port: DiscoveryService.p2pPort,
                   myDeviceName: globalDeviceName ?? '',
                   connectionManager: cm,
+                  discoveryService: globalDiscoveryService!,
                   initialDeviceId: deviceName,
                 ),
               ),
@@ -618,12 +620,14 @@ class _PermissionWrapperState extends State<PermissionWrapper>
         );
         Navigator.of(context).push(
           MaterialPageRoute(
+            settings: const RouteSettings(name: '/chat'),
             builder: (_) => ChatScreen(
               deviceName: deviceName,
               ipAddress: connection.currentConnection?.ipAddress ?? '',
               port: DiscoveryService.p2pPort,
               myDeviceName: globalDeviceName ?? '',
               connectionManager: cm,
+              discoveryService: globalDiscoveryService!,
               initialDeviceId: deviceName,
             ),
           ),

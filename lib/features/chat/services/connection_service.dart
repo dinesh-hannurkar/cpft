@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:fylooo/models/hotspot_info.dart';
+import 'package:fylooo/services/hotspot_service.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -124,6 +126,7 @@ class ConnectionService {
   String? get remoteWifiDirectName => _remoteWifiDirectName;
   String? get remoteWifiDirectMac => _remotePeerAddress;
   String? get localWifiDirectMac => _localWifiDirectPeerId;
+  String? get remotePlatform => _remotePlatform;
   final _wifiDirectService = WiFiDirectService();
   Timer? _wifiDirectRetryTimer;
   String? _remotePeerAddress; // Store remote device MAC for P2P
@@ -139,6 +142,8 @@ class ConnectionService {
 
   bool _wifiDirectPreparing = false;
   bool _isDisconnecting = false;
+  bool _hotspotCredentialsShared = false;
+  bool _isHandoverMonitoringActive = false;
   StreamSubscription<WiFiDirectConnectionEvent>? _wifiDirectConnSub;
 
   // Cross-platform high-speed transfer state
@@ -832,12 +837,53 @@ class ConnectionService {
         }
       }
 
-      // Step 1: Connect primary socket
-      final primarySocket = await Socket.connect(
-        ipAddress,
-        port,
-        timeout: const Duration(seconds: 10),
-      );
+      // Step 1: Connect primary socket with staggered retries
+      Socket? primarySocket;
+      int retryCount = 0;
+      const maxRetries = 5;
+      final retryDelays = Platform.isIOS
+          ? [
+              const Duration(seconds: 3), // Longer first delay for iOS
+              const Duration(seconds: 2),
+              const Duration(seconds: 2),
+              const Duration(seconds: 3),
+              const Duration(seconds: 4),
+            ]
+          : [
+              const Duration(seconds: 1),
+              const Duration(seconds: 2),
+              const Duration(seconds: 2),
+              const Duration(seconds: 3),
+              const Duration(seconds: 4),
+            ];
+
+      while (retryCount < maxRetries) {
+        try {
+          primarySocket = await Socket.connect(
+            ipAddress,
+            port,
+            timeout: const Duration(seconds: 10),
+          );
+          break; // Success
+        } on SocketException catch (e) {
+          retryCount++;
+          debugPrint(
+            '[ConnectionService] ⚠️ Primary socket attempt $retryCount failed: $e',
+          );
+          if (retryCount >= maxRetries) rethrow;
+
+          // Staggered delay before retry to allow the OS networking stack to stabilize
+          final delay =
+              retryDelays[math.min(retryCount - 1, retryDelays.length - 1)];
+          await Future.delayed(delay);
+        }
+      }
+
+      if (primarySocket == null) {
+        throw const SocketException(
+          'Failed to establish primary socket after retries',
+        );
+      }
       _sockets.add(primarySocket);
       _sendChains.add(Future.value());
       _incomingChains.add(Future.value());
@@ -1294,10 +1340,13 @@ class ConnectionService {
           if (event.isGroupOwner &&
               event.ssid != null &&
               event.password != null) {
-            if (_remotePlatform != 'android' && _remotePlatform != null) {
+            if (_remotePlatform != 'android' &&
+                _remotePlatform != null &&
+                !_hotspotCredentialsShared) {
               debugPrint(
                 '[ConnectionService] 📡 Sharing high-speed credentials with $_remotePlatform peer',
               );
+              _hotspotCredentialsShared = true;
               _sendHighSpeedCredentials(event.ssid!, event.password!);
               // Android is the group owner — the hotspot IS the high-speed
               // connection. Mark as connected immediately so the UI shows
@@ -1711,6 +1760,14 @@ class ConnectionService {
       return;
     }
 
+    if (message.type == 'goodbye') {
+      debugPrint(
+        '[ConnectionService] 👋 Received goodbye message from ${message.senderName}, disconnecting...',
+      );
+      await disconnect();
+      return;
+    }
+
     if (message.type == 'handshake') {
       // Extract remote platform from handshake
       if (message.metadata != null &&
@@ -1758,30 +1815,32 @@ class ConnectionService {
         }
       }
 
-      if (_currentConnection != null &&
-          _currentConnection!.status == ConnectionStatus.connecting) {
-        debugPrint(
-          '[ConnectionService] 🤝 Handshake received from ${message.senderName}.',
-        );
+      if (_currentConnection != null) {
+        final isConnecting =
+            _currentConnection!.status == ConnectionStatus.connecting;
 
-        // Send handshake response
-        await _sendHandshake();
+        if (isConnecting) {
+          debugPrint(
+            '[ConnectionService] 🤝 Handshake received from ${message.senderName}.',
+          );
+          // Send handshake response ONLY if we were responding to a connecting state
+          await _sendHandshake();
+        } else {
+          debugPrint(
+            '[ConnectionService] 🤝 Received handshake (already connected), updating details for ${message.senderName}',
+          );
+        }
 
-        // Now transition to connected state and update device name with actual remote device name
+        // Always update the device name with actual remote device name
         _updateStatus(
           _currentConnection!.copyWith(
-            deviceName:
-                message.senderName, // Update with actual remote device name
+            deviceName: message.senderName,
             status: ConnectionStatus.connected,
-            connectedAt: DateTime.now(),
+            connectedAt: _currentConnection!.connectedAt ?? DateTime.now(),
           ),
         );
         debugPrint(
-          '[ConnectionService] ✅ Handshake complete, connection established with ${message.senderName}',
-        );
-      } else if (isConnected) {
-        debugPrint(
-          '[ConnectionService] 🤝 Received handshake (already connected), ignoring',
+          '[ConnectionService] ✅ Handshake processed, connection established with ${message.senderName}',
         );
       }
       return;
@@ -1816,6 +1875,16 @@ class ConnectionService {
       return;
     }
 
+    if (message.type == 'high_speed_declined') {
+      debugPrint('[ConnectionService] 🚫 Received high_speed_declined');
+      _highSpeedManualAttempted = false;
+      // Force UI rebuild to show banner again
+      final currentStatus = wifiDirectStatusNotifier.value;
+      wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
+      wifiDirectStatusNotifier.value = currentStatus;
+      return;
+    }
+
     if (message.type == 'high_speed_credentials') {
       debugPrint('[ConnectionService] 📥 Received high_speed_credentials');
       final creds = {
@@ -1824,8 +1893,9 @@ class ConnectionService {
       };
       _highSpeedCredentialsController.add(creds);
 
-      // Start automatic handover monitoring on non-Android platforms
-      if (!Platform.isAndroid) {
+      // Start automatic handover monitoring on non-Android, non-iOS platforms (like Desktop)
+      // iOS strictly relies on the manual QrScannerScreen
+      if (!Platform.isAndroid && !Platform.isIOS) {
         startHotspotHandover();
       }
       return;
@@ -3496,6 +3566,8 @@ class ConnectionService {
     _localWifiDirectName = null;
     _wifiDirectAttempted = false;
     _usingWifiDirect = false;
+    _hotspotCredentialsShared = false;
+    _isHandoverMonitoringActive = false;
 
     // Perform session cleanup (delete temp files and clear history)
     await cleanupSessionFiles();
@@ -4545,9 +4617,28 @@ extension HighSpeedTransferExtension on ConnectionService {
     );
   }
 
+  /// Decline high-speed transfer request from the remote peer
+  Future<void> declineHighSpeedRequest() async {
+    debugPrint('[ConnectionService] 🚫 Declining high-speed mode');
+    _highSpeedManualAttempted = false;
+
+    // Force UI rebuild to show banner again
+    final currentStatus = wifiDirectStatusNotifier.value;
+    wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
+    wifiDirectStatusNotifier.value = currentStatus;
+
+    await _sendControlMessage(
+      DeviceMessage(
+        type: 'high_speed_declined',
+        content: 'Declined high-speed transfer mode',
+        senderName: deviceName,
+      ),
+    );
+  }
+
   /// Start the high-speed hotspot on Android
-  Future<void> enableHighSpeedHotspot() async {
-    if (!Platform.isAndroid) return;
+  Future<HotspotInfo?> enableHighSpeedHotspot() async {
+    if (!Platform.isAndroid) return null;
     debugPrint('[ConnectionService] 🚀 Enabling high-speed hotspot');
 
     _highSpeedManualAttempted = true;
@@ -4555,10 +4646,45 @@ extension HighSpeedTransferExtension on ConnectionService {
     wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
 
     _wifiDirectAttempted = true;
+    // Reset credentials shared flag so it sends the new ones via chat
+    _hotspotCredentialsShared = false;
+
     await _prepareWiFiDirectUpgrade(
       initiator: false,
     ); // false because we want to be Group Owner
-    await _wifiDirectService.createGroup();
+
+    // Use LocalHotspotService to ensure consistent management.
+    // We forceNew: true because if a user explicitly clicks "Enable High Speed",
+    // they expect a fresh, secure connection even if a hotspot was already running.
+    final info = await LocalHotspotService.startHotspot(forceNew: true);
+    if (info == null) {
+      debugPrint('[ConnectionService] ⚠️  Hotspot failed to start/refresh');
+      wifiDirectStatusNotifier.value = WifiDirectStatus.failed;
+    } else {
+      // Broadcast credentials to non-Android peer explicitly so they get a prompt
+      if (_remotePlatform != 'android' &&
+          _remotePlatform != null &&
+          !_hotspotCredentialsShared) {
+        debugPrint(
+          '[ConnectionService] 📡 Sharing high-speed credentials manually with $_remotePlatform peer',
+        );
+        _hotspotCredentialsShared = true;
+        await _sendHighSpeedCredentials(info.ssid, info.password);
+        _usingWifiDirect = true;
+        wifiDirectStatusNotifier.value = WifiDirectStatus.connected;
+      }
+    }
+    return info;
+  }
+
+  /// Stop the high-speed hotspot and reset state
+  Future<void> stopHotspotHandover() async {
+    await LocalHotspotService.stopHotspot();
+    _usingWifiDirect = false;
+    _highSpeedManualAttempted = false;
+    _hotspotCredentialsShared = false;
+    wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
+    debugPrint('[ConnectionService] 🛑 High-speed hotspot stopped');
   }
 
   /// Send high-speed credentials to the remote peer
@@ -4577,12 +4703,10 @@ extension HighSpeedTransferExtension on ConnectionService {
     _hotspotCredentialsSentController.add(null);
   }
 
-  /// Start monitoring for the Android hotspot gateway to switch connection.
-  /// When reachable, emits the gateway IP via [hotspotHandoverStream].
-  /// ChatScreen listens and triggers a fresh connection via ConnectionManager
-  /// (same flow as scan-and-connect).
   Future<void> startHotspotHandover() async {
     if (Platform.isAndroid) return;
+    if (_isHandoverMonitoringActive) return;
+    _isHandoverMonitoringActive = true;
 
     debugPrint('[ConnectionService] 🚀 Starting hotspot handover monitor...');
     wifiDirectStatusNotifier.value = WifiDirectStatus.connecting;
@@ -4610,6 +4734,7 @@ extension HighSpeedTransferExtension on ConnectionService {
           wifiDirectStatusNotifier.value = WifiDirectStatus.disconnected;
         }
         timer.cancel();
+        _isHandoverMonitoringActive = false;
         return;
       }
 
@@ -4622,13 +4747,17 @@ extension HighSpeedTransferExtension on ConnectionService {
         await socket.close();
 
         debugPrint(
-          '[ConnectionService] 🚀 Hotspot gateway REACHABLE — emitting handover event for ChatScreen',
+          '[ConnectionService] 🚀 Hotspot gateway REACHABLE — stabilization cool-off (2.5s)...',
+        );
+        await Future.delayed(const Duration(milliseconds: 2500));
+
+        debugPrint(
+          '[ConnectionService] 🚀 Handover ready — emitting event for ChatScreen',
         );
         timer.cancel();
+        _isHandoverMonitoringActive = false;
 
         // Emit the gateway IP. ChatScreen will trigger the reconnect using
-        // connectionManager.getOrCreateConnection() + service.connect(),
-        // mirroring the scan-and-connect flow exactly.
         _hotspotHandoverController.add(gatewayIp);
       } catch (_) {
         // Not reachable yet, continue polling

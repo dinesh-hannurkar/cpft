@@ -7,6 +7,7 @@ import 'package:fylooo/features/chat/presentation/widgets/constants/file_icons_l
 import 'package:fylooo/features/chat/presentation/widgets/empty_data_widget.dart';
 import 'package:fylooo/features/chat/services/connection_manager.dart';
 import 'package:fylooo/features/chat/services/connection_service.dart';
+import 'package:fylooo/shared/widgets/dialog_helpers.dart' as app_dialog;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
@@ -38,11 +39,17 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:fylooo/services/share_intent_service.dart';
 import 'package:fylooo/features/chat/presentation/widgets/shared_files_banner.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:fylooo/utils/permissions.dart' as AppPerm;
+import 'package:fylooo/services/database_service.dart';
+import 'package:fylooo/services/wifi_service.dart';
+import 'package:fylooo/services/discovery_service.dart';
+import 'package:fylooo/models/hotspot_info.dart';
+import 'package:fylooo/services/hotspot_service.dart';
+import 'package:fylooo/features/home/presentation/widgets/sheets/hotspot_qr_sheet.dart';
+import 'package:fylooo/features/qr_scanner/presentation/qr_scanner_screen.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:fylooo/shared/widgets/drag_overlay.dart';
-import 'package:fylooo/utils/permissions.dart';
-import 'package:fylooo/services/database_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String deviceName;
@@ -50,6 +57,7 @@ class ChatScreen extends StatefulWidget {
   final int port;
   final String myDeviceName;
   final ConnectionManager connectionManager;
+  final DiscoveryService discoveryService;
   final String? initialDeviceId;
   final List<XFile>? droppedFiles;
   final VoidCallback? onFilesSent;
@@ -62,6 +70,7 @@ class ChatScreen extends StatefulWidget {
     required this.port,
     required this.myDeviceName,
     required this.connectionManager,
+    required this.discoveryService,
     this.initialDeviceId,
     this.droppedFiles,
     this.onFilesSent,
@@ -116,6 +125,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   // Peer‑to‑peer port constant
   static const int p2pPort = 53318;
+
+  bool get _shouldShowScanOption => io.Platform.isIOS;
 
   @override
   void initState() {
@@ -274,50 +285,33 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   /// Called when the hotspot gateway becomes reachable (non-Android side).
   /// Reconnects using the same scan-and-connect flow as the home screen,
   /// going through ConnectionManager so the session is properly tracked.
-  Future<void> _onHotspotHandover(String gatewayIp) async {
+  void _showHotspotQrSheet(HotspotInfo info) {
     if (!mounted) return;
-    debugPrint(
-      '[ChatScreen] 🚀 Hotspot handover: reconnecting to $gatewayIp via ConnectionManager',
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => HotspotQrSheet(
+        hotspotInfo: info,
+        onStop: () {
+          _connectionService.stopHotspotHandover();
+        },
+        onRegenerate: () async {
+          return await _connectionService.enableHighSpeedHotspot();
+        },
+        connectionManager: widget.connectionManager,
+        onExpiryUpdated: (_) {},
+      ),
     );
+  }
 
-    // The remote device name may already be in the current connection info.
-    final remoteDeviceName =
-        _connectionService.currentConnection?.deviceName ?? widget.deviceName;
-    final port = _connectionService.currentConnection?.port ?? widget.port;
-
-    // Mark the old status as connecting on this service's notifier so the UI
-    // shows the "Optimizing..." banner while the new connection is being made.
-    _connectionService.wifiDirectStatusNotifier.value =
-        WifiDirectStatus.connecting;
-
-    // Use the same scan-and-connect flow: get/create service via ConnectionManager,
-    // then connect. This ensures the session is tracked and Device A will accept
-    // the incoming socket (not close it as a disconnected duplicate).
-    try {
-      final newService = widget.connectionManager.getOrCreateConnection(
-        remoteDeviceName,
-      );
-      final success = await newService.connect(
-        remoteDeviceName,
-        gatewayIp,
-        port,
-      );
-      if (success) {
-        debugPrint('[ChatScreen] 🚀 Hotspot handover: connected to $gatewayIp');
-      } else {
-        debugPrint(
-          '[ChatScreen] ⚠️  Hotspot handover: connect() returned false',
-        );
-        _connectionService.wifiDirectStatusNotifier.value =
-            WifiDirectStatus.failed;
-      }
-    } catch (e) {
-      debugPrint('[ChatScreen] ⚠️  Hotspot handover error: $e');
-      if (mounted) {
-        _connectionService.wifiDirectStatusNotifier.value =
-            WifiDirectStatus.failed;
-      }
-    }
+  void _onHotspotHandover(String gatewayIp) async {
+    // ⚠️ DISABLED AUTOMATIC HANDOVER FOR IOS
+    // The user prefers manual QR scan for high-speed upgrades on iOS
+    // as it is more reliable for network association and routing.
+    debugPrint(
+      '[ChatScreen] ℹ️ Automatic handover event ignored - using manual QR flow for stability.',
+    );
   }
 
   /// Called on Device A (Android) after hotspot credentials are sent.
@@ -680,94 +674,363 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _onHighSpeedRequest(String senderName) {
     if (!mounted || _isHighSpeedDialogShowing) return;
     _isHighSpeedDialogShowing = true;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('High-Speed Transfer Request'),
-        content: Text(
-          '$senderName is requesting high-speed transfer mode. This will start an Android WiFi Hotspot.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+
+    app_dialog
+        .showAppDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? Colors.grey.shade900
+                : Colors.white,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            titlePadding: const EdgeInsets.only(
+              top: 24,
+              left: 24,
+              right: 24,
+              bottom: 8,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 8,
+            ),
+            actionsPadding: const EdgeInsets.all(16),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.speed_rounded,
+                    color: Colors.blue.shade600,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'High-Speed Transfer',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              '$senderName is requesting high-speed transfer mode. This will start an Android WiFi Hotspot to maximize performance.',
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.black87,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  _isHighSpeedDialogShowing = false;
+                  Navigator.pop(context);
+                  await _connectionService.declineHighSpeedRequest();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey.shade700,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  _isHighSpeedDialogShowing = false;
+                  Navigator.pop(context);
+                  final info = await _connectionService
+                      .enableHighSpeedHotspot();
+                  if (info != null && mounted) {
+                    _showHotspotQrSheet(info);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade600,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'Start Hotspot',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              _isHighSpeedDialogShowing = false;
-              Navigator.pop(context);
-              _connectionService.enableHighSpeedHotspot();
-            },
-            child: const Text('Start Hotspot'),
-          ),
-        ],
-      ),
-    ).then((_) => _isHighSpeedDialogShowing = false);
+        )
+        .then((_) {
+          if (mounted) _isHighSpeedDialogShowing = false;
+        });
   }
 
-  void _onHighSpeedCredentials(Map<String, String> creds) {
-    if (!mounted || _isHighSpeedDialogShowing) return;
+  void _showManualHighSpeedDialog(Map<String, String> creds) {
+    if (!mounted) return;
     _isHighSpeedDialogShowing = true;
     final ssid = creds['ssid'];
     final password = creds['password'];
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Connect to High-Speed Hotspot'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Please connect your computer to this WiFi network for maximum transfer speeds:',
+
+    app_dialog
+        .showAppDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? Colors.grey.shade900
+                : Colors.white,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'SSID: $ssid',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+            titlePadding: const EdgeInsets.only(
+              top: 24,
+              left: 24,
+              right: 24,
+              bottom: 8,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 8,
+            ),
+            actionsPadding: const EdgeInsets.all(16),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Password: $password',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                  child: Icon(
+                    Icons.wifi_tethering,
+                    color: Colors.green.shade600,
+                    size: 24,
                   ),
-                ],
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Hotspot Ready',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Please connect your computer to this WiFi network for maximum speeds.',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.black87,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green.shade100),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.wifi,
+                            size: 16,
+                            color: Colors.green.shade700,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'SSID',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        ssid ?? 'Unknown',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: 16,
+                            color: Colors.green.shade700,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'PASSWORD',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        password ?? 'Unknown',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  _isHighSpeedDialogShowing = false;
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'Got it',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'The app will automatically detect and switch to high-speed mode once connected.',
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              _isHighSpeedDialogShowing = false;
-              Navigator.pop(context);
-            },
-            child: const Text('Got it'),
+            ],
           ),
-        ],
-      ),
-    ).then((_) => _isHighSpeedDialogShowing = false);
+        )
+        .then((_) {
+          if (mounted) _isHighSpeedDialogShowing = false;
+        });
+  }
+
+  void _onHighSpeedCredentials(Map<String, String> creds) async {
+    if (!mounted || _isHighSpeedDialogShowing) return;
+    // Skip automated/manual hotspot dialogs on Android as native WFD is preferred
+    // Also skip on iOS as it relies entirely on the manual QrScannerScreen
+    if (io.Platform.isAndroid || io.Platform.isIOS) return;
+
+    final ssid = creds['ssid'];
+    final password = creds['password'];
+
+    if (ssid == null || ssid.isEmpty) return;
+
+    if (WifiService.isSupported) {
+      _isHighSpeedDialogShowing = true;
+      // Show loading indicator during automated connection
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey.shade900
+              : Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 32,
+          ),
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Text(
+                  'Connecting to high-speed network...',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      try {
+        await WifiService.connectToWifi(ssid: ssid, password: password);
+
+        if (mounted) {
+          _isHighSpeedDialogShowing = false;
+          // Dismiss loading dialog
+          Navigator.of(context, rootNavigator: true).pop();
+
+          AppSnackbar.showSuccess(
+            context,
+            'Hotspot joined! Reconnecting app session...',
+          );
+        }
+      } catch (e) {
+        debugPrint('[ChatScreen] Auto WiFi connection failed: $e');
+        if (mounted) {
+          _isHighSpeedDialogShowing = false;
+          // Dismiss loading dialog
+          Navigator.of(context, rootNavigator: true).pop();
+          // Fallback to manual display
+          _showManualHighSpeedDialog(creds);
+        }
+      }
+    } else {
+      // Desktop clients don't support automated connection yet
+      _showManualHighSpeedDialog(creds);
+    }
   }
 
   void _handleIncomingOffer(DeviceMessage message) async {
@@ -1030,7 +1293,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     try {
       if (path.toLowerCase().endsWith('.apk')) {
         if (Theme.of(context).platform == TargetPlatform.android) {
-          final status = await AppPermissions.runGuarded(
+          final status = await AppPerm.AppPermissions.runGuarded(
             () => Permission.requestInstallPackages.request(),
           );
           if (!status.isGranted) {
@@ -1391,6 +1654,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 port: port ?? 53318,
                 myDeviceName: widget.myDeviceName,
                 connectionManager: widget.connectionManager,
+                discoveryService: widget.discoveryService,
                 initialDeviceId: deviceId,
               ),
             ),
@@ -1548,12 +1812,56 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       },
                       onRequest: () async {
                         if (io.Platform.isAndroid) {
-                          await _connectionService.enableHighSpeedHotspot();
+                          final info = await _connectionService
+                              .enableHighSpeedHotspot();
+                          if (info != null && mounted) {
+                            // Only show QR sheet if connected to an iOS/iPad device
+                            final remotePlatform =
+                                _connectionService.remotePlatform;
+                            if (remotePlatform == 'ios') {
+                              _showHotspotQrSheet(info);
+                            } else {
+                              debugPrint(
+                                '[ChatScreen] Hotspot started for $remotePlatform, credentials broadcasted in background. No QR needed.',
+                              );
+                              AppSnackbar.showSuccess(
+                                context,
+                                'High-speed hotspot active',
+                              );
+                            }
+                          }
                         } else {
                           await _connectionService.requestHighSpeed();
                         }
                         if (mounted) setState(() {});
                       },
+                      onScan: _shouldShowScanOption
+                          ? () {
+                              if (!mounted) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => QrScannerScreen(
+                                    discoveryService: widget.discoveryService,
+                                    myDeviceName: widget.myDeviceName,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                      onShowQR:
+                          (_connectionService.remotePlatform != null &&
+                              _connectionService.remotePlatform != 'android' &&
+                              LocalHotspotService.cachedHotspotInfo != null)
+                          ? () {
+                              if (!mounted) return;
+                              final info =
+                                  LocalHotspotService.cachedHotspotInfo;
+                              if (io.Platform.isAndroid && info != null) {
+                                _showHotspotQrSheet(info);
+                              }
+                            }
+                          : null,
                       onInfo: () {
                         if (!mounted) return;
 

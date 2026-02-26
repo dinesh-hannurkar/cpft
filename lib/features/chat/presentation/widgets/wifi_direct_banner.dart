@@ -11,6 +11,9 @@ class WiFiDirectBanner extends StatelessWidget {
   final VoidCallback? onRequest;
   final VoidCallback? onInfo;
 
+  final VoidCallback? onScan;
+  final VoidCallback? onShowQR;
+
   const WiFiDirectBanner({
     super.key,
     required this.statusNotifier,
@@ -20,6 +23,8 @@ class WiFiDirectBanner extends StatelessWidget {
     this.onConnect,
     this.onRequest,
     this.onInfo,
+    this.onScan,
+    this.onShowQR,
   });
 
   @override
@@ -35,11 +40,8 @@ class WiFiDirectBanner extends StatelessWidget {
             iconColor: Colors.green.shade700,
             title: 'High-Speed Connection Active',
             subtitle: '5GHz channel enabled',
-            trailing: IconButton(
-              icon: Icon(Icons.info_outline, color: Colors.green.shade700),
-              tooltip: 'Connection Details',
-              onPressed: onInfo,
-            ),
+            action: (isAndroid && onShowQR != null) ? 'Show QR' : null,
+            onAction: isAndroid ? onShowQR : null,
           );
         }
 
@@ -61,16 +63,15 @@ class WiFiDirectBanner extends StatelessWidget {
             icon: Icons.warning_amber_rounded,
             iconColor: Colors.orange.shade700,
             title: 'Connection Optimization Failed',
-            subtitle: 'Retrying...',
+            subtitle: 'Ensure hotspot is active',
           );
         }
 
         if (canConnect || canRequest) {
-          // Use 'Enable' for Android-Android or if we are the Android side of cross-platform
-          // Use 'Request' for non-Android side of cross-platform
+          final isScanning = onScan != null && !isAndroid;
           final String actionLabel = canConnect
               ? 'Enable'
-              : (canRequest && isAndroid ? 'Enable' : 'Request');
+              : (isAndroid ? 'Enable' : (isScanning ? 'Scan QR' : 'Request'));
 
           return StatusBanner(
             color: Colors.blue.shade50,
@@ -82,18 +83,15 @@ class WiFiDirectBanner extends StatelessWidget {
                 : 'High Speed Optimization',
             subtitle: canConnect
                 ? 'Tap to enable 5GHz transfer'
-                : (canRequest
-                      ? (isAndroid
-                            ? 'Start Android hotspot for faster transfer'
-                            : 'Request faster transfer protocol')
-                      : 'Switch to high-speed mode'),
+                : (isAndroid
+                      ? 'Start Android hotspot for faster transfer'
+                      : (isScanning
+                            ? 'Scan the QR code on the other device'
+                            : 'Request faster transfer protocol')),
             action: actionLabel,
-            onAction: canConnect ? onConnect : onRequest,
-            trailing: IconButton(
-              icon: Icon(Icons.info_outline, color: Colors.blue.shade700),
-              tooltip: 'Connection Details',
-              onPressed: onInfo,
-            ),
+            onAction: canConnect
+                ? onConnect
+                : (isScanning ? onScan : onRequest),
           );
         }
 
