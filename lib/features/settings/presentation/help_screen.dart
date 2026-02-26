@@ -14,6 +14,7 @@ class HelpScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PrimaryAppBar(
+        backgroundColor: Colors.transparent,
         leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
         title: 'Help & Support',
         centerTitle: true,
@@ -31,83 +32,71 @@ class HelpScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.all(AppSizes.md),
             children: [
-              _buildSection(
-                'Getting Started',
-                [
-                  _HelpItem(
-                    icon: Icons.play_circle_outline,
-                    title: 'Quick Start Guide',
-                    subtitle: 'Learn how to connect and transfer files',
-                    onTap: () => _showQuickStart(context),
-                  ),
-                  _HelpItem(
-                    icon: Icons.connect_without_contact,
-                    title: 'Connection Guide',
-                    subtitle: 'Troubleshooting connection issues',
-                    onTap: () => _showConnectionGuide(context),
-                  ),
-                ],
-              ),
+              _buildSection('Getting Started', [
+                _HelpItem(
+                  icon: Icons.play_circle_outline,
+                  title: 'Quick Start Guide',
+                  subtitle: 'Learn how to connect and transfer files',
+                  onTap: () => _showQuickStart(context),
+                ),
+                _HelpItem(
+                  icon: Icons.connect_without_contact,
+                  title: 'Connection Guide',
+                  subtitle: 'Troubleshooting connection issues',
+                  onTap: () => _showConnectionGuide(context),
+                ),
+              ]),
               const SizedBox(height: AppSizes.lg),
-              _buildSection(
-                'Troubleshooting',
-                [
-                  _HelpItem(
-                    icon: Icons.wifi_off,
-                    title: 'Connection Refused',
-                    subtitle: 'Fix connection refused errors',
-                    onTap: () => _showConnectionRefusedGuide(context),
-                  ),
-                  _HelpItem(
-                    icon: Icons.bug_report,
-                    title: 'Debug Guide',
-                    subtitle: 'Advanced debugging tools and logs',
-                    onTap: () => _showDebugGuide(context),
-                  ),
-                  _HelpItem(
-                    icon: Icons.phone_android,
-                    title: 'Platform Issues',
-                    subtitle: 'Android and iOS specific fixes',
-                    onTap: () => _showPlatformIssues(context),
-                  ),
-                ],
-              ),
+              _buildSection('Troubleshooting', [
+                _HelpItem(
+                  icon: Icons.wifi_off,
+                  title: 'Connection Refused',
+                  subtitle: 'Fix connection refused errors',
+                  onTap: () => _showConnectionRefusedGuide(context),
+                ),
+                _HelpItem(
+                  icon: Icons.bug_report,
+                  title: 'Debug Guide',
+                  subtitle: 'Advanced debugging tools and logs',
+                  onTap: () => _showDebugGuide(context),
+                ),
+                _HelpItem(
+                  icon: Icons.phone_android,
+                  title: 'Platform Issues',
+                  subtitle: 'Android and iOS specific fixes',
+                  onTap: () => _showPlatformIssues(context),
+                ),
+              ]),
               const SizedBox(height: AppSizes.lg),
-              _buildSection(
-                'Features',
-                [
-                  _HelpItem(
-                    icon: Icons.web,
-                    title: 'Web Platform Support',
-                    subtitle: 'Using ${AppStrings.appName} in web browsers',
-                    onTap: () => _showWebPlatformGuide(context),
-                  ),
-                  _HelpItem(
-                    icon: Icons.file_present,
-                    title: 'File Transfer Features',
-                    subtitle: 'Advanced file operations and management',
-                    onTap: () => _showFileFeatures(context),
-                  ),
-                ],
-              ),
+              _buildSection('Features', [
+                _HelpItem(
+                  icon: Icons.web,
+                  title: 'Web Platform Support',
+                  subtitle: 'Using ${AppStrings.appName} in web browsers',
+                  onTap: () => _showWebPlatformGuide(context),
+                ),
+                _HelpItem(
+                  icon: Icons.file_present,
+                  title: 'File Transfer Features',
+                  subtitle: 'Advanced file operations and management',
+                  onTap: () => _showFileFeatures(context),
+                ),
+              ]),
               const SizedBox(height: AppSizes.lg),
-              _buildSection(
-                'Contact & Support',
-                [
-                  _HelpItem(
-                    icon: Icons.email,
-                    title: 'Send Feedback',
-                    subtitle: 'Report bugs or suggest features',
-                    onTap: () => _launchEmail(),
-                  ),
-                  _HelpItem(
-                    icon: Icons.help_center,
-                    title: 'FAQs',
-                    subtitle: 'Frequently asked questions',
-                    onTap: () => _showFAQs(context),
-                  ),
-                ],
-              ),
+              _buildSection('Contact & Support', [
+                _HelpItem(
+                  icon: Icons.email,
+                  title: 'Send Feedback',
+                  subtitle: 'Report bugs or suggest features',
+                  onTap: () => _launchEmail(),
+                ),
+                _HelpItem(
+                  icon: Icons.help_center,
+                  title: 'FAQs',
+                  subtitle: 'Frequently asked questions',
+                  onTap: () => _showFAQs(context),
+                ),
+              ]),
             ],
           ),
         ),
@@ -120,7 +109,10 @@ class HelpScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: AppSizes.sm, bottom: AppSizes.sm),
+          padding: const EdgeInsets.only(
+            left: AppSizes.sm,
+            bottom: AppSizes.sm,
+          ),
           child: Text(
             title,
             style: const TextStyle(
@@ -137,10 +129,7 @@ class HelpScreen extends StatelessWidget {
 
   void _showQuickStart(BuildContext context) {
     final appName = AppStrings.appName;
-    _showMarkdownContent(
-      context,
-      'Quick Start Guide',
-      '''
+    _showMarkdownContent(context, 'Quick Start Guide', '''
 **Quick Start Guide**
 
 **Connecting Devices**
@@ -179,16 +168,12 @@ If devices don't appear:
 • Check WiFi connection
 • Verify permissions are granted
 • Try different devices
-''',
-    );
+''');
   }
 
   void _showConnectionGuide(BuildContext context) {
     final appName = AppStrings.appName;
-    _showMarkdownContent(
-      context,
-      'Connection Troubleshooting',
-      '''
+    _showMarkdownContent(context, 'Connection Troubleshooting', '''
 **Connection Troubleshooting Guide**
 
 **Common Connection Problems**
@@ -268,16 +253,12 @@ Contact Support with this information:
 • Network environment details
 • Exact error messages
 • Steps to reproduce the issue
-''',
-    );
+''');
   }
 
   void _showConnectionRefusedGuide(BuildContext context) {
     final appName = AppStrings.appName;
-    _showMarkdownContent(
-      context,
-      'Connection Refused Fix',
-      '''
+    _showMarkdownContent(context, 'Connection Refused Fix', '''
 **Connection Refused Error - Quick Fix**
 
 **Immediate Solution**
@@ -332,16 +313,12 @@ Please provide this information when contacting support:
 • Reproduction Steps: Detailed steps that cause the error
 
 Contact: support@cpft.app
-''',
-    );
+''');
   }
 
   void _showDebugGuide(BuildContext context) {
     final appName = AppStrings.appName;
-    _showMarkdownContent(
-      context,
-      'Debug Guide',
-      '''
+    _showMarkdownContent(context, 'Debug Guide', '''
 **Debug & Troubleshooting Tools**
 
 **Debug Commands & Testing**
@@ -428,16 +405,12 @@ Gather this information before contacting:
 • Performance metrics during failure
 • Exact reproduction steps
 • System configuration details
-''',
-    );
+''');
   }
 
   void _showPlatformIssues(BuildContext context) {
     final appName = AppStrings.appName;
-    _showMarkdownContent(
-      context,
-      'Platform-Specific Issues',
-      '''
+    _showMarkdownContent(context, 'Platform-Specific Issues', '''
 **Platform-Specific Issues & Solutions**
 
 **Android-Specific Issues**
@@ -582,16 +555,12 @@ Web platform limitations:
 • Network Restrictions
   - CORS policies may limit connections
   - Mixed content warnings on HTTP sites
-''',
-    );
+''');
   }
 
   void _showWebPlatformGuide(BuildContext context) {
     final appName = AppStrings.appName;
-    _showMarkdownContent(
-      context,
-      'Web Platform Support',
-      '''
+    _showMarkdownContent(context, 'Web Platform Support', '''
 **Web Platform Features & Limitations**
 
 **Supported Browsers**
@@ -715,15 +684,11 @@ Web platform limitations:
 • Monitor transfer progress closely
 • Ensure sufficient browser memory
 • Resume interrupted transfers when possible
-''',
-    );
+''');
   }
 
   void _showFileFeatures(BuildContext context) {
-    _showMarkdownContent(
-      context,
-      'File Transfer Features',
-      '''
+    _showMarkdownContent(context, 'File Transfer Features', '''
 **File Transfer Features & Capabilities**
 
 **Supported File Types**
@@ -848,8 +813,7 @@ Web platform limitations:
 • Differential transfer: Send only changed parts
 • On-the-fly compression: Reduce transfer sizes
 • Advanced encryption: Military-grade security options
-''',
-    );
+''');
   }
 
   void _launchEmail() async {
@@ -859,7 +823,8 @@ Web platform limitations:
       path: 'support@cpft.app',
       queryParameters: {
         'subject': '$appName Support Request',
-        'body': '''
+        'body':
+            '''
 Please describe your issue:
 
 Device: [Android/iOS/Web]
@@ -887,10 +852,7 @@ Additional details:
 
   void _showFAQs(BuildContext context) {
     final appName = AppStrings.appName;
-    _showMarkdownContent(
-      context,
-      'Frequently Asked Questions',
-      '''
+    _showMarkdownContent(context, 'Frequently Asked Questions', '''
 **Frequently Asked Questions**
 
 **General Questions**
@@ -1028,8 +990,7 @@ Feature requests:
 • Explain benefits for other users
 
 **Pro Tip**: Most issues are resolved by restarting devices and ensuring both are on the same WiFi network. Try that first before contacting support!
-''',
-    );
+''');
   }
 
   TextSpan _parseBoldText(String text) {
@@ -1041,46 +1002,56 @@ Feature requests:
     for (final match in matches) {
       // Add text before the bold part
       if (match.start > lastIndex) {
-        spans.add(TextSpan(
-          text: text.substring(lastIndex, match.start),
+        spans.add(
+          TextSpan(
+            text: text.substring(lastIndex, match.start),
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: Colors.black87,
+            ),
+          ),
+        );
+      }
+
+      // Add the bold text
+      spans.add(
+        TextSpan(
+          text: match.group(1),
           style: const TextStyle(
             fontSize: 14,
             height: 1.5,
             color: Colors.black87,
+            fontWeight: FontWeight.bold,
           ),
-        ));
-      }
-
-      // Add the bold text
-      spans.add(TextSpan(
-        text: match.group(1),
-        style: const TextStyle(
-          fontSize: 14,
-          height: 1.5,
-          color: Colors.black87,
-          fontWeight: FontWeight.bold,
         ),
-      ));
+      );
 
       lastIndex = match.end;
     }
 
     // Add remaining text
     if (lastIndex < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(lastIndex),
-        style: const TextStyle(
-          fontSize: 14,
-          height: 1.5,
-          color: Colors.black87,
+      spans.add(
+        TextSpan(
+          text: text.substring(lastIndex),
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.5,
+            color: Colors.black87,
+          ),
         ),
-      ));
+      );
     }
 
     return TextSpan(children: spans);
   }
 
-  void _showMarkdownContent(BuildContext context, String title, String content) {
+  void _showMarkdownContent(
+    BuildContext context,
+    String title,
+    String content,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

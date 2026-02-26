@@ -38,7 +38,17 @@ class StatusBanner extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: color,
-        border: Border(bottom: BorderSide(color: borderColor)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, 2),
+            blurRadius: 4,
+          ),
+        ],
+        border: Border(
+          top: BorderSide(color: borderColor.withOpacity(0.5), width: 0.5),
+          bottom: BorderSide(color: borderColor),
+        ),
         gradient: useWhiteText
             ? LinearGradient(
                 colors: [color, borderColor],

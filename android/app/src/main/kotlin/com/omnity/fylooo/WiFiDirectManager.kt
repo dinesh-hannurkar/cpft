@@ -175,21 +175,40 @@ class WiFiDirectManager(
                 context.registerReceiver(receiver, intentFilter)
             }
             
-            // First, remove any existing group to avoid ERROR_BUSY (error code 2)
-            p2pManager?.removeGroup(p2pChannel, object : WifiP2pManager.ActionListener {
-                @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
-                override fun onSuccess() {
-                    Log.d(TAG, "Existing group removed, creating new group...")
-                    createGroupInternal()
+            // First, check if we are already a group owner
+            p2pManager?.requestGroupInfo(p2pChannel) { group ->
+                if (group != null && group.isGroupOwner) {
+                    Log.d(TAG, "Already Group Owner, reusing existing group")
+                    val payload = mapOf(
+                        "ipAddress" to "192.168.49.1",
+                        "port" to TRANSFER_PORT,
+                        "isGroupOwner" to true,
+                        "ssid" to group.networkName,
+                        "password" to group.passphrase
+                    )
+                    channel.invokeMethod("onConnectionEstablished", payload)
+                } else {
+                    // No group or not owner, proceed to creation
+                    // First, remove any existing group to avoid ERROR_BUSY (error code 2)
+                    p2pManager?.removeGroup(p2pChannel, object : WifiP2pManager.ActionListener {
+                        @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+                        override fun onSuccess() {
+                            Log.d(TAG, "Existing group removed, waiting before creating new group...")
+                            // Add delay to prevent ERROR_BUSY when creating
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                createGroupInternal()
+                            }, 1000)
+                        }
+                        
+                        @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
+                        override fun onFailure(reason: Int) {
+                            // If removal fails (e.g., no group exists), proceed to create anyway
+                            Log.d(TAG, "No existing group to remove (reason: $reason), creating new group...")
+                            createGroupInternal()
+                        }
+                    })
                 }
-                
-                @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES])
-                override fun onFailure(reason: Int) {
-                    // If removal fails (e.g., no group exists), proceed to create anyway
-                    Log.d(TAG, "No existing group to remove (reason: $reason), creating new group...")
-                    createGroupInternal()
-                }
-            })
+            }
             
             return true
         } catch (e: Exception) {

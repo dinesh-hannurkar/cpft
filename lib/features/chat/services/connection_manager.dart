@@ -297,8 +297,6 @@ class ConnectionManager {
             status == ConnectionStatus.connecting) {
           if (status == ConnectionStatus.connected) {
             // Check if this might be a parallel socket connection
-            // If the connection is already connected and this is from the same IP,
-            // it might be a parallel socket - pass it to the service
             AppLogger.d(
               'Passing potential parallel socket to existing connected service for $foundKey',
               tag: 'ConnMgr',
@@ -313,16 +311,39 @@ class ConnectionManager {
                 tag: 'ConnMgr',
               );
             } else {
-              AppLogger.w(
-                'Failed to accept parallel socket for $foundKey, might be a duplicate',
+              // Same device name, different IP (e.g., Hotspot Handover upgrade)
+              AppLogger.i(
+                'Different IP for $foundKey. Replacing outgoing/old socket with new Hotspot socket!',
                 tag: 'ConnMgr',
               );
-              // If it's truly a duplicate (not a parallel socket), notify UI to navigate
-              _notifyConnectionListeners(
+
+              // This is a new connection path (e.g. WiFi -> Hotspot) from the SAME device.
+              // We must accept this socket into the existing ConnectionService, which will
+              // cleanly close the old socket and upgrade the connection invisibly.
+              final upgradeSuccess = await foundService.acceptConnection(
+                socket,
                 foundKey,
-                foundService,
-                isIncoming: true,
               );
+              if (upgradeSuccess) {
+                AppLogger.i(
+                  'Successfully adopted Hotspot/New IP socket for existing service $foundKey',
+                  tag: 'ConnMgr',
+                );
+                // Trigger UI update
+                _notifyConnectionListeners(
+                  foundKey,
+                  foundService,
+                  isIncoming: true,
+                );
+              } else {
+                AppLogger.w(
+                  'Failed to adopt new IP socket for $foundKey',
+                  tag: 'ConnMgr',
+                );
+                try {
+                  socket.close();
+                } catch (_) {}
+              }
             }
             return;
           } else if (status == ConnectionStatus.connecting) {
@@ -504,6 +525,23 @@ class ConnectionManager {
 
       // Attach status listener for incoming connections (same as outgoing)
       service.addStatusListener((info) {
+        // [FIX]: Upon successful handshake, swap the IP address key in `_activeConnections` mapped dictionary
+        // to the real remote device name so that the UI correctly displays the name instead of the IP.
+        if (info.status == ConnectionStatus.connected &&
+            info.deviceName != remoteName &&
+            _activeConnections.containsKey(remoteName)) {
+          AppLogger.d(
+            'Device name resolved from $remoteName to ${info.deviceName}. Updating connection map key.',
+            tag: 'ConnMgr',
+          );
+          final currentService = _activeConnections.remove(remoteName);
+          if (currentService != null) {
+            _activeConnections[info.deviceName] = currentService;
+            remoteName = info
+                .deviceName; // Update captured variable for future disconnect/failure cleanups
+          }
+        }
+
         if (info.status == ConnectionStatus.connected) {
           AppLogger.i(
             'Connection to ${info.deviceName} now connected',

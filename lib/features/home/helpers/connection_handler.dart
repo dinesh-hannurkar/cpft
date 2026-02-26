@@ -10,7 +10,7 @@ import 'package:share_plus/share_plus.dart';
 /// Helper class for handling device connection logic
 class ConnectionHandler {
   /// Handle device tap with connection state awareness
-  static Future<void> handleDeviceTap({
+  static Future<bool> handleDeviceTap({
     required BuildContext context,
     required DeviceInfo device,
     required ConnectionManager connectionManager,
@@ -18,6 +18,8 @@ class ConnectionHandler {
     required String myDeviceName,
     List<XFile>? droppedFiles,
     VoidCallback? onFilesSent,
+    bool replace = false,
+    bool silent = false,
   }) async {
     debugPrint(
       '[ConnectionHandler] 🔍 Tapped device: ${device.name} (IP: ${device.ip})',
@@ -57,10 +59,12 @@ class ConnectionHandler {
           ipAddress: device.ip,
           myDeviceName: myDeviceName,
           connectionManager: connectionManager,
+          discoveryService: discoveryService,
           droppedFiles: droppedFiles,
           onFilesSent: onFilesSent,
+          replace: replace,
         );
-        return;
+        return true;
       } else if (status == ConnectionStatus.connected ||
           status == ConnectionStatus.connecting) {
         // We are "connected" according to the old socket, but the IP we are
@@ -77,10 +81,12 @@ class ConnectionHandler {
           ipAddress: device.ip,
           myDeviceName: myDeviceName,
           connectionManager: connectionManager,
+          discoveryService: discoveryService,
           droppedFiles: droppedFiles,
           onFilesSent: onFilesSent,
+          replace: replace,
         );
-        return;
+        return true;
       } else if (status == ConnectionStatus.disconnected) {
         // Connection exists but is disconnected - navigate to chat to allow reconnect
         debugPrint(
@@ -92,11 +98,40 @@ class ConnectionHandler {
           ipAddress: device.ip,
           myDeviceName: myDeviceName,
           connectionManager: connectionManager,
+          discoveryService: discoveryService,
           droppedFiles: droppedFiles,
           onFilesSent: onFilesSent,
+          replace: replace,
         );
-        return;
+        return true;
       }
+    }
+
+    if (silent) {
+      debugPrint(
+        '[ConnectionHandler] Silent mode: Connecting directly to ${device.ip}',
+      );
+      final service = connectionManager.getOrCreateConnection(device.name);
+      final success = await service.connect(
+        device.name,
+        device.ip,
+        DiscoveryService.p2pPort,
+      );
+
+      if (success && context.mounted) {
+        _navigateToChat(
+          context: context,
+          deviceName: device.name,
+          ipAddress: device.ip,
+          myDeviceName: myDeviceName,
+          connectionManager: connectionManager,
+          discoveryService: discoveryService,
+          droppedFiles: droppedFiles,
+          onFilesSent: onFilesSent,
+          replace: replace,
+        );
+      }
+      return success;
     }
 
     // Not connected - show confirmation dialog
@@ -122,10 +157,14 @@ class ConnectionHandler {
         ipAddress: device.ip,
         myDeviceName: myDeviceName,
         connectionManager: connectionManager,
+        discoveryService: discoveryService,
         droppedFiles: droppedFiles,
         onFilesSent: onFilesSent,
+        replace: replace,
       );
+      return true;
     }
+    return false;
   }
 
   static void _navigateToChat({
@@ -134,23 +173,47 @@ class ConnectionHandler {
     required String ipAddress,
     required String myDeviceName,
     required ConnectionManager connectionManager,
+    required DiscoveryService discoveryService,
     List<XFile>? droppedFiles,
     VoidCallback? onFilesSent,
+    bool replace = false,
   }) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          deviceName: deviceName,
-          ipAddress: ipAddress,
-          port: DiscoveryService.p2pPort,
-          myDeviceName: myDeviceName,
-          connectionManager: connectionManager,
-          initialDeviceId: deviceName,
-          droppedFiles: droppedFiles,
-          onFilesSent: onFilesSent,
+    if (replace) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/chat'),
+          builder: (_) => ChatScreen(
+            deviceName: deviceName,
+            ipAddress: ipAddress,
+            port: DiscoveryService.p2pPort,
+            myDeviceName: myDeviceName,
+            connectionManager: connectionManager,
+            discoveryService: discoveryService,
+            initialDeviceId: deviceName,
+            droppedFiles: droppedFiles,
+            onFilesSent: onFilesSent,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/chat'),
+          builder: (_) => ChatScreen(
+            deviceName: deviceName,
+            ipAddress: ipAddress,
+            port: DiscoveryService.p2pPort,
+            myDeviceName: myDeviceName,
+            connectionManager: connectionManager,
+            discoveryService: discoveryService,
+            initialDeviceId: deviceName,
+            droppedFiles: droppedFiles,
+            onFilesSent: onFilesSent,
+          ),
+        ),
+      );
+    }
   }
 }

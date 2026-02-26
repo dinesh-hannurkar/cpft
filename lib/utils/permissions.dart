@@ -45,14 +45,23 @@ class AppPermissions {
         if (status.isGranted) return true;
 
         final result = await Permission.nearbyWifiDevices.request();
-        return result.isGranted;
+        if (result.isGranted) return true;
+
+        // Fallback for Android < 12: NEARBY_WIFI_DEVICES doesn't exist or fails.
+        // Location permission is required instead for WiFi operations.
+        final locationStatus = await Permission.location.status;
+        if (locationStatus.isGranted) return true;
+
+        final locationResult = await Permission.location.request();
+        return locationResult.isGranted;
       } catch (e) {
-        // Permission not available on this Android version/device.
-        AppLogger.d(
-          'Nearby WiFi Devices permission not available: $e',
-          tag: 'Permissions',
-        );
-        return true;
+        // Permission not available or error - try location fallback as last resort.
+        try {
+          final locStatus = await Permission.location.request();
+          return locStatus.isGranted;
+        } catch (_) {
+          return true; // Assume success if both fail (legacy behavior)
+        }
       }
     });
   }

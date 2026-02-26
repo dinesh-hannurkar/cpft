@@ -9,14 +9,15 @@ import 'package:fylooo/shared/widgets/back_button_chip.dart';
 class ConnectedDevicesScreen extends StatelessWidget {
   final ConnectionManager connectionManager;
   final String myDeviceName;
+  final DiscoveryService discoveryService;
   final VoidCallback? onFilesSent;
-
   final bool showAppBar;
 
   const ConnectedDevicesScreen({
     super.key,
     required this.connectionManager,
     required this.myDeviceName,
+    required this.discoveryService,
     this.onFilesSent,
     this.showAppBar = true,
   });
@@ -59,12 +60,14 @@ class ConnectedDevicesScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: '/chat'),
                             builder: (_) => ChatScreen(
                               deviceName: deviceId,
                               ipAddress: ipAddress ?? '',
                               port: port ?? DiscoveryService.p2pPort,
                               myDeviceName: myDeviceName,
                               connectionManager: connectionManager,
+                              discoveryService: discoveryService,
                               initialDeviceId: deviceId,
                               onFilesSent: onFilesSentCallback,
                             ),

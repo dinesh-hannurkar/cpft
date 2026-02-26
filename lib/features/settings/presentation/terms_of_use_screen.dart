@@ -13,6 +13,7 @@ class TermsOfUseScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PrimaryAppBar(
+        backgroundColor: Colors.transparent,
         leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
         title: 'Terms of Use',
         centerTitle: true,

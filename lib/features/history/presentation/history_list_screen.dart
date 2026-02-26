@@ -6,17 +6,19 @@ import 'package:fylooo/features/home/presentation/widgets/tiles/device_list_tile
 import 'package:fylooo/features/chat/presentation/chat_screen.dart';
 import 'package:fylooo/features/chat/services/connection_manager.dart';
 import 'package:fylooo/services/database_service.dart';
+import 'package:fylooo/services/discovery_service.dart';
 
 class HistoryListScreen extends StatefulWidget {
   final ConnectionManager connectionManager;
   final String myDeviceName;
-
+  final DiscoveryService discoveryService;
   final bool showAppBar;
 
   const HistoryListScreen({
     super.key,
     required this.connectionManager,
     required this.myDeviceName,
+    required this.discoveryService,
     this.showAppBar = true,
   });
 
@@ -53,6 +55,7 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
       extendBodyBehindAppBar: true,
       appBar: widget.showAppBar
           ? PrimaryAppBar(
+              backgroundColor: Colors.transparent,
               leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
               title: 'Recent Chats (24h)',
               centerTitle: true,
@@ -86,8 +89,8 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.7,
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
                         child: Center(child: Text('Error: ${snapshot.error}')),
                       ),
                     ],
@@ -105,8 +108,8 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.7,
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
                         child: const Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -154,6 +157,9 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
+                                      settings: const RouteSettings(
+                                        name: '/chat',
+                                      ),
                                       builder: (_) => ChatScreen(
                                         deviceName: deviceId,
                                         ipAddress: deviceId,
@@ -161,6 +167,8 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
                                         myDeviceName: widget.myDeviceName,
                                         connectionManager:
                                             widget.connectionManager,
+                                        discoveryService:
+                                            widget.discoveryService,
                                         initialDeviceId: deviceId,
                                         isOffline: true,
                                       ),

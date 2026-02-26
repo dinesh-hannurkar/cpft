@@ -113,6 +113,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
             port: port,
             myDeviceName: widget.deviceName,
             connectionManager: _discoveryService.connectionManager!,
+            discoveryService: _discoveryService,
           ),
         ),
       );
@@ -1040,6 +1041,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
             port: 53318,
             myDeviceName: widget.deviceName,
             connectionManager: connectionManager,
+            discoveryService: _discoveryService,
             initialDeviceId: deviceName,
           ),
         ),
@@ -1057,6 +1059,7 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
           port: 53318, // Use P2P port
           myDeviceName: widget.deviceName,
           connectionManager: connectionManager,
+          discoveryService: _discoveryService,
         ),
       ),
     );

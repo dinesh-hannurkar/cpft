@@ -9,23 +9,35 @@ class ConnectingBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      color: Colors.blue.shade100,
-      child: Row(children: [
-        const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.blue.shade900.withOpacity(0.2)
+            : Colors.blue.shade50,
+        border: Border(
+          bottom: BorderSide(color: Colors.blue.shade200, width: 1),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            'Connecting to $deviceName...',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.w600),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
-        ),
-      ]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Connecting to $deviceName...',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.blue.shade900,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

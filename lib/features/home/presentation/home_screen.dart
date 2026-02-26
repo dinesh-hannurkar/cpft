@@ -91,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _historyCount = 0;
   int _connectedCount = 0;
   Timer? _countRefreshTimer;
+  DateTime? _qrExpiryTime;
 
   @override
   void initState() {
@@ -242,19 +243,52 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Defer navigation to avoid setState during build
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChatScreen(
-                  deviceName: deviceName,
-                  ipAddress: service.currentConnection?.ipAddress ?? '',
-                  port: DiscoveryService.p2pPort,
-                  myDeviceName: widget.myDeviceName,
-                  connectionManager: cm,
-                  initialDeviceId: deviceName,
-                ),
+            // Check what the current top route is
+            bool isTopRouteChat = false;
+
+            Navigator.of(context, rootNavigator: true).popUntil((route) {
+              isTopRouteChat = route.settings.name == '/chat';
+              // Also consider it "Home" if it's a modal/anonymous route on top of the first route
+              return true;
+            });
+
+            // Prepare the new ChatScreen to be pushed
+            final newChatRoute = MaterialPageRoute(
+              settings: const RouteSettings(name: '/chat'),
+              builder: (_) => ChatScreen(
+                deviceName: deviceName,
+                ipAddress: service.currentConnection?.ipAddress ?? '',
+                port: DiscoveryService.p2pPort,
+                myDeviceName: widget.myDeviceName,
+                connectionManager: cm,
+                discoveryService: widget.discoveryService,
+                initialDeviceId: deviceName,
               ),
             );
+
+            if (isTopRouteChat) {
+              // If we are ALREADY on a ChatScreen, replace it with the new one
+              // so it binds to the new connection socket cleanly.
+              debugPrint(
+                '[HomeScreen] 🔄 Replacing existing ChatScreen with new connection',
+              );
+              Navigator.of(
+                context,
+                rootNavigator: true,
+              ).pushReplacement(newChatRoute);
+            } else {
+              // Push the ChatScreen. If there's an overlay (like QR sheet),
+              // it will just stay behind or be popped depending on how the app handles it.
+              // For consistent UX, we'll pop everything until we reach home, then push Chat.
+              debugPrint(
+                '[HomeScreen] 🚀 Navigating to ChatScreen (Incoming connection)',
+              );
+
+              Navigator.of(
+                context,
+                rootNavigator: true,
+              ).pushAndRemoveUntil(newChatRoute, (route) => route.isFirst);
+            }
           });
         }
       }
@@ -434,7 +468,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       // If offline, try to start hotspot; otherwise do not auto-stop hotspot.
       if (_networkName == 'Not Connected') {
-        _maybeStartHotspot();
+        // If Android and hotspot is actually running but we lost state (e.g. screen rebuilt), restore it
+        if (Platform.isAndroid && _hotspotInfo == null) {
+          final isRunning = await LocalHotspotService.isHotspotRunning();
+          if (isRunning) {
+            debugPrint('[HomeScreen] 🔄 Restoring active hotspot state...');
+            _maybeStartHotspot(); // This will fetch the active credentials
+          } else {
+            _maybeStartHotspot();
+          }
+        } else {
+          _maybeStartHotspot();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -643,10 +688,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       backgroundColor: Colors.transparent,
       builder: (context) => HotspotQrSheet(
         hotspotInfo: _hotspotInfo!,
+        initialExpiryTime: LocalHotspotService.expiryTime,
         onStop: () {
           _maybeStopHotspot();
         },
         onRegenerate: _regenerateHotspot,
+        onExpiryUpdated: (newExpiry) {
+          // LocalHotspotService handles expiry internally
+        },
+        connectionManager: widget.discoveryService.connectionManager,
       ),
     );
   }
@@ -772,6 +822,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             HistoryListScreen(
               connectionManager: widget.discoveryService.connectionManager!,
               myDeviceName: widget.myDeviceName,
+              discoveryService: widget.discoveryService,
               showAppBar: false,
             )
           else
@@ -782,6 +833,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ConnectedDevicesScreen(
               connectionManager: widget.discoveryService.connectionManager!,
               myDeviceName: widget.myDeviceName,
+              discoveryService: widget.discoveryService,
               onFilesSent: () {},
               showAppBar: false,
             )
@@ -833,6 +885,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   context,
                   MaterialPageRoute(
                     builder: (_) => HistoryListScreen(
+                      discoveryService: widget.discoveryService,
                       connectionManager: cm,
                       myDeviceName: widget.myDeviceName,
                     ),
@@ -1442,6 +1495,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           port: port ?? DiscoveryService.p2pPort,
           myDeviceName: widget.myDeviceName,
           connectionManager: connectionManager,
+          discoveryService: widget.discoveryService,
           initialDeviceId: deviceId,
           droppedFiles: _droppedFiles.isNotEmpty
               ? List<XFile>.from(_droppedFiles)

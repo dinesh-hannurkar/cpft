@@ -59,7 +59,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       deviceInfo.writeln('Platform: ${Platform.operatingSystem}');
       deviceInfo.writeln('OS Version: ${Platform.operatingSystemVersion}');
       deviceInfo.writeln('App Version: $_appVersion');
-      
+
       // Additional device details
       try {
         deviceInfo.writeln('Locale: ${Platform.localeName}');
@@ -76,6 +76,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PrimaryAppBar(
+        backgroundColor: Colors.transparent,
         leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
         title: 'Send Feedback',
         centerTitle: true,
@@ -168,7 +169,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         title: const Text('Include device information'),
                         subtitle: const Text('Help us debug issues faster'),
                         value: _includeDeviceInfo,
-                        onChanged: (value) => setState(() => _includeDeviceInfo = value),
+                        onChanged: (value) =>
+                            setState(() => _includeDeviceInfo = value),
                         activeThumbColor: AppColors.primary,
                       ),
                       if (_includeDeviceInfo)
@@ -177,7 +179,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                           margin: const EdgeInsets.only(top: AppSizes.sm),
                           decoration: BoxDecoration(
                             color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(AppSizes.cardRadiusSm),
+                            borderRadius: BorderRadius.circular(
+                              AppSizes.cardRadiusSm,
+                            ),
                             border: Border.all(color: Colors.grey.shade300),
                           ),
                           child: Text(
@@ -285,8 +289,12 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       final success = await FeedbackService().submitFeedback(
         type: _selectedType,
         description: _description,
-        stepsToReproduce: _stepsToReproduce.isNotEmpty ? _stepsToReproduce : null,
-        expectedBehavior: _expectedBehavior.isNotEmpty ? _expectedBehavior : null,
+        stepsToReproduce: _stepsToReproduce.isNotEmpty
+            ? _stepsToReproduce
+            : null,
+        expectedBehavior: _expectedBehavior.isNotEmpty
+            ? _expectedBehavior
+            : null,
         includeDeviceInfo: _includeDeviceInfo,
       );
 
@@ -295,7 +303,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           AppSnackbar.showSuccess(context, 'Thank you for your feedback!');
           Navigator.pop(context);
         } else {
-          AppSnackbar.showError(context, 'Failed to send feedback. Please try again.');
+          AppSnackbar.showError(
+            context,
+            'Failed to send feedback. Please try again.',
+          );
         }
       }
     } catch (e) {

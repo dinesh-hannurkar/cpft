@@ -394,6 +394,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       extendBodyBehindAppBar: true,
       appBar: widget.showAppBar
           ? PrimaryAppBar(
+              backgroundColor: Colors.transparent,
               leading: BackButtonChip(onPressed: () => Navigator.pop(context)),
               title: 'Settings',
               centerTitle: true,

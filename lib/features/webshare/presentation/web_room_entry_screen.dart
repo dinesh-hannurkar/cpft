@@ -369,6 +369,7 @@ class _WebRoomEntryScreenState extends State<WebRoomEntryScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: PrimaryAppBar(
+          backgroundColor: Colors.transparent,
           titleWidget: GestureDetector(
             onTap: () {
               if (kIsWeb) {

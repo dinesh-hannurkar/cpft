@@ -7,17 +7,25 @@ import 'package:fylooo/core/constants/app_sizes.dart';
 import 'package:fylooo/models/hotspot_info.dart';
 import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import 'package:fylooo/shared/widgets/app_bottom_sheet.dart';
+import 'package:fylooo/shared/widgets/app_confirm_dialog.dart';
+import 'package:fylooo/features/chat/services/connection_manager.dart';
 
 class HotspotQrSheet extends StatefulWidget {
   final HotspotInfo hotspotInfo;
   final VoidCallback onStop;
   final Future<HotspotInfo?> Function() onRegenerate;
+  final DateTime? initialExpiryTime;
+  final Function(DateTime) onExpiryUpdated;
+  final ConnectionManager? connectionManager;
 
   const HotspotQrSheet({
     super.key,
     required this.hotspotInfo,
     required this.onStop,
     required this.onRegenerate,
+    required this.onExpiryUpdated,
+    this.initialExpiryTime,
+    this.connectionManager,
   });
 
   @override
@@ -25,24 +33,35 @@ class HotspotQrSheet extends StatefulWidget {
 }
 
 class _HotspotQrSheetState extends State<HotspotQrSheet> {
-  late Timer _timer;
+  Timer? _timer;
   late DateTime _expiryTime;
   bool _isExpired = false;
   bool _isRegenerating = false;
   late HotspotInfo _currentHotspotInfo;
 
-  // Set expiry to 2 minutes by default
-  static const Duration _validityDuration = Duration(minutes: 2);
+  // Set expiry to 1 minute by default
+  static const Duration _validityDuration = Duration(minutes: 1);
 
   @override
   void initState() {
     super.initState();
     _currentHotspotInfo = widget.hotspotInfo;
-    _resetTimer();
+    if (widget.initialExpiryTime != null) {
+      _expiryTime = widget.initialExpiryTime!;
+      if (DateTime.now().isAfter(_expiryTime)) {
+        _isExpired = true;
+      } else {
+        _isExpired = false;
+        _startTimer();
+      }
+    } else {
+      _resetTimer();
+    }
   }
 
   void _resetTimer() {
     _expiryTime = DateTime.now().add(_validityDuration);
+    widget.onExpiryUpdated(_expiryTime);
     _isExpired = false;
     _startTimer();
   }
@@ -62,7 +81,7 @@ class _HotspotQrSheetState extends State<HotspotQrSheet> {
 
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -75,6 +94,31 @@ class _HotspotQrSheetState extends State<HotspotQrSheet> {
   }
 
   Future<void> _handleRegenerate() async {
+    // 1. Check for active connections
+    final connectedCount =
+        widget.connectionManager?.activeConnections.values
+            .where((s) => s.isConnected)
+            .length ??
+        0;
+
+    if (connectedCount > 0) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AppConfirmDialog(
+          title: 'Regenerate QR Code?',
+          content: Text(
+            'There are $connectedCount device(s) currently connected. Regenerating the QR code will change the network password and disconnect all active devices.',
+            style: const TextStyle(height: 1.5),
+          ),
+          confirmLabel: 'Regenerate & Disconnect',
+          cancelLabel: 'Cancel',
+          destructive: true,
+        ),
+      );
+
+      if (confirm != true) return;
+    }
+
     setState(() => _isRegenerating = true);
     final newInfo = await widget.onRegenerate();
     if (mounted) {

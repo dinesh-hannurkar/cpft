@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
 
@@ -11,10 +13,9 @@ import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/shared/widgets/app_snackbar.dart';
 
 import 'package:fylooo/services/discovery_service.dart';
-import 'package:fylooo/shared/widgets/app_bottom_sheet.dart';
-
-import 'package:fylooo/features/chat/presentation/chat_screen.dart';
-import 'dart:ui' as ui;
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:fylooo/utils/network_utils.dart';
+import 'package:fylooo/features/home/helpers/connection_handler.dart';
 
 class QrScannerScreen extends StatefulWidget {
   final DiscoveryService? discoveryService;
@@ -38,6 +39,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   ScannerState _scannerState = ScannerState.scanning;
   String _connectionStatus = '';
   late AnimationController _animationController;
+  Timer? _connectionTimer;
 
   @override
   void initState() {
@@ -79,6 +81,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   @override
   void dispose() {
     _animationController.dispose();
+    _connectionTimer?.cancel();
     controller?.dispose();
     super.dispose();
   }
@@ -418,52 +421,59 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                             ),
                           ),
 
-                        // Connection Success View (when scanner is hidden)
+                        // Connection Feedback View (Light Themed Integrated UI)
                         if (_scannerState != ScannerState.scanning)
-                          Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(32),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.green.withValues(
-                                      alpha: 0.1,
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  AppColors.secondary.withValues(alpha: 0.95),
+                                  Colors.white,
+                                ],
+                              ),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  // Animated Success/Status Icon
+                                  _buildAnimatedStatusIcon(),
+                                  const SizedBox(height: 32),
+                                  // Simplified Status Text
+                                  Text(
+                                    _getDescriptiveStatus(),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: AppColors.darkPrimary,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
                                     ),
-                                    shape: BoxShape.circle,
                                   ),
-                                  child: Icon(
-                                    _scannerState == ScannerState.connected
-                                        ? Icons.cloud_done_rounded
-                                        : _scannerState == ScannerState.timeout
-                                        ? Icons.error_outline_rounded
-                                        : Icons.qr_code_scanner_rounded,
-                                    color: _scannerState == ScannerState.timeout
-                                        ? Colors.orange
-                                        : AppColors.green,
-                                    size: 80,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  _scannerState == ScannerState.detected
-                                      ? 'Device Detected!'
-                                      : _scannerState == ScannerState.timeout
-                                      ? 'Connection Help'
-                                      : 'Connecting Devices',
-                                  style: const TextStyle(
-                                    color: AppColors.darkPrimary,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                                  if (_scannerState ==
+                                      ScannerState.connecting) ...[
+                                    const SizedBox(height: 16),
+                                    const SizedBox(
+                                      width: 140,
+                                      child: LinearProgressIndicator(
+                                        backgroundColor: AppColors.secondary,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              AppColors.skyBlue,
+                                            ),
+                                        minHeight: 3,
+                                      ),
+                                    ),
+                                  ],
+                                  // Timeout Actions
+                                  if (_scannerState == ScannerState.timeout)
+                                    _buildTimeoutActions(),
+                                ],
+                              ),
                             ),
                           ),
-
-                        // Full-width Connection Overlay
-                        if (_scannerState != ScannerState.scanning)
-                          _buildConnectionOverlay(),
                       ],
                     ),
             ],
@@ -487,6 +497,8 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     setState(() {
       _scannerState = ScannerState.connecting;
     });
+
+    _startConnectionTimeout();
 
     if (code.startsWith('WIFI:')) {
       debugPrint('QR Scanner: WiFi QR code detected');
@@ -515,111 +527,69 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     }
   }
 
+  void _startConnectionTimeout() {
+    _connectionTimer?.cancel();
+    _connectionTimer = Timer(const Duration(seconds: 30), () {
+      if (mounted && _scannerState == ScannerState.connecting) {
+        debugPrint('QR Scanner: Connection timeout reached');
+        _connectionTimer = null;
+
+        // Show error and close scanner
+        AppSnackbar.showError(
+          context,
+          'Connection timed out. Please try again.',
+        );
+
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      }
+    });
+  }
+
   Future<void> _connectToStandardWifi(Map<String, String> wifiData) async {
     final ssid = wifiData['ssid']!;
     final password = wifiData['password'];
     final security = (wifiData['security'] ?? 'WPA2');
 
     try {
-      await WifiService.connectToWifi(
-        ssid: ssid,
-        password: password?.isNotEmpty == true ? password : null,
-        security: security,
-      );
+      // 1. SSID Pre-check: Avoid interrupting the OS if we are already on this network
+      try {
+        final currentSsid = await NetworkUtils.getWifiName();
+        if (currentSsid == ssid) {
+          debugPrint(
+            'QR Scanner: Already connected to $ssid. Skipping programmatic Wi-Fi connection.',
+          );
+        } else {
+          await WifiService.connectToWifi(
+            ssid: ssid,
+            password: password?.isNotEmpty == true ? password : null,
+            security: security,
+          );
+        }
+      } catch (e) {
+        debugPrint(
+          'QR Scanner: SSID pre-check/connect error (falling back): $e',
+        );
+        // If check fails, try connecting anyway
+        await WifiService.connectToWifi(
+          ssid: ssid,
+          password: password?.isNotEmpty == true ? password : null,
+          security: security,
+        );
+      }
 
       if (!mounted) return;
 
-      // Notify user
-      AppSnackbar.showSuccess(
-        context,
-        'Connected to WiFi! Searching for host...',
-      );
-
-      // Trigger discovery and navigation (same as Android)
-      if (widget.discoveryService != null && widget.myDeviceName != null) {
-        // Enable auto-accept for incoming connections from the host
-        widget.discoveryService!.connectionManager?.setAutoAccept(true);
-
-        // Define the expected IP for WiFi Direct Group Owner (standard gateway)
-        const groupOwnerIp = '192.168.49.1';
-        bool found = false;
-
-        void navigateToChat(String name, int port) {
-          if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                deviceName: name,
-                ipAddress: groupOwnerIp,
-                port: port,
-                myDeviceName: widget.myDeviceName!,
-                connectionManager: widget.discoveryService!.connectionManager!,
-              ),
-            ),
-          );
-        }
-
-        // Check current devices
-        final devices = widget.discoveryService!.discoveredDevices;
-        for (final DeviceInfo device in devices.values) {
-          if (device.ip == groupOwnerIp) {
-            navigateToChat(device.name, device.port);
-            found = true;
-            break;
-          }
-        }
-
-        if (!found) {
-          void onDiscovered(String name, String ip, int port) {
-            if (ip == groupOwnerIp) {
-              widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-              navigateToChat(name, port);
-            }
-          }
-
-          widget.discoveryService!.addDiscoveryListener(onDiscovered);
-
-          // Force announcements to speed up discovery
-          widget.discoveryService!.announce();
-
-          // Increase discovery timeout to 6 seconds to allow slow devices some time to settle
-          Future.delayed(const Duration(seconds: 6), () async {
-            if (mounted && _scannerState == ScannerState.connecting) {
-              widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-
-              if (!found) {
-                // Check if this device is the one that should be the host (prevent self-connect)
-                final ownIp = await widget.discoveryService!
-                    .getLocalIpAddress();
-                if (ownIp == groupOwnerIp) {
-                  setState(() {
-                    _scannerState = ScannerState.timeout;
-                    _errorMessage =
-                        "Self-connection detected. You are likely the host device.";
-                  });
-                  return;
-                }
-
-                debugPrint(
-                  'QR Scanner: Discovery timed out, showing choice to user',
-                );
-                setState(() {
-                  _scannerState = ScannerState.timeout;
-                });
-              }
-            }
-          });
-        }
-      } else {
-        // Fallback if no services
-        Navigator.of(context).pop();
-      }
+      // 2. Identify and Stabilize Network
+      await _findHostAndConnect(isWifiDirect: false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isProcessing = false;
         _scannerState = ScannerState.scanning;
       });
+      _connectionTimer?.cancel();
       WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       _showErrorDialog('Failed to connect: $e');
@@ -633,14 +603,10 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     try {
       if (!mounted) return;
 
-      // Import WiFiDirectService at the top of the file
       final wifiDirectService = WiFiDirectService();
       await wifiDirectService.initialize();
 
-      // Show connecting message using AppSnackbar
       AppSnackbar.showInfo(context, 'Connecting to $ssid via WiFi Direct...');
-
-      // Enable auto-accept for incoming connections from the host
       widget.discoveryService?.connectionManager?.setAutoAccept(true);
 
       final success = await wifiDirectService.connectToGroup(
@@ -651,97 +617,13 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       if (!mounted) return;
 
       if (success) {
-        AppSnackbar.showSuccess(
-          context,
-          'Connected! Waiting for device discovery...',
-        );
-
-        // Wait for mDNS to discover the device if we have the service
-        if (widget.discoveryService != null && widget.myDeviceName != null) {
-          // Define the expected IP for WiFi Direct Group Owner
-          const groupOwnerIp = '192.168.49.1';
-
-          // Check if already discovered
-          bool found = false;
-
-          // Helper to navigate
-          void navigateToChat(String name, int port) {
-            if (!mounted) return;
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => ChatScreen(
-                  deviceName: name,
-                  ipAddress: groupOwnerIp,
-                  port: port,
-                  myDeviceName: widget.myDeviceName!,
-                  connectionManager:
-                      widget.discoveryService!.connectionManager!,
-                ),
-              ),
-            );
-          }
-
-          // Check current devices first
-          final devices = widget.discoveryService!.discoveredDevices;
-          for (final DeviceInfo device in devices.values) {
-            if (device.ip == groupOwnerIp) {
-              navigateToChat(device.name, device.port);
-              found = true;
-              break;
-            }
-          }
-
-          if (!found) {
-            // Listen for new devices
-            void onDiscovered(String name, String ip, int port) {
-              if (ip == groupOwnerIp) {
-                widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-                navigateToChat(name, port);
-              }
-            }
-
-            widget.discoveryService!.addDiscoveryListener(onDiscovered);
-
-            // Timeout after 6 seconds (mDNS can be slow, especially after newly joining a network)
-            Future.delayed(const Duration(seconds: 6), () async {
-              if (mounted && _scannerState == ScannerState.connecting) {
-                widget.discoveryService!.removeDiscoveryListener(onDiscovered);
-
-                if (!found) {
-                  // Check if this device is the one that should be the host (prevent self-connect)
-                  final ownIp = await widget.discoveryService!
-                      .getLocalIpAddress();
-                  if (ownIp == groupOwnerIp) {
-                    setState(() {
-                      _scannerState = ScannerState.timeout;
-                      _errorMessage =
-                          "Self-connection detected. You are likely the host device.";
-                    });
-                    return;
-                  }
-
-                  debugPrint(
-                    'QR Scanner: Discovery timed out on Android, showing choice to user',
-                  );
-                  setState(() {
-                    _scannerState = ScannerState.timeout;
-                  });
-                }
-              }
-            });
-          }
-        } else {
-          // Fallback if service not provided
-          await Future.delayed(const Duration(seconds: 2));
-          if (mounted) {
-            Navigator.of(context).pop(); // Close scanner
-          }
-        }
+        await _findHostAndConnect(isWifiDirect: true);
       } else {
         setState(() {
           _isProcessing = false;
           _scannerState = ScannerState.scanning;
         });
+        _connectionTimer?.cancel();
         WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
         AppSnackbar.showError(
           context,
@@ -754,8 +636,100 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         _isProcessing = false;
         _scannerState = ScannerState.scanning;
       });
+      _connectionTimer?.cancel();
       WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
       AppSnackbar.showError(context, 'Connection failed: $e');
+    }
+  }
+
+  Future<void> _findHostAndConnect({required bool isWifiDirect}) async {
+    if (!mounted) return;
+
+    // 1. Stabilization Phase: Wait for OS network stack to settle
+    AppSnackbar.showInfo(context, 'Stabilizing network connection...');
+
+    String groupOwnerIp = isWifiDirect
+        ? '192.168.49.1'
+        : '192.168.43.1'; // Defaults
+    final info = NetworkInfo();
+
+    // Poll for valid gateway IP (DHCP can be slow)
+    for (int i = 0; i < 12; i++) {
+      try {
+        final gateway = await info.getWifiGatewayIP();
+        if (gateway != null && gateway.isNotEmpty && gateway != '0.0.0.0') {
+          groupOwnerIp = gateway;
+          debugPrint('QR Scanner: Gateway IP stabilized at $groupOwnerIp');
+          break;
+        }
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    if (!mounted) return;
+
+    // Extra cool-off delay after IP acquisition to avoid discovery contention
+    await Future.delayed(const Duration(milliseconds: 2500));
+    if (!mounted) return;
+
+    // Phase 3: Add extra "warm-up" delay for iOS clients connecting to Android
+    // ensures the networking stack is ready to route traffic to the gateway.
+    if (io.Platform.isIOS) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+    }
+
+    AppSnackbar.showSuccess(context, 'Network ready! Finding host...');
+
+    if (widget.discoveryService != null && widget.myDeviceName != null) {
+      // Enable auto-accept for incoming connections from the host
+      widget.discoveryService!.connectionManager?.setAutoAccept(true);
+
+      // 2. Discovery Phase: Polling loop for mDNS/Bonjour discovery
+      debugPrint('QR Scanner: Polling for host discovery at $groupOwnerIp...');
+      DeviceInfo? hostDevice;
+      for (int i = 0; i < 20; i++) {
+        // Increase to 10 seconds for slower devices
+        final devices = widget.discoveryService!.discoveredDevices;
+        for (final device in devices.values) {
+          if (device.ip == groupOwnerIp) {
+            hostDevice = device;
+            break;
+          }
+        }
+        if (hostDevice != null) break;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      if (!mounted) return;
+
+      // 3. Connection Phase: Execute connection
+      hostDevice ??= DeviceInfo(
+        name: 'Fylooo Host',
+        ip: groupOwnerIp,
+        port: DiscoveryService.p2pPort,
+        lastSeen: DateTime.now(),
+      );
+
+      final success = await ConnectionHandler.handleDeviceTap(
+        context: context,
+        device: hostDevice,
+        connectionManager: widget.discoveryService!.connectionManager!,
+        discoveryService: widget.discoveryService!,
+        myDeviceName: widget.myDeviceName!,
+        replace: true,
+        silent: true,
+      );
+
+      if (!success && mounted) {
+        setState(() {
+          _scannerState = ScannerState.timeout;
+          _errorMessage = 'Could not verify device at $groupOwnerIp';
+        });
+      }
+    } else {
+      // Fallback if no services
+      Navigator.of(context).pop();
     }
   }
 
@@ -814,256 +788,151 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     );
   }
 
-  Widget _buildCompactConnectionSteps() {
-    return Column(
-      children: [
-        _buildStep(
-          'Connecting to WiFi Direct',
-          true,
-          isCurrent: _scannerState == ScannerState.detected,
-        ),
-        const SizedBox(height: 20),
-        _buildStep(
-          'Discovering device',
-          _scannerState == ScannerState.connecting ||
-              _scannerState == ScannerState.connected,
-          isCurrent: _scannerState == ScannerState.connecting,
-        ),
-        const SizedBox(height: 20),
-        _buildStep(
-          'Establishing secure link',
-          _scannerState == ScannerState.connected,
-          isCurrent: false,
-        ),
-      ],
-    );
-  }
+  Widget _buildAnimatedStatusIcon() {
+    IconData icon;
+    Color color;
 
-  Widget _buildStep(String label, bool isActive, {bool isCurrent = false}) {
-    return Row(
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 500),
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: isActive
-                ? AppColors.primary.withValues(alpha: 0.1)
-                : Colors.grey[100],
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isActive ? AppColors.primary : Colors.grey[300]!,
-              width: 2,
-            ),
-            boxShadow: isCurrent
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      spreadRadius: 2,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: isActive
-                ? (isCurrent
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              AppColors.primary,
-                            ),
-                          ),
-                        )
-                      : const Icon(
-                          Icons.check_rounded,
-                          color: AppColors.primary,
-                          size: 18,
-                        ))
-                : null,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isActive ? AppColors.darkPrimary : Colors.grey[400],
-              fontSize: 16,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-              height: 1.2,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildConnectionOverlay() {
-    String? title;
-    if (_scannerState == ScannerState.detected ||
-        _scannerState == ScannerState.connecting) {
-      title = _scannerState == ScannerState.detected
-          ? 'Device Detected'
-          : 'Connecting...';
-    } else if (_scannerState == ScannerState.timeout) {
-      title = 'Connection Help';
+    switch (_scannerState) {
+      case ScannerState.detected:
+        icon = Icons.qr_code_scanner_rounded;
+        color = AppColors.skyBlue;
+        break;
+      case ScannerState.connecting:
+        icon = Icons.sync_rounded;
+        color = AppColors.skyBlue;
+        break;
+      case ScannerState.connected:
+        icon = Icons.check_circle_rounded;
+        color = AppColors.green;
+        break;
+      case ScannerState.timeout:
+        icon = Icons.warning_amber_rounded;
+        color = Colors.orange;
+        break;
+      default:
+        icon = Icons.qr_code_scanner_rounded;
+        color = AppColors.darkPrimary;
     }
 
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: AppBottomSheet(
-        title: title,
-        showCloseButton: false,
-        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_scannerState == ScannerState.detected ||
-                _scannerState == ScannerState.connecting) ...[
-              const SizedBox(height: 16),
-              // Connecting Spinner and State
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppColors.primary,
-                      ),
-                      strokeWidth: 2.5,
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withOpacity(0.2), width: 2),
+      ),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.elasticOut,
+        builder: (context, value, child) {
+          return Transform.scale(
+            scale: value,
+            child: Icon(icon, color: color, size: 80),
+          );
+        },
+      ),
+    );
+  }
+
+  String _getDescriptiveStatus() {
+    switch (_scannerState) {
+      case ScannerState.detected:
+        return 'Device Found';
+      case ScannerState.connecting:
+        return 'Connecting Device...';
+      case ScannerState.connected:
+        return 'Connected Successfully';
+      case ScannerState.timeout:
+        return 'Connection Help';
+      default:
+        return 'Scanning...';
+    }
+  }
+
+  Widget _buildTimeoutActions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+      child: Column(
+        children: [
+          Text(
+            _errorMessage ?? 'Discovery is taking longer than usual.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.greyDark, fontSize: 15),
+          ),
+          const SizedBox(height: 32),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _scannerState = ScannerState.scanning;
+                      _isProcessing = false;
+                      _errorMessage = null;
+                    });
+                    _startScanner();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: AppColors.skyBlue),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    _scannerState == ScannerState.detected
-                        ? 'Starting link...'
-                        : 'Discovering...',
-                    style: TextStyle(
-                      color: AppColors.primary.withOpacity(0.8),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              // Centered compact steps
-              Center(child: _buildCompactConnectionSteps()),
-            ] else if (_scannerState == ScannerState.timeout) ...[
-              // Timeout State UI
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                  child: const Text(
+                    'Retry Scan',
+                    style: TextStyle(color: AppColors.skyBlue),
                   ),
                 ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.orange,
-                          size: 28,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _errorMessage ??
-                                'Discovery is taking longer than usual.',
-                            style: const TextStyle(
-                              color: AppColors.darkPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Identity could not be verified automatically. You can try connecting anyway if you are sure about the host.',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
               ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        setState(() {
-                          _scannerState = ScannerState.scanning;
-                          _isProcessing = false;
-                          _errorMessage = null;
-                        });
-                        WidgetsBinding.instance.addPostFrameCallback(
-                          (_) => _startScanner(),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: const BorderSide(color: AppColors.primary),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    setState(() {
+                      _scannerState = ScannerState.connecting;
+                      _errorMessage = null;
+                    });
+
+                    final success = await ConnectionHandler.handleDeviceTap(
+                      context: context,
+                      device: DeviceInfo(
+                        name: 'P2P Host',
+                        ip: '192.168.49.1',
+                        port: DiscoveryService.p2pPort,
+                        lastSeen: DateTime.now(),
                       ),
-                      child: const Text('Retry Scan'),
+                      connectionManager:
+                          widget.discoveryService!.connectionManager!,
+                      discoveryService: widget.discoveryService!,
+                      myDeviceName: widget.myDeviceName!,
+                      replace: true,
+                      silent: true,
+                    );
+
+                    if (!success && mounted) {
+                      setState(() {
+                        _scannerState = ScannerState.timeout;
+                        _errorMessage =
+                            'Manual link failed. Please check hotspot.';
+                      });
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.skyBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Fallback navigation
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => ChatScreen(
-                              deviceName: 'P2P Host',
-                              ipAddress: '192.168.49.1',
-                              port: 53318,
-                              myDeviceName: widget.myDeviceName!,
-                              connectionManager:
-                                  widget.discoveryService!.connectionManager!,
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text('Connect Anyways'),
-                    ),
-                  ),
-                ],
+                  child: const Text('Connect Anyway'),
+                ),
               ),
             ],
-            const SizedBox(height: 16),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1103,8 +972,8 @@ class ScannerOverlayPainter extends CustomPainter {
       );
 
     final backgroundPaint = Paint()
-      ..color = Colors.black
-          .withOpacity(0.7) // Darker, more premium background
+      ..color = Colors.white
+          .withOpacity(0.8) // Light, airy background
       ..style = PaintingStyle.fill;
 
     // Draw background with cutout
@@ -1116,10 +985,10 @@ class ScannerOverlayPainter extends CustomPainter {
     // Draw Corners with Gradient
     final paint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
+      ..strokeWidth = 5
       ..strokeCap = StrokeCap.round
-      ..shader = LinearGradient(
-        colors: [borderColor, borderColor.withOpacity(0.5)],
+      ..shader = const LinearGradient(
+        colors: [AppColors.skyBlue, Colors.white],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(cutOutRect);
