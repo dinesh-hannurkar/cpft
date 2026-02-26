@@ -948,13 +948,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         label: 'History',
                       ),
                       NavigationDestination(
-                        icon: Badge(
-                          backgroundColor: Colors.red,
-                          label: _connectedCount > 0
-                              ? Text('$_connectedCount')
-                              : null,
-                          isLabelVisible: _connectedCount > 0,
-                          child: const Icon(Icons.devices_outlined),
+                        icon: Showcase(
+                          key: ShowcaseHelper.connectedDevicesKey,
+                          description:
+                              'View and manage your connected devices.',
+                          title: 'Connected Devices',
+                          child: Badge(
+                            backgroundColor: Colors.red,
+                            label: _connectedCount > 0
+                                ? Text('$_connectedCount')
+                                : null,
+                            isLabelVisible: _connectedCount > 0,
+                            child: const Icon(Icons.devices_outlined),
+                          ),
                         ),
                         selectedIcon: Badge(
                           backgroundColor: Colors.red,
@@ -966,9 +972,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         label: 'Connected',
                       ),
-                      const NavigationDestination(
-                        icon: Icon(Icons.settings_outlined),
-                        selectedIcon: Icon(Icons.settings),
+                      NavigationDestination(
+                        icon: Showcase(
+                          key: ShowcaseHelper.settingsKey,
+                          description:
+                              'Change your device name and other settings.',
+                          title: 'Settings',
+                          child: const Icon(Icons.settings_outlined),
+                        ),
+                        selectedIcon: const Icon(Icons.settings),
                         label: 'Settings',
                       ),
                     ],

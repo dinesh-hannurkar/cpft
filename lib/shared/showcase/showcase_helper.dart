@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 
@@ -44,11 +46,28 @@ class ShowcaseHelper {
   }
 
   static void startForHome(BuildContext context) {
-    ShowCaseWidget.of(context).startShowCase([
-      connectedDevicesKey,
-      qrScannerKey,
-      settingsKey,
-      linkShareKey,
-    ]);
+    final List<GlobalKey> keys = [];
+
+    // connectedDevicesKey is on Desktop AppBar OR Mobile NavigationBar
+    keys.add(connectedDevicesKey);
+
+    // qrScannerKey is NOT on Desktop
+    final isDesktop =
+        !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+    if (!isDesktop) {
+      keys.add(qrScannerKey);
+    }
+
+    // settingsKey is on Desktop AppBar OR Mobile NavigationBar
+    keys.add(settingsKey);
+
+    // linkShareKey is always on HomeScreen
+    keys.add(linkShareKey);
+
+    try {
+      ShowCaseWidget.of(context).startShowCase(keys);
+    } catch (e) {
+      debugPrint('[ShowcaseHelper] Error starting home showcase: $e');
+    }
   }
 }

@@ -120,77 +120,72 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // On web, use ShowCaseWidget but with specific initial route
-    if (kIsWeb) {
-      return ShowCaseWidget(
-        builder: (context) => MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Fylooo',
-          theme: AppTheme.lightTheme,
-          navigatorKey: navigatorKey,
-          // On web, only show the WebShare (WebRTC) screen
-          initialRoute: '/webshare',
-          onGenerateRoute: (settings) {
-            // On web, redirect mobile-only routes to webshare
-            if (kIsWeb) {
-              final allowedWebRoutes = ['/webshare', '/privacy', '/termsofuse'];
-              if (!allowedWebRoutes.contains(settings.name)) {
-                return MaterialPageRoute(
-                  builder: (context) => const WebRoomEntryScreen(),
-                  settings: const RouteSettings(name: '/webshare'),
-                );
-              }
-            }
-
-            // Use default routes
-            switch (settings.name) {
-              case '/webshare':
-                return MaterialPageRoute(
-                  builder: (context) => const WebRoomEntryScreen(),
-                  settings: settings,
-                );
-              case '/privacy':
-                return MaterialPageRoute(
-                  builder: (context) => const PrivacyPolicyScreen(),
-                  settings: settings,
-                );
-              case '/termsofuse':
-                return MaterialPageRoute(
-                  builder: (context) => const TermsOfUseScreen(),
-                  settings: settings,
-                );
-              default:
-                return MaterialPageRoute(
-                  builder: (context) => const WebRoomEntryScreen(),
-                  settings: settings,
-                );
-            }
-          },
-          builder: (context, child) {
-            final content = Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                  stops: [0.0, 1.0],
-                ),
-              ),
-              child: child,
-            );
-            return Stack(
-              children: [
-                content,
-                // FirebaseStatusBanner(),
-              ],
-            );
-          },
+    // Shared builder for gradient background and Showcase support
+    Widget appBuilder(BuildContext context, Widget? child) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
+            stops: [0.0, 1.0],
+          ),
+        ),
+        child: ShowCaseWidget(
+          builder: (context) => Stack(
+            children: [
+              if (child != null) child,
+              // FirebaseStatusBanner(),
+            ],
+          ),
         ),
       );
     }
 
-    Route<dynamic> _onGenerateRoute(RouteSettings settings) {
-      // Use default routes
+    if (kIsWeb) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Fylooo',
+        theme: AppTheme.lightTheme,
+        navigatorKey: navigatorKey,
+        initialRoute: '/webshare',
+        onGenerateRoute: (settings) {
+          final allowedWebRoutes = ['/webshare', '/privacy', '/termsofuse'];
+          if (!allowedWebRoutes.contains(settings.name)) {
+            return MaterialPageRoute(
+              builder: (context) => const WebRoomEntryScreen(),
+              settings: const RouteSettings(name: '/webshare'),
+            );
+          }
+
+          switch (settings.name) {
+            case '/webshare':
+              return MaterialPageRoute(
+                builder: (context) => const WebRoomEntryScreen(),
+                settings: settings,
+              );
+            case '/privacy':
+              return MaterialPageRoute(
+                builder: (context) => const PrivacyPolicyScreen(),
+                settings: settings,
+              );
+            case '/termsofuse':
+              return MaterialPageRoute(
+                builder: (context) => const TermsOfUseScreen(),
+                settings: settings,
+              );
+            default:
+              return MaterialPageRoute(
+                builder: (context) => const WebRoomEntryScreen(),
+                settings: settings,
+              );
+          }
+        },
+        builder: appBuilder,
+      );
+    }
+
+    Route<dynamic> onGenerateRoute(RouteSettings settings) {
       switch (settings.name) {
         case '/':
           return MaterialPageRoute(
@@ -230,35 +225,14 @@ class MainApp extends StatelessWidget {
       }
     }
 
-    // On mobile/desktop, use ShowCaseWidget
-    return ShowCaseWidget(
-      builder: (context) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Fylooo',
-        theme: AppTheme.lightTheme,
-        navigatorKey: navigatorKey,
-        initialRoute: '/',
-        onGenerateRoute: _onGenerateRoute,
-        builder: (context, child) {
-          final content = Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFE2F6FB), Color(0xFFFFFFFF)],
-                stops: [0.0, 1.0],
-              ),
-            ),
-            child: child,
-          );
-          return Stack(
-            children: [
-              content,
-              // FirebaseStatusBanner(),
-            ],
-          );
-        },
-      ),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Fylooo',
+      theme: AppTheme.lightTheme,
+      navigatorKey: navigatorKey,
+      initialRoute: '/',
+      onGenerateRoute: onGenerateRoute,
+      builder: appBuilder,
     );
   }
 }
