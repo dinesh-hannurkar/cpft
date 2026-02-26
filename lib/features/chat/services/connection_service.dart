@@ -18,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 import 'package:fylooo/features/dpftp/dpftp_service.dart';
 import 'package:fylooo/services/database_service.dart';
+import 'package:fylooo/main.dart'; // To access globalDeviceId
 
 // 🔬 PERF: Global profiling state
 class _PerfMetrics {
@@ -1222,6 +1223,7 @@ class ConnectionService {
       type: 'handshake',
       content: 'Hello from $deviceName',
       senderName: deviceName,
+      deviceId: globalDeviceId, // Send our unique persistent ID
       metadata: {
         'platform': Platform.operatingSystem, // Send our platform
       },
@@ -1821,7 +1823,7 @@ class ConnectionService {
 
         if (isConnecting) {
           debugPrint(
-            '[ConnectionService] 🤝 Handshake received from ${message.senderName}.',
+            '[ConnectionService] 🤝 Handshake received from ${message.senderName} (${message.deviceId ?? "no-id"}).',
           );
           // Send handshake response ONLY if we were responding to a connecting state
           await _sendHandshake();
@@ -1831,10 +1833,11 @@ class ConnectionService {
           );
         }
 
-        // Always update the device name with actual remote device name
+        // Always update the device name with actual remote device name and device ID
         _updateStatus(
           _currentConnection!.copyWith(
             deviceName: message.senderName,
+            deviceId: message.deviceId, // Store the unique ID
             status: ConnectionStatus.connected,
             connectedAt: _currentConnection!.connectedAt ?? DateTime.now(),
           ),
@@ -3354,7 +3357,7 @@ class ConnectionService {
     _currentConnection = info;
 
     if (!wasConnected && isConnected) {
-      _loadHistory(info.deviceName);
+      _loadHistory(info.deviceId ?? info.deviceName);
     }
 
     for (final listener in List.of(_statusListeners)) {
@@ -3399,7 +3402,7 @@ class ConnectionService {
           if (_currentConnection != null) {
             DatabaseService().insertMessage(
               message,
-              _currentConnection!.deviceName,
+              _currentConnection!.deviceId ?? _currentConnection!.deviceName,
             );
           }
         }
@@ -3409,7 +3412,7 @@ class ConnectionService {
         if (_currentConnection != null) {
           DatabaseService().insertMessage(
             message,
-            _currentConnection!.deviceName,
+            _currentConnection!.deviceId ?? _currentConnection!.deviceName,
           );
         }
       }

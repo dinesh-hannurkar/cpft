@@ -1,22 +1,13 @@
 /// Connection state enum
-enum ConnectionStatus {
-  disconnected,
-  connecting,
-  connected,
-  failed,
-}
+enum ConnectionStatus { disconnected, connecting, connected, failed }
 
 /// WiFi Direct connection status
-enum WifiDirectStatus {
-  disconnected,
-  connecting,
-  connected,
-  failed,
-}
+enum WifiDirectStatus { disconnected, connecting, connected, failed }
 
 /// Connection information model
 class ConnectionInfo {
   final String deviceName;
+  final String? deviceId; // Added for unique identification
   final String ipAddress;
   final int port;
   final int? dataPort;
@@ -26,6 +17,7 @@ class ConnectionInfo {
 
   ConnectionInfo({
     required this.deviceName,
+    this.deviceId,
     required this.ipAddress,
     required this.port,
     this.dataPort,
@@ -36,6 +28,7 @@ class ConnectionInfo {
 
   ConnectionInfo copyWith({
     String? deviceName,
+    String? deviceId,
     String? ipAddress,
     int? port,
     int? dataPort,
@@ -45,6 +38,7 @@ class ConnectionInfo {
   }) {
     return ConnectionInfo(
       deviceName: deviceName ?? this.deviceName,
+      deviceId: deviceId ?? this.deviceId,
       ipAddress: ipAddress ?? this.ipAddress,
       port: port ?? this.port,
       dataPort: dataPort ?? this.dataPort,
@@ -65,6 +59,7 @@ class DeviceMessage {
   final String type;
   final String content;
   final String senderName;
+  final String? deviceId; // Added for unique identification
   final DateTime timestamp;
   final Map<String, dynamic>? metadata;
 
@@ -72,6 +67,7 @@ class DeviceMessage {
     required this.type,
     required this.content,
     required this.senderName,
+    this.deviceId,
     DateTime? timestamp,
     this.metadata,
   }) : timestamp = timestamp ?? DateTime.now();
@@ -81,6 +77,7 @@ class DeviceMessage {
       'type': type,
       'content': content,
       'senderName': senderName,
+      'deviceId': deviceId,
       'timestamp': timestamp.toIso8601String(),
       'metadata': metadata,
     };
@@ -91,6 +88,7 @@ class DeviceMessage {
       type: json['type'] as String,
       content: json['content'] as String,
       senderName: json['senderName'] as String,
+      deviceId: json['deviceId'] as String?,
       timestamp: DateTime.parse(json['timestamp'] as String),
       metadata: json['metadata'] as Map<String, dynamic>?,
     );

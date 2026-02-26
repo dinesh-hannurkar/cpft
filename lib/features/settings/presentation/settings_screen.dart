@@ -207,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await Share.share(
         'Check out CPFT - Cross-Platform File Transfer! Transfer files between devices instantly over WiFi. '
-        'Download now: https://cpft.app/download',
+        'Download now: https://fylooo.com',
         subject: 'CPFT - Cross-Platform File Transfer',
       );
     } catch (e) {
@@ -514,20 +514,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               onTap: _changeDownloadPath,
                             ),
                           // 🔬 Debug: Toggle between native receiver and direct Dart I/O
-                          if (!kIsWeb)
-                            SettingsTile(
-                              icon: Icons.science_rounded,
-                              title: 'Test Mode: Direct I/O',
-                              subtitle: _useNativeReceiver
-                                  ? 'Using native receiver (4 Mbps)'
-                                  : 'Using direct Dart I/O (23 Mbps test)',
-                              trailing: Switch(
-                                value: _useNativeReceiver,
-                                onChanged: (value) =>
-                                    _toggleNativeReceiver(value),
-                                activeColor: AppColors.primary,
-                              ),
-                            ),
+                          // if (!kIsWeb)
+                          //   SettingsTile(
+                          //     icon: Icons.science_rounded,
+                          //     title: 'Test Mode: Direct I/O',
+                          //     subtitle: _useNativeReceiver
+                          //         ? 'Using native receiver (4 Mbps)'
+                          //         : 'Using direct Dart I/O (23 Mbps test)',
+                          //     trailing: Switch(
+                          //       value: _useNativeReceiver,
+                          //       onChanged: (value) =>
+                          //           _toggleNativeReceiver(value),
+                          //       activeColor: AppColors.primary,
+                          //     ),
+                          //   ),
                           SettingsTile(
                             icon: Icons.info_outline_rounded,
                             title: 'Version',

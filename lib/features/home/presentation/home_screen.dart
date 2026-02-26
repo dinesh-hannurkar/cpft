@@ -262,7 +262,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 myDeviceName: widget.myDeviceName,
                 connectionManager: cm,
                 discoveryService: widget.discoveryService,
-                initialDeviceId: deviceName,
+                initialDeviceId:
+                    service.currentConnection?.deviceId ?? deviceName,
               ),
             );
 

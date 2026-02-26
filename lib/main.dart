@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:window_manager/window_manager.dart';
 // import 'package:flutter_web_plugins/flutter_web_plugins.dart'
 //     if (dart.library.io) 'package:flutter/foundation.dart'
@@ -32,6 +33,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 // Global reference to discovery service for notification handling
 DiscoveryService? globalDiscoveryService;
 String? globalDeviceName;
+String? globalDeviceId; // Added for unique identification
 
 // Build-time toggle (no UI):
 // `flutter run --dart-define=CPFT_USE_NATIVE_RECEIVER=false`
@@ -287,6 +289,15 @@ class _HomeWrapperState extends State<HomeWrapper> {
   Future<void> _loadDeviceName() async {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('device_name');
+
+    // Ensure we have a persistent unique device ID
+    String? deviceId = prefs.getString('device_id');
+    if (deviceId == null || deviceId.isEmpty) {
+      deviceId = _generateRandomId(16);
+      await prefs.setString('device_id', deviceId);
+    }
+    globalDeviceId = deviceId;
+
     if (name != null && name.isNotEmpty) {
       if (mounted) {
         setState(() {
@@ -302,6 +313,15 @@ class _HomeWrapperState extends State<HomeWrapper> {
         Navigator.of(context).pushReplacementNamed('/setup');
       }
     }
+  }
+
+  String _generateRandomId(int length) {
+    const chars = '0123456789abcdef';
+    final random = math.Random();
+    return List.generate(
+      length,
+      (index) => chars[random.nextInt(chars.length)],
+    ).join();
   }
 
   void _initializeDiscoveryService(String deviceName) {
@@ -347,7 +367,8 @@ class _HomeWrapperState extends State<HomeWrapper> {
                   myDeviceName: globalDeviceName ?? '',
                   connectionManager: cm,
                   discoveryService: globalDiscoveryService!,
-                  initialDeviceId: deviceName,
+                  initialDeviceId:
+                      connection.currentConnection?.deviceId ?? deviceName,
                 ),
               ),
             );

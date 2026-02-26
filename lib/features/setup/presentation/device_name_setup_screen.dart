@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import '../../../core/constants/app_colors.dart';
@@ -80,6 +81,13 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('device_name', name);
 
+      // Ensure we have a persistent unique device ID
+      String? deviceId = prefs.getString('device_id');
+      if (deviceId == null || deviceId.isEmpty) {
+        deviceId = _generateRandomId(16);
+        await prefs.setString('device_id', deviceId);
+      }
+
       if (mounted) {
         Navigator.of(
           context,
@@ -95,6 +103,15 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  String _generateRandomId(int length) {
+    const chars = '0123456789abcdef';
+    final random = math.Random();
+    return List.generate(
+      length,
+      (index) => chars[random.nextInt(chars.length)],
+    ).join();
   }
 
   @override
@@ -134,7 +151,9 @@ class _DeviceNameSetupScreenState extends State<DeviceNameSetupScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             SizedBox(
-                              height: isSmallScreen ? AppSizes.xl : AppSizes.xl * 2,
+                              height: isSmallScreen
+                                  ? AppSizes.xl
+                                  : AppSizes.xl * 2,
                             ),
 
                             // Animated Logo Container
