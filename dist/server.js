@@ -27,24 +27,25 @@ const server = http.createServer((req, res) => {
 
   let filePath;
 
-  // Root path serves landing page
+  // Get file path
   if (req.url === '/' || req.url === '/index.html') {
     filePath = path.join(ROOT_DIR, 'index.html');
   } else if (req.url === '/downloads' || req.url === '/downloads.html') {
     filePath = path.join(ROOT_DIR, 'downloads.html');
   } else {
-    const appPath = path.join(ROOT_DIR, 'app');
-
-    // Try to find the requested file as a static asset in /app/
-    const requestedFile = path.join(appPath, req.url);
-
-    if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
-      // It's a real file (JS, CSS, images, etc.), serve it
-      filePath = requestedFile;
+    // 1. Check if file exists in the root directory (for landing page assets & releases.json)
+    const rootPathFile = path.join(ROOT_DIR, req.url);
+    if (fs.existsSync(rootPathFile) && fs.statSync(rootPathFile).isFile()) {
+      filePath = rootPathFile;
     } else {
-      // For any route request (e.g., /webshare, /privacy), serve Flutter app's index.html
-      // Flutter will handle routing via path-based routing (no hashes needed)
-      filePath = path.join(appPath, 'index.html');
+      // 2. Check if file exists in /app/ directory (for Flutter web assets)
+      const appPathFile = path.join(ROOT_DIR, 'app', req.url);
+      if (fs.existsSync(appPathFile) && fs.statSync(appPathFile).isFile()) {
+        filePath = appPathFile;
+      } else {
+        // 3. Fallback to Flutter app's index.html for all other routes
+        filePath = path.join(ROOT_DIR, 'app', 'index.html');
+      }
     }
   }
 
