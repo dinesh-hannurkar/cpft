@@ -184,9 +184,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _rateApp() async {
     const String appStoreUrl =
-        'https://play.google.com/store/apps/details?id=com.cpft.app';
+        'https://play.google.com/store/apps/details?id=com.omnity.fylooo';
     const String appStoreUrlIOS =
-        'https://apps.apple.com/app/cpft/id1234567890'; // Replace with actual App Store ID
+        'https://apps.apple.com/us/app/fylooo/id6756907233';
 
     try {
       if (Theme.of(context).platform == TargetPlatform.iOS) {
