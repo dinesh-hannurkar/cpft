@@ -163,7 +163,8 @@ class NetworkBanner extends StatelessWidget {
             ],
           ),
           // Show hotspot button when not in hotspot mode and on Android/iOS
-          if (onSwitchToHotspot != null && !Platform.isMacOS) ...[
+          if (onSwitchToHotspot != null &&
+              (Platform.isAndroid || Platform.isIOS)) ...[
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: onSwitchToHotspot,
