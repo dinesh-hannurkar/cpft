@@ -26,16 +26,18 @@ const server = http.createServer((req, res) => {
   console.log(`${req.method} ${req.url}`);
 
   let filePath;
-  
+
   // Root path serves landing page
   if (req.url === '/' || req.url === '/index.html') {
     filePath = path.join(ROOT_DIR, 'index.html');
+  } else if (req.url === '/downloads' || req.url === '/downloads.html') {
+    filePath = path.join(ROOT_DIR, 'downloads.html');
   } else {
     const appPath = path.join(ROOT_DIR, 'app');
-    
+
     // Try to find the requested file as a static asset in /app/
     const requestedFile = path.join(appPath, req.url);
-    
+
     if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
       // It's a real file (JS, CSS, images, etc.), serve it
       filePath = requestedFile;

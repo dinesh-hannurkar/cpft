@@ -8,10 +8,10 @@
   <script>
     // Redirect Flutter routes to /app/ with path-based routing (no hash)
     const currentPath = window.location.pathname;
-    
+
     // List of routes that should go to Flutter app
     const flutterRoutes = ['/webshare', '/privacy', '/termsofuse'];
-    
+
     // If we're on a Flutter route and not already on /app/, redirect to /app/
     if (flutterRoutes.includes(currentPath) && !currentPath.startsWith('/app/')) {
       // Redirect to /app/ + the same path
@@ -19,9 +19,9 @@
     }
 
     // Smooth scroll for anchor links
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
       document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
+        anchor.addEventListener('click', function (e) {
           e.preventDefault();
           const targetId = this.getAttribute('href').substring(1);
           const targetElement = document.getElementById(targetId);
@@ -607,7 +607,8 @@
       <h2 class="download-title">Download Now</h2>
       <div class="platforms-container">
         <!-- Android -->
-        <a href="https://play.google.com/store/apps/details?id=com.omnity.fylooo" class="platform-card" target="_blank" rel="noopener noreferrer">
+        <a href="https://play.google.com/store/apps/details?id=com.omnity.fylooo" class="platform-card" target="_blank"
+          rel="noopener noreferrer">
           <div class="platform-icon-box">
             <img src="img/android-logo-5e3c95.svg" alt="Android" class="platform-icon" />
           </div>
@@ -615,21 +616,22 @@
         </a>
 
         <!-- iOS -->
-        <a href="https://apps.apple.com/app/cpft/id1234567890" class="platform-card" target="_blank" rel="noopener noreferrer">
+        <a href="https://apps.apple.com/us/app/fylooo/id6756907233" class="platform-card" target="_blank"
+          rel="noopener noreferrer">
           <div class="platform-icon-box">
-              <img src="img/ios-logo-cb4ee2.svg" alt="" class="platform-icon" />
+            <img src="img/ios-logo-cb4ee2.svg" alt="" class="platform-icon" />
           </div>
           <span class="platform-name">iOS</span>
         </a>
 
         <!-- Windows -->
-        <div class="platform-card coming-soon">
+        <a href="/downloads" class="platform-card">
           <div class="platform-icon-box">
             <img src="img/windows-logo-e86ea3.svg" alt="Windows" class="platform-icon" />
           </div>
           <span class="platform-name">Windows</span>
-          <span class="coming-soon-text">Coming Soon</span>
-        </div>
+          <span class="coming-soon-text" style="color: #1063ac">Download .exe</span>
+        </a>
 
         <!-- MacOS -->
         <div class="platform-card coming-soon">
@@ -641,13 +643,13 @@
         </div>
 
         <!-- Linux -->
-        <div class="platform-card coming-soon">
+        <a href="/downloads" class="platform-card">
           <div class="platform-icon-box">
             <img src="img/linux-logo-39c4d2.svg" alt="Linux" class="platform-icon" />
           </div>
           <span class="platform-name">Linux</span>
-          <span class="coming-soon-text">Coming Soon</span>
-        </div>
+          <span class="coming-soon-text" style="color: #1063ac">Get for Linux</span>
+        </a>
       </div>
     </div>
   </section>

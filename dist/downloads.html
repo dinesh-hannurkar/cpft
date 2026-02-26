@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Fylooo - Premium Desktop Experience</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1063ac;
+            --secondary: #e2f6fb;
+            --dark: #4a4a4a;
+            --text: #2d3436;
+            --glass: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #e2f6fb 0%, #ffffff 50%, #f0f9ff 100%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        header {
+            padding: 40px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 28px;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .logo img {
+            height: 48px;
+            width: auto;
+        }
+
+        .back-link {
+            font-weight: 600;
+            color: var(--primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.2s;
+        }
+
+        .back-link:hover {
+            opacity: 0.8;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 60px 0 40px;
+        }
+
+        .hero h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            background: linear-gradient(90deg, #1063ac, #42a5f5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .hero p {
+            font-size: 20px;
+            color: var(--dark);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 32px;
+            margin: 60px 0;
+        }
+
+        .download-card {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 32px;
+            padding: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(16, 99, 172, 0.08);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .download-card:hover {
+            transform: translateY(-8px);
+        }
+
+        .platform-icon {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 24px;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+        }
+
+        .download-card h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .version-tag {
+            background: rgba(16, 99, 172, 0.1);
+            color: var(--primary);
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 32px;
+        }
+
+        .btn-download {
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            padding: 18px 48px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 18px;
+            box-shadow: 0 10px 20px rgba(16, 99, 172, 0.3);
+            transition: all 0.3s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn-download:hover {
+            background: #0d4e8a;
+            box-shadow: 0 15px 30px rgba(16, 99, 172, 0.4);
+            transform: scale(1.02);
+        }
+
+        .history-section {
+            margin: 80px 0;
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border-radius: 32px;
+            padding: 40px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .history-section h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 24px;
+            margin-bottom: 32px;
+            text-align: center;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .platform-badge {
+            font-size: 11px;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 800;
+        }
+
+        .badge-windows {
+            background: #00a4ef20;
+            color: #00a4ef;
+        }
+
+        .badge-linux {
+            background: #f57c0020;
+            color: #f57c00;
+        }
+
+        .history-date {
+            color: #95a5a6;
+            font-size: 14px;
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        footer {
+            margin-top: auto;
+            padding: 40px 0;
+            text-align: center;
+            font-size: 14px;
+            color: #95a5a6;
+        }
+
+        @media (max-width: 768px) {
+            .download-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero h1 {
+                font-size: 40px;
+            }
+
+            .download-card {
+                padding: 32px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo">
+                <img src="img/web-app-logo.webp" alt="Fylooo">
+                <span>Fylooo</span>
+            </a>
+            <a href="/" class="back-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to Home
+            </a>
+        </header>
+
+        <section class="hero">
+            <h1>Fylooo for Desktop</h1>
+            <p>Instant file sharing on your computer. Optimized for performance and power users.</p>
+        </section>
+
+        <div class="download-grid">
+            <!-- Windows Card -->
+            <div class="download-card" id="card-windows">
+                <img src="img/windows-logo-e86ea3.svg" alt="Windows" class="platform-icon">
+                <h2>Windows</h2>
+                <div class="version-tag" id="win-version">v1.0.0</div>
+                <a href="#" class="btn-download" id="win-link">Download for Windows</a>
+            </div>
+
+            <!-- Linux Card -->
+            <div class="download-card" id="card-linux">
+                <img src="img/linux-logo-39c4d2.svg" alt="Linux" class="platform-icon">
+                <h2>Linux</h2>
+                <div class="version-tag" id="linux-version">v1.0.0</div>
+                <a href="#" class="btn-download" id="linux-link">Download for Linux</a>
+            </div>
+        </div>
+
+        <section class="history-section">
+            <h3>Release History</h3>
+            <div id="history-container">
+                <!-- Dynamic content -->
+                <div class="history-item">
+                    <div class="history-info"><span class="skeleton" style="width: 60px; height: 20px;"></span><span
+                            class="skeleton" style="width: 100px; height: 20px;"></span></div><span class="skeleton"
+                        style="width: 80px; height: 16px;"></span>
+                </div>
+                <div class="history-item">
+                    <div class="history-info"><span class="skeleton" style="width: 60px; height: 20px;"></span><span
+                            class="skeleton" style="width: 100px; height: 20px;"></span></div><span class="skeleton"
+                        style="width: 80px; height: 16px;"></span>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            &copy; 2025 Omnity Digital Private Limited. Quality file sharing.
+        </footer>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: 'AIzaSyDKGuKkrZilyAYaqsdBXYagcGffp8Om1O8',
+            appId: '1:962041178714:web:347cdb1f39624971ac4663',
+            messagingSenderId: '962041178714',
+            projectId: 'cpft-bf8a0',
+            authDomain: 'cpft-bf8a0.firebaseapp.com',
+            storageBucket: 'cpft-bf8a0.firebasestorage.app',
+            measurementId: 'G-KQ010D0SFS'
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        async function loadReleases() {
+            const container = document.getElementById('history-container');
+
+            try {
+                const q = query(collection(db, "desktop_releases"), orderBy("timestamp", "desc"));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    container.innerHTML = '<p style="text-align:center; color:#95a5a6;">No releases found.</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                let latestWin = null;
+                let latestLinux = null;
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+
+                    // Render in history
+                    const item = document.createElement('div');
+                    item.className = 'history-item';
+                    const platformClass = data.platform === 'windows' ? 'badge-windows' : 'badge-linux';
+                    const date = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleDateString() : 'N/A';
+
+                    item.innerHTML = `
+            <div class="history-info">
+              <span class="platform-badge ${platformClass}">${data.platform}</span>
+              <strong>${data.version}</strong>
+            </div>
+            <span class="history-date">${date}</span>
+          `;
+                    container.appendChild(item);
+
+                    // Update Latest
+                    if (data.platform === 'windows' && !latestWin) latestWin = data;
+                    if (data.platform === 'linux' && !latestLinux) latestLinux = data;
+                });
+
+                // Update cards
+                if (latestWin) {
+                    document.getElementById('win-version').innerText = latestWin.version;
+                    document.getElementById('win-link').href = latestWin.downloadUrl;
+                }
+                if (latestLinux) {
+                    document.getElementById('linux-version').innerText = latestLinux.version;
+                    document.getElementById('linux-link').href = latestLinux.downloadUrl;
+                }
+
+            } catch (error) {
+                console.error("Error loading releases: ", error);
+                container.innerHTML = '<p style="text-align:center; color:#e74c3c;">Failed to load releases. Please try again later.</p>';
+            }
+        }
+
+        loadReleases();
+    </script>
+</body>
+
+</html>
