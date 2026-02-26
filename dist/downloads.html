@@ -233,6 +233,24 @@
             text-align: center;
         }
 
+        .history-columns {
+            display: flex;
+            gap: 48px;
+        }
+
+        .history-col {
+            flex: 1;
+        }
+
+        .history-col h4 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            color: var(--primary);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--secondary);
+        }
+
         .history-item {
             display: flex;
             justify-content: space-between;
@@ -304,6 +322,11 @@
                 grid-template-columns: 1fr;
             }
 
+            .history-columns {
+                flex-direction: column;
+                gap: 32px;
+            }
+
             .hero h1 {
                 font-size: 40px;
             }
@@ -360,17 +383,26 @@
 
         <section class="history-section">
             <h3>Release History</h3>
-            <div id="history-container">
-                <!-- Dynamic content -->
-                <div class="history-item">
-                    <div class="history-info"><span class="skeleton" style="width: 60px; height: 20px;"></span><span
-                            class="skeleton" style="width: 100px; height: 20px;"></span></div><span class="skeleton"
-                        style="width: 80px; height: 16px;"></span>
+            <div class="history-columns">
+                <div class="history-col">
+                    <h4>Windows Releases</h4>
+                    <div id="history-windows">
+                        <!-- Dynamic Windows content -->
+                        <div class="history-item">
+                            <div class="history-info"><span class="skeleton" style="width: 100px; height: 20px;"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="history-item">
-                    <div class="history-info"><span class="skeleton" style="width: 60px; height: 20px;"></span><span
-                            class="skeleton" style="width: 100px; height: 20px;"></span></div><span class="skeleton"
-                        style="width: 80px; height: 16px;"></span>
+                <div class="history-col">
+                    <h4>Linux Releases</h4>
+                    <div id="history-linux">
+                        <!-- Dynamic Linux content -->
+                        <div class="history-item">
+                            <div class="history-info"><span class="skeleton" style="width: 100px; height: 20px;"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -382,7 +414,8 @@
 
     <script>
         async function loadReleases() {
-            const container = document.getElementById('history-container');
+            const winHistory = document.getElementById('history-windows');
+            const linuxHistory = document.getElementById('history-linux');
 
             try {
                 const response = await fetch('/releases.json');
@@ -390,37 +423,44 @@
                 const releases = await response.json();
 
                 if (!releases || releases.length === 0) {
-                    container.innerHTML = '<p style="text-align:center; color:#95a5a6;">No releases found.</p>';
+                    const emptyMsg = '<p style="text-align:center; color:#95a5a6;">No releases found.</p>';
+                    winHistory.innerHTML = emptyMsg;
+                    linuxHistory.innerHTML = emptyMsg;
                     return;
                 }
 
-                container.innerHTML = '';
+                winHistory.innerHTML = '';
+                linuxHistory.innerHTML = '';
                 let latestWin = null;
                 let latestLinux = null;
 
-                // Assuming JSON is already sorted by date desc or we sort it here
+                // Sort by date desc
                 releases.sort((a, b) => new Date(b.date) - new Date(a.date));
 
                 releases.forEach((data) => {
-                    // Render in history
                     const item = document.createElement('div');
                     item.className = 'history-item';
-                    const platformClass = data.platform === 'windows' ? 'badge-windows' : 'badge-linux';
                     const dateDisplay = new Date(data.date).toLocaleDateString();
 
                     item.innerHTML = `
                         <div class="history-info">
-                            <span class="platform-badge ${platformClass}">${data.platform}</span>
                             <strong>${data.version}</strong>
                         </div>
                         <span class="history-date">${dateDisplay}</span>
                     `;
-                    container.appendChild(item);
 
-                    // Update Latest
-                    if (data.platform === 'windows' && !latestWin) latestWin = data;
-                    if (data.platform === 'linux' && !latestLinux) latestLinux = data;
+                    if (data.platform === 'windows') {
+                        winHistory.appendChild(item);
+                        if (!latestWin) latestWin = data;
+                    } else if (data.platform === 'linux') {
+                        linuxHistory.appendChild(item);
+                        if (!latestLinux) latestLinux = data;
+                    }
                 });
+
+                // Final check for empty platform history
+                if (winHistory.innerHTML === '') winHistory.innerHTML = '<p style="color:#95a5a6;">No Windows releases.</p>';
+                if (linuxHistory.innerHTML === '') linuxHistory.innerHTML = '<p style="color:#95a5a6;">No Linux releases.</p>';
 
                 // Update cards
                 if (latestWin) {
@@ -434,7 +474,9 @@
 
             } catch (error) {
                 console.error("Error loading releases: ", error);
-                container.innerHTML = '<p style="text-align:center; color:#e74c3c;">Failed to load releases. Please try again later.</p>';
+                const errorMsg = '<p style="text-align:center; color:#e74c3c;">Failed to load.</p>';
+                winHistory.innerHTML = errorMsg;
+                linuxHistory.innerHTML = errorMsg;
             }
         }
 
