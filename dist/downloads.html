@@ -41,26 +41,73 @@
         }
 
         header {
-            padding: 40px 0;
+            padding: 0;
+        }
+
+        #header-section {
+            background-color: #e2f6fb;
+            position: relative;
+            z-index: 10;
+        }
+
+        .site-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            height: 50px;
         }
 
         .logo {
+            font-weight: 700;
+            font-size: 24px;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+            text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 12px;
-            font-family: 'Outfit', sans-serif;
-            font-weight: 700;
-            font-size: 28px;
-            color: var(--primary);
-            text-decoration: none;
         }
 
         .logo img {
             height: 48px;
             width: auto;
+        }
+
+        .main-nav {
+            display: flex;
+            gap: 32px;
+        }
+
+        .nav-link {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--primary);
+            transition: opacity 0.2s;
+            text-decoration: none;
+        }
+
+        .nav-link:hover {
+            opacity: 0.8;
+        }
+
+        .header-line {
+            width: 100%;
+            height: 1px;
+            background-color: rgba(110, 207, 240, 0.25);
+            max-width: auto;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 768px) {
+            .site-header {
+                flex-direction: column;
+                height: auto;
+                padding: 15px 0;
+                gap: 15px;
+            }
+
+            .main-nav {
+                gap: 20px;
+            }
         }
 
         .back-link {
@@ -269,21 +316,24 @@
 </head>
 
 <body>
+    <section id="header-section">
+        <div class="container">
+            <header class="site-header">
+                <div class="logo">
+                    <img src="img/web-app-logo.webp" alt="Fylooo Logo" style="height: 64px; width: auto;">
+                </div>
+                <nav class="main-nav">
+                    <a href="/#hero-section" class="nav-link">Home</a>
+                    <a href="/#download-section" class="nav-link">Download</a>
+                    <a href="/privacy" class="nav-link">Privacy</a>
+                    <a href="/termsofuse" class="nav-link">Terms</a>
+                </nav>
+            </header>
+        </div>
+        <div class="header-line"></div>
+    </section>
+
     <div class="container">
-        <header>
-            <a href="/" class="logo">
-                <img src="img/web-app-logo.webp" alt="Fylooo">
-                <span>Fylooo</span>
-            </a>
-            <a href="/" class="back-link">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="19" y1="12" x2="5" y2="12"></line>
-                    <polyline points="12 19 5 12 12 5"></polyline>
-                </svg>
-                Back to Home
-            </a>
-        </header>
 
         <section class="hero">
             <h1>Fylooo for Desktop</h1>
@@ -330,31 +380,16 @@
         </footer>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: 'AIzaSyDKGuKkrZilyAYaqsdBXYagcGffp8Om1O8',
-            appId: '1:962041178714:web:347cdb1f39624971ac4663',
-            messagingSenderId: '962041178714',
-            projectId: 'cpft-bf8a0',
-            authDomain: 'cpft-bf8a0.firebaseapp.com',
-            storageBucket: 'cpft-bf8a0.firebasestorage.app',
-            measurementId: 'G-KQ010D0SFS'
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
+    <script>
         async function loadReleases() {
             const container = document.getElementById('history-container');
 
             try {
-                const q = query(collection(db, "desktop_releases"), orderBy("timestamp", "desc"));
-                const querySnapshot = await getDocs(q);
+                const response = await fetch('/releases.json');
+                if (!response.ok) throw new Error('Failed to fetch releases');
+                const releases = await response.json();
 
-                if (querySnapshot.empty) {
+                if (!releases || releases.length === 0) {
                     container.innerHTML = '<p style="text-align:center; color:#95a5a6;">No releases found.</p>';
                     return;
                 }
@@ -363,22 +398,23 @@
                 let latestWin = null;
                 let latestLinux = null;
 
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
+                // Assuming JSON is already sorted by date desc or we sort it here
+                releases.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+                releases.forEach((data) => {
                     // Render in history
                     const item = document.createElement('div');
                     item.className = 'history-item';
                     const platformClass = data.platform === 'windows' ? 'badge-windows' : 'badge-linux';
-                    const date = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleDateString() : 'N/A';
+                    const dateDisplay = new Date(data.date).toLocaleDateString();
 
                     item.innerHTML = `
-            <div class="history-info">
-              <span class="platform-badge ${platformClass}">${data.platform}</span>
-              <strong>${data.version}</strong>
-            </div>
-            <span class="history-date">${date}</span>
-          `;
+                        <div class="history-info">
+                            <span class="platform-badge ${platformClass}">${data.platform}</span>
+                            <strong>${data.version}</strong>
+                        </div>
+                        <span class="history-date">${dateDisplay}</span>
+                    `;
                     container.appendChild(item);
 
                     // Update Latest

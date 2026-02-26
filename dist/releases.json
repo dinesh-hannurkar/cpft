@@ -1,0 +1,16 @@
+[
+    {
+        "platform": "windows",
+        "version": "v1.0.0",
+        "filename": "Fylooo-Setup-1.0.0.exe",
+        "downloadUrl": "/desktop_releases/Fylooo-Setup-1.0.0.exe",
+        "date": "2025-02-26"
+    },
+    {
+        "platform": "linux",
+        "version": "v1.0.0",
+        "filename": "fylooo-1.0.0-amd64.deb",
+        "downloadUrl": "/desktop_releases/fylooo-1.0.0-amd64.deb",
+        "date": "2025-02-26"
+    }
+]
