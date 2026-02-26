@@ -86,12 +86,21 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
                   onRefresh: _refreshHistory,
                   backgroundColor: AppColors.white,
                   color: AppColors.primary,
-                  child: ListView(
+                  child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Center(child: Text('Error: ${snapshot.error}')),
+                    slivers: [
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              'Error: ${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -105,24 +114,31 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
                   onRefresh: _refreshHistory,
                   backgroundColor: AppColors.white,
                   color: AppColors.primary,
-                  child: ListView(
+                  child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: const Center(
+                    slivers: [
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.history, size: 64, color: Colors.grey),
-                              SizedBox(height: 16),
-                              Text(
+                              const Icon(
+                                Icons.history,
+                                size: 64,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
                                 'No recent history',
                                 style: TextStyle(
                                   fontSize: 18,
                                   color: Colors.grey,
                                 ),
                               ),
+                              // Add some bottom padding to compensate for the AppBar height
+                              // if it's visible, to make it visually centered in the remaining space
+                              if (widget.showAppBar) const SizedBox(height: 80),
                             ],
                           ),
                         ),
