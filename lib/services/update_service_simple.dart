@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive.dart';
+import 'package:fylooo/shared/widgets/app_snackbar.dart';
 
 class UpdateService {
   static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
@@ -38,17 +39,13 @@ class UpdateService {
         await InAppUpdate.performImmediateUpdate();
       } else if (!silent) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('App is up to date')));
+          AppSnackbar.showInfo(context, 'App is up to date');
         }
       }
     } catch (e) {
       debugPrint('Android update error: $e');
       if (!silent && context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+        AppSnackbar.showError(context, 'Update check failed: $e');
       }
     }
   }
@@ -74,18 +71,14 @@ class UpdateService {
           if (_isNewVersionAvailable(currentVersion, storeVersion)) {
             _showUpdateDialog(context, results[0]['trackViewUrl']);
           } else if (!silent && context.mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('App is up to date')));
+            AppSnackbar.showInfo(context, 'App is up to date');
           }
         }
       }
     } catch (e) {
       debugPrint('iOS update error: $e');
       if (!silent && context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+        AppSnackbar.showError(context, 'Update check failed: $e');
       }
     }
   }
@@ -127,13 +120,15 @@ class UpdateService {
           if (_isNewVersionAvailable(currentVersion, storeVersion)) {
             updateNotifier.value = latestRelease;
             if (!silent) {
-              _showUpdateDialog(context, 'https://fylooo.com/downloads.html');
+              _showUpdateDialog(
+                context,
+                'https://fylooo.com/downloads.html',
+                desktopRelease: latestRelease,
+              );
             }
           } else if (!silent && context.mounted) {
             updateNotifier.value = null;
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('App is up to date')));
+            AppSnackbar.showInfo(context, 'App is up to date');
           } else {
             updateNotifier.value = null;
           }
@@ -142,9 +137,7 @@ class UpdateService {
     } catch (e) {
       debugPrint('Desktop update error: $e');
       if (!silent && context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+        AppSnackbar.showError(context, 'Update check failed: $e');
       }
     }
   }
@@ -206,9 +199,7 @@ class UpdateService {
     } catch (e) {
       debugPrint('Update failed: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Update failed: $e')));
+        AppSnackbar.showError(context, 'Update failed: $e');
       }
     }
   }
@@ -279,7 +270,11 @@ rm "\$0"
     return false;
   }
 
-  static void _showUpdateDialog(BuildContext context, String appStoreUrl) {
+  static void _showUpdateDialog(
+    BuildContext context,
+    String appStoreUrl, {
+    Map<String, dynamic>? desktopRelease,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -311,7 +306,9 @@ rm "\$0"
                 ),
                 const SizedBox(height: AppSizes.sm * 1.5),
                 Text(
-                  'A new version of the app is available. Please update to get the latest features and improvements.',
+                  desktopRelease != null
+                      ? 'A new version (${desktopRelease['version']}) is available. It will be downloaded and installed automatically.'
+                      : 'A new version of the app is available. Please update to get the latest features and improvements.',
                   textAlign: TextAlign.center,
                   style: Theme.of(
                     context,
@@ -320,17 +317,47 @@ rm "\$0"
                 const SizedBox(height: AppSizes.lg),
                 Row(
                   children: [
+                    if (desktopRelease != null)
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            "Later",
+                            style: TextStyle(color: AppColors.primary),
+                          ),
+                        ),
+                      ),
+                    if (desktopRelease != null) const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () async {
-                          final url = Uri.parse(appStoreUrl);
-                          if (await canLaunchUrl(url)) {
-                            await launchUrl(
-                              url,
-                              mode: LaunchMode.externalApplication,
+                          if (desktopRelease != null) {
+                            Navigator.of(context).pop();
+                            AppSnackbar.showInfo(
+                              context,
+                              'Downloading update...',
                             );
+                            UpdateService.downloadAndApplyUpdate(
+                              context,
+                              desktopRelease,
+                            );
+                          } else {
+                            final url = Uri.parse(appStoreUrl);
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            }
+                            Navigator.of(context).pop();
                           }
-                          Navigator.of(context).pop();
                         },
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -340,7 +367,7 @@ rm "\$0"
                           ),
                         ),
                         child: const Text(
-                          "Update",
+                          "Update Now",
                           style: TextStyle(color: Colors.white),
                         ),
                       ),

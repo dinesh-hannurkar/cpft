@@ -1607,32 +1607,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (update == null) return const SizedBox.shrink();
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: AppSizes.md),
-          padding: const EdgeInsets.all(AppSizes.md),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSizes.md,
+            vertical: AppSizes.sm,
+          ),
           decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue.shade200),
+            gradient: LinearGradient(
+              colors: [Colors.blue.shade400, Colors.blue.shade700],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.system_update_rounded, color: Colors.blue),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.system_update_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
               const SizedBox(width: AppSizes.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'Update Available (${update['version']})',
-                      style: const TextStyle(
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        color: Colors.blue,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Get the latest features and bug fixes.',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    Text(
+                      'Tap to download and install automatically.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 10,
+                      ),
                     ),
                   ],
                 ),
@@ -1642,11 +1661,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   AppSnackbar.showInfo(context, 'Downloading update...');
                   UpdateService.downloadAndApplyUpdate(context, update);
                 },
-                child: const Text('Update Now'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Update Now', style: TextStyle(fontSize: 12)),
               ),
               IconButton(
                 onPressed: () => UpdateService.updateNotifier.value = null,
-                icon: const Icon(Icons.close, size: 20),
+                icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                padding: const EdgeInsets.only(left: 8),
+                constraints: const BoxConstraints(),
               ),
             ],
           ),
