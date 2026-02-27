@@ -13,6 +13,7 @@ import 'package:fylooo/models/hotspot_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fylooo/features/home/presentation/connected_devices_screen.dart';
+import 'package:fylooo/services/update_service_simple.dart';
 
 import 'package:fylooo/core/constants/app_colors.dart';
 import 'package:fylooo/core/constants/app_sizes.dart';
@@ -110,6 +111,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _setupCountListeners();
     _updateCounts();
     _checkAndShowShowcase();
+
+    // Auto-check for updates on Desktop
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      UpdateService.checkForUpdates(context, silent: true);
+    }
   }
 
   void _checkAndShowShowcase() {
@@ -1032,6 +1039,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   if (!kIsWeb) const SharedContentBanner(),
                   // Show dropped files banner if files are waiting
                   if (_droppedFiles.isNotEmpty) _buildDroppedFilesBanner(),
+                  _buildUpdateBanner(),
                   const SizedBox(height: AppSizes.sm),
 
                   _buildScanningStatus(),
@@ -1589,6 +1597,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildUpdateBanner() {
+    return ValueListenableBuilder<Map<String, dynamic>?>(
+      valueListenable: UpdateService.updateNotifier,
+      builder: (context, update, _) {
+        if (update == null) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: AppSizes.md),
+          padding: const EdgeInsets.all(AppSizes.md),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.system_update_rounded, color: Colors.blue),
+              const SizedBox(width: AppSizes.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Update Available (${update['version']})',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Get the latest features and bug fixes.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  AppSnackbar.showInfo(context, 'Downloading update...');
+                  UpdateService.downloadAndApplyUpdate(context, update);
+                },
+                child: const Text('Update Now'),
+              ),
+              IconButton(
+                onPressed: () => UpdateService.updateNotifier.value = null,
+                icon: const Icon(Icons.close, size: 20),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

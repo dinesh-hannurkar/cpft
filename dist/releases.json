@@ -5,6 +5,7 @@
         "release_type": "Stable",
         "filename": "Fylooo-Setup-1.0.0.exe",
         "downloadUrl": "/desktop_releases/Fylooo-Setup-1.0.0.exe",
+        "update_zip": "/desktop_releases/fylooo-windows-update.zip",
         "date": "2025-02-26",
         "notes": "Initial Windows Release with high-speed connection support and premium design."
     },
@@ -14,6 +15,7 @@
         "release_type": "Stable",
         "filename": "fylooo-1.0.0-amd64.deb",
         "downloadUrl": "/desktop_releases/fylooo-1.0.0-amd64.deb",
+        "update_zip": "/desktop_releases/fylooo-linux-update.zip",
         "date": "2025-02-26",
         "notes": "Initial Linux Release with optimized transfer speeds."
     }

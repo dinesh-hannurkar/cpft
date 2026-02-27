@@ -8,8 +8,13 @@ import 'package:http/http.dart' as http;
 import 'package:in_app_update/in_app_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:archive/archive.dart';
 
 class UpdateService {
+  static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
+      ValueNotifier(null);
   static Future<void> checkForUpdates(
     BuildContext context, {
     bool silent = true,
@@ -107,18 +112,30 @@ class UpdateService {
       );
 
       if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        final platforms = json['platforms'];
-        if (platforms != null && platforms[platformKey] != null) {
-          final latestRelease = platforms[platformKey][0];
-          final storeVersion = latestRelease['version'];
+        final List<dynamic> jsonList = jsonDecode(response.body);
+        final latestRelease = jsonList.firstWhere(
+          (item) => item['platform'] == platformKey,
+          orElse: () => null,
+        );
+
+        if (latestRelease != null) {
+          final storeVersion = (latestRelease['version'] as String).replaceAll(
+            'v',
+            '',
+          );
 
           if (_isNewVersionAvailable(currentVersion, storeVersion)) {
-            _showUpdateDialog(context, 'https://fylooo.com/downloads.html');
+            updateNotifier.value = latestRelease;
+            if (!silent) {
+              _showUpdateDialog(context, 'https://fylooo.com/downloads.html');
+            }
           } else if (!silent && context.mounted) {
+            updateNotifier.value = null;
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(const SnackBar(content: Text('App is up to date')));
+          } else {
+            updateNotifier.value = null;
           }
         }
       }
@@ -129,6 +146,116 @@ class UpdateService {
           context,
         ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
       }
+    }
+  }
+
+  static Future<void> downloadAndApplyUpdate(
+    BuildContext context,
+    Map<String, dynamic> release,
+  ) async {
+    try {
+      final updateUrl = release['update_zip'];
+      if (updateUrl == null) {
+        _launchUrl('https://fylooo.com/downloads.html');
+        return;
+      }
+
+      final fullUrl = updateUrl.startsWith('http')
+          ? updateUrl
+          : 'https://fylooo.com$updateUrl';
+
+      // 1. Download ZIP
+      final response = await http.get(Uri.parse(fullUrl));
+      if (response.statusCode != 200) throw Exception('Download failed');
+
+      final tempDir = await getTemporaryDirectory();
+      final zipFile = File(p.join(tempDir.path, 'update.zip'));
+      await zipFile.writeAsBytes(response.bodyBytes);
+
+      // 2. Extract
+      final updateDir = Directory(p.join(tempDir.path, 'fylooo_update'));
+      if (await updateDir.exists()) await updateDir.delete(recursive: true);
+      await updateDir.create();
+
+      final archive = ZipDecoder().decodeBytes(response.bodyBytes);
+      for (final file in archive) {
+        final filename = file.name;
+        if (file.isFile) {
+          final data = file.content as List<int>;
+          File(p.join(updateDir.path, filename))
+            ..createSync(recursive: true)
+            ..writeAsBytesSync(data);
+        } else {
+          Directory(
+            p.join(updateDir.path, filename),
+          ).createSync(recursive: true);
+        }
+      }
+
+      // 3. Prepare Patch Script
+      final currentExe = Platform.resolvedExecutable;
+      final installDir = p.dirname(currentExe);
+
+      if (Platform.isWindows) {
+        await _applyWindowsUpdate(updateDir.path, installDir, currentExe);
+      } else if (Platform.isLinux) {
+        await _applyLinuxUpdate(updateDir.path, installDir, currentExe);
+      }
+
+      exit(0); // Exit app to let the script take over
+    } catch (e) {
+      debugPrint('Update failed: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Update failed: $e')));
+      }
+    }
+  }
+
+  static Future<void> _applyWindowsUpdate(
+    String sourceDir,
+    String destDir,
+    String exePath,
+  ) async {
+    final scriptPath = p.join(p.dirname(sourceDir), 'patch.bat');
+    final script =
+        '''
+@echo off
+timeout /t 2 /nobreak > nul
+xcopy /s /y /e "$sourceDir\\*" "$destDir\\"
+start "" "$exePath"
+del "%~f0"
+''';
+    await File(scriptPath).writeAsString(script);
+    await Process.start('cmd', [
+      '/c',
+      scriptPath,
+    ], mode: ProcessStartMode.detached);
+  }
+
+  static Future<void> _applyLinuxUpdate(
+    String sourceDir,
+    String destDir,
+    String exePath,
+  ) async {
+    final scriptPath = p.join(p.dirname(sourceDir), 'patch.sh');
+    final script =
+        '''
+#!/bin/bash
+sleep 2
+cp -r $sourceDir/* $destDir/
+"$exePath" &
+rm "\$0"
+''';
+    await File(scriptPath).writeAsString(script);
+    await Process.start('bash', [scriptPath], mode: ProcessStartMode.detached);
+  }
+
+  static Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
