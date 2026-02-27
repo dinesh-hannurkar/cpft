@@ -16,7 +16,7 @@ import 'package:fylooo/shared/widgets/app_snackbar.dart';
 class UpdateService {
   static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
       ValueNotifier(null);
-  static String _baseUrl = 'https://fylooo.com';
+  static String _baseUrl = 'http://192.168.1.181:3000';
   static Future<void> checkForUpdates(
     BuildContext context, {
     bool silent = true,
