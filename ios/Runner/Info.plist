@@ -58,7 +58,11 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app needs access to discover and connect to nearby devices on your local network.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs location access to identify your WiFi network name.</string>
+	<string>This app needs location access to identify your WiFi network name for local file sharing.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs location access to identify your WiFi network name for consistent local file sharing.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs location access to identify your WiFi network name for consistent local file sharing.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>To upload photos, please allow permission to access your photo library.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
