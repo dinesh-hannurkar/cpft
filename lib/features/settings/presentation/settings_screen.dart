@@ -1,5 +1,6 @@
 import 'package:fylooo/features/settings/presentation/widget/settings_tile.dart';
 import 'package:fylooo/shared/widgets/back_button_chip.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -24,6 +25,7 @@ import 'package:fylooo/features/chat/services/connection_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:fylooo/features/dpftp/dpftp_service.dart';
+import 'package:fylooo/services/update_service_simple.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
@@ -59,6 +61,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadSoundsEnabled();
     _loadDownloadPath();
     _useNativeReceiver = ConnectionService.useNativeReceiver;
+
+    // Auto-check for updates on Desktop
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) UpdateService.checkForUpdates(context, silent: true);
+      });
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
       final hasSeenShowcase = prefs.getBool('settings_showcase_seen') ?? false;
@@ -532,8 +543,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             icon: Icons.info_outline_rounded,
                             title: 'Version',
                             subtitle: 'Installed app version',
-                            trailing: Text(
-                              _appVersion.isEmpty ? '-' : _appVersion,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _appVersion.isEmpty ? '-' : _appVersion,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: () =>
+                                      UpdateService.checkForUpdates(
+                                        context,
+                                        silent: false,
+                                      ),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    foregroundColor: AppColors.primary,
+                                  ),
+                                  child: const Text('Check for Updates'),
+                                ),
+                              ],
                             ),
                           ),
                           SettingsTile(

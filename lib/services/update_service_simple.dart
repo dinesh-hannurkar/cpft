@@ -10,26 +10,45 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UpdateService {
-  static Future<void> checkForUpdates(BuildContext context) async {
+  static Future<void> checkForUpdates(
+    BuildContext context, {
+    bool silent = true,
+  }) async {
     if (Platform.isAndroid) {
-      await _checkAndroidUpdate(context);
+      await _checkAndroidUpdate(context, silent);
     } else if (Platform.isIOS) {
-      await _checkiOSUpdate(context);
+      await _checkiOSUpdate(context, silent);
+    } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      await _checkDesktopUpdate(context, silent);
     }
   }
 
-  static Future<void> _checkAndroidUpdate(BuildContext context) async {
+  static Future<void> _checkAndroidUpdate(
+    BuildContext context,
+    bool silent,
+  ) async {
     try {
       final info = await InAppUpdate.checkForUpdate();
       if (info.updateAvailability == UpdateAvailability.updateAvailable) {
         await InAppUpdate.performImmediateUpdate();
+      } else if (!silent) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('App is up to date')));
+        }
       }
     } catch (e) {
       debugPrint('Android update error: $e');
+      if (!silent && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+      }
     }
   }
 
-  static Future<void> _checkiOSUpdate(BuildContext context) async {
+  static Future<void> _checkiOSUpdate(BuildContext context, bool silent) async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
@@ -49,11 +68,67 @@ class UpdateService {
           final storeVersion = results[0]['version'];
           if (_isNewVersionAvailable(currentVersion, storeVersion)) {
             _showUpdateDialog(context, results[0]['trackViewUrl']);
+          } else if (!silent && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('App is up to date')));
           }
         }
       }
     } catch (e) {
       debugPrint('iOS update error: $e');
+      if (!silent && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+      }
+    }
+  }
+
+  static Future<void> _checkDesktopUpdate(
+    BuildContext context,
+    bool silent,
+  ) async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+
+      // Determine platform key for releases.json
+      String platformKey = '';
+      if (Platform.isWindows)
+        platformKey = 'windows';
+      else if (Platform.isLinux)
+        platformKey = 'linux';
+      else if (Platform.isMacOS)
+        platformKey = 'macos';
+
+      final response = await http.get(
+        Uri.parse('https://fylooo.com/releases.json'),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final platforms = json['platforms'];
+        if (platforms != null && platforms[platformKey] != null) {
+          final latestRelease = platforms[platformKey][0];
+          final storeVersion = latestRelease['version'];
+
+          if (_isNewVersionAvailable(currentVersion, storeVersion)) {
+            _showUpdateDialog(context, 'https://fylooo.com/downloads.html');
+          } else if (!silent && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('App is up to date')));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Desktop update error: $e');
+      if (!silent && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Update check failed: $e')));
+      }
     }
   }
 
