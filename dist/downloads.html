@@ -135,6 +135,7 @@
             font-weight: 800;
             margin-bottom: 16px;
             background: linear-gradient(90deg, #1063ac, #42a5f5);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: -1px;
@@ -253,9 +254,9 @@
 
         .history-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 0;
+            flex-direction: column;
+            gap: 12px;
+            padding: 24px 0;
             border-bottom: 1px solid rgba(0, 0, 0, 0.05);
         }
 
@@ -263,10 +264,45 @@
             border-bottom: none;
         }
 
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
         .history-info {
             display: flex;
             align-items: center;
             gap: 16px;
+        }
+
+        .history-notes {
+            font-size: 14px;
+            color: #636e72;
+            line-height: 1.5;
+            margin: 4px 0;
+        }
+
+        .history-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+
+        .btn-mini-download {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s;
+        }
+
+        .btn-mini-download:hover {
+            opacity: 0.7;
         }
 
         .platform-badge {
@@ -443,10 +479,19 @@
                     const dateDisplay = new Date(data.date).toLocaleDateString();
 
                     item.innerHTML = `
-                        <div class="history-info">
-                            <strong>${data.version}</strong>
+                        <div class="history-header">
+                            <div class="history-info">
+                                <strong>${data.version}</strong>
+                            </div>
+                            <span class="history-date">${dateDisplay}</span>
                         </div>
-                        <span class="history-date">${dateDisplay}</span>
+                        <div class="history-notes">${data.notes || ''}</div>
+                        <div class="history-actions">
+                            <a href="${data.downloadUrl}" class="btn-mini-download">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </a>
+                        </div>
                     `;
 
                     if (data.platform === 'windows') {

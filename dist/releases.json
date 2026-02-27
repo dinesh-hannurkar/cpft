@@ -6,7 +6,7 @@
         "filename": "Fylooo-Setup-1.0.0.exe",
         "downloadUrl": "/desktop_releases/Fylooo-Setup-1.0.0.exe",
         "date": "2025-02-26",
-        "notes": "Initial Windows Release"
+        "notes": "Initial Windows Release with high-speed connection support and premium design."
     },
     {
         "platform": "linux",
@@ -15,6 +15,6 @@
         "filename": "fylooo-1.0.0-amd64.deb",
         "downloadUrl": "/desktop_releases/fylooo-1.0.0-amd64.deb",
         "date": "2025-02-26",
-        "notes": "Initial Linux Release"
+        "notes": "Initial Linux Release with optimized transfer speeds."
     }
 ]
