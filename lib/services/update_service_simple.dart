@@ -212,14 +212,43 @@ class UpdateService {
     String destDir,
     String exePath,
   ) async {
-    final scriptPath = p.join(p.dirname(sourceDir), 'patch.bat');
+    final parentDir = p.dirname(sourceDir);
+    final scriptPath = p.join(parentDir, 'patch.bat');
+    final logPath = p.join(parentDir, 'patch.log');
+
+    // Robust Windows Script using robocopy and a retry loop
     final script =
         '''
 @echo off
-timeout /t 2 /nobreak > nul
-xcopy /s /y /e "$sourceDir\\*" "$destDir\\"
-start "" "$exePath"
-del "%~f0"
+setlocal enabledelayedexpansion
+echo Starting update... > "$logPath"
+
+:: Wait for app to exit
+timeout /t 3 /nobreak > nul
+
+set RETRY=0
+:RETRY_LOOP
+set /a RETRY+=1
+echo Attempt !RETRY! to copy files... >> "$logPath"
+
+:: Use robocopy for robust copying (/is = include same, /it = include tweaked, /mt = multi-threaded)
+robocopy "$sourceDir" "$destDir" /e /is /it /move /ndl /nfl /np /r:3 /w:2 >> "$logPath" 2>&1
+
+if %ERRORLEVEL% LEQ 7 (
+    echo Copy successful. >> "$logPath"
+    start "" "$exePath"
+    del "%~f0"
+    exit
+)
+
+if !RETRY! LEQ 5 (
+    echo Copy failed (Error %ERRORLEVEL%), retrying in 2s... >> "$logPath"
+    timeout /t 2 /nobreak > nul
+    goto RETRY_LOOP
+)
+
+echo Failed to update after 5 attempts. >> "$logPath"
+pause
 ''';
     await File(scriptPath).writeAsString(script);
     await Process.start('cmd', [
@@ -233,16 +262,46 @@ del "%~f0"
     String destDir,
     String exePath,
   ) async {
-    final scriptPath = p.join(p.dirname(sourceDir), 'patch.sh');
+    final parentDir = p.dirname(sourceDir);
+    final scriptPath = p.join(parentDir, 'patch.sh');
+    final logPath = p.join(parentDir, 'patch.log');
+
+    // Robust Linux Script with retry loop and process check
     final script =
         '''
 #!/bin/bash
-sleep 2
-cp -r $sourceDir/* $destDir/
-"$exePath" &
-rm "\$0"
+exec > "$logPath" 2>&1
+echo "Starting Linux update..."
+
+# Wait for process to exit
+sleep 3
+
+MAX_RETRIES=5
+RETRY=0
+
+while [ \$RETRY -lt \$MAX_RETRIES ]; do
+    RETRY=\$((RETRY+1))
+    echo "Attempt \$RETRY to copy files..."
+    
+    # -a for archive, -v for verbose, -f for force
+    cp -rvf "$sourceDir"/* "$destDir"/
+    
+    if [ \$? -eq 0 ]; then
+        echo "Copy successful."
+        chmod +x "$exePath"
+        "$exePath" &
+        rm "\$0"
+        exit 0
+    fi
+    
+    echo "Copy failed, retrying in 2s..."
+    sleep 2
+done
+
+echo "Failed to update after \$MAX_RETRIES attempts."
 ''';
     await File(scriptPath).writeAsString(script);
+    await Process.run('chmod', ['+x', scriptPath]);
     await Process.start('bash', [scriptPath], mode: ProcessStartMode.detached);
   }
 
