@@ -16,6 +16,7 @@ import 'package:fylooo/shared/widgets/app_snackbar.dart';
 class UpdateService {
   static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
       ValueNotifier(null);
+  static String _baseUrl = 'https://fylooo.com';
   static Future<void> checkForUpdates(
     BuildContext context, {
     bool silent = true,
@@ -100,9 +101,11 @@ class UpdateService {
       else if (Platform.isMacOS)
         platformKey = 'macos';
 
-      final response = await http.get(
-        Uri.parse('http://192.168.1.181:3000/releases.json'),
-      );
+      final releasesUri = Uri.parse('http://192.168.1.181:3000/releases.json');
+      _baseUrl =
+          '${releasesUri.scheme}://${releasesUri.host}${releasesUri.hasPort ? ':${releasesUri.port}' : ''}';
+
+      final response = await http.get(releasesUri);
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = jsonDecode(response.body);
@@ -155,7 +158,7 @@ class UpdateService {
 
       final fullUrl = updateUrl.startsWith('http')
           ? updateUrl
-          : 'https://fylooo.com$updateUrl';
+          : '$_baseUrl$updateUrl';
 
       // 1. Download ZIP
       final response = await http.get(Uri.parse(fullUrl));

@@ -1,7 +1,7 @@
 [
     {
         "platform": "windows",
-        "version": "v1.0.0",
+        "version": "v1.1.5",
         "release_type": "Stable",
         "filename": "Fylooo-Setup-1.0.0.exe",
         "downloadUrl": "/desktop_releases/Fylooo-Setup-1.0.0.exe",
@@ -11,7 +11,7 @@
     },
     {
         "platform": "linux",
-        "version": "v1.0.0",
+        "version": "v1.1.5",
         "release_type": "Stable",
         "filename": "fylooo-1.0.0-amd64.deb",
         "downloadUrl": "/desktop_releases/fylooo-1.0.0-amd64.deb",
