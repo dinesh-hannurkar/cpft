@@ -26,16 +26,36 @@ Your build files will be in:
 ---
 
 ## Alternative: Inno Setup (For Installers)
-If you want a "Setup.exe" that installs the app but also offers a "portable" extraction mode:
-1. Install [Inno Setup](https://jrsoftware.org/isinfo.php).
-2. Create a script that includes all files in the `Release` folder.
-3. This is better if you want a professional installer with desktop shortcuts.
+Inno Setup is great for creating a `Setup.exe`. If the app isn't opening on other systems, it's almost certainly because the **DLLs** or the **data folder** are missing from the script.
 
-## Summary of Files to Include
-If you prefer to just zip the files (the "Portable Folder" approach), you **must** include:
-- `fylooo.exe`
-- `flutter_windows.dll`
-- `window_manager_plugin.dll` (and any other `.dll` files)
-- The `data/` folder (contains your app assets and icons)
+### 🛑 Crucial Inno Setup "[Files]" Section
+Your `.iss` script must include more than just the `.exe`. Use this exact structure in your `[Files]` section:
 
-**Tip**: Always test the generated `.exe` on a computer that doesn't have Flutter installed to ensure all DLLs were bundled correctly.
+```iss
+[Files]
+; The main application executable
+Source: "build\windows\x64\runner\Release\fylooo.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; The Flutter engine DLL
+Source: "build\windows\x64\runner\Release\flutter_windows.dll"; DestDir: "{app}"; Flags: ignoreversion
+
+; All other plugin DLLs (like window_manager_plugin.dll)
+Source: "build\windows\x64\runner\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+
+; The DATA folder (icons, assets, fonts) - CRITICAL!
+Source: "build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+```
+
+### ⚠️ Missing System Dependencies
+If the app *still* doesn't open (or gives a "msvcp140.dll missing" error), the target computer needs the **Visual C++ Redistributable**.
+- You can include the installer for it in your Inno Setup script, or
+- Download and install it manually on the target machine: [Microsoft VCRedist 2015-2022](https://aka.ms/vs/17/release/vc_redist.x64.exe).
+
+## Summary: What MUST be in the same folder
+Whether you use a tool or just Zip the files, these 4 components must stay together:
+1. `fylooo.exe`
+2. `flutter_windows.dll` 
+3. `*.dll` (All plugin DLLs)
+4. `data/` (Folder containing assets)
+
+**Tip**: The easiest way to verify is to copy the *entire* `build/windows/x64/runner/Release/` folder to a USB drive and try running it from there on another machine. If that works, ensure your Inno Setup script is catching all those files.
