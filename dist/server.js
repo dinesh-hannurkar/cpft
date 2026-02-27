@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const PORT = 3000;
 const ROOT_DIR = __dirname;
@@ -20,6 +21,20 @@ const mimeTypes = {
   '.ttf': 'font/ttf',
   '.eot': 'application/vnd.ms-fontobject'
 };
+
+function getLocalIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+const LOCAL_IP = getLocalIp();
 
 const server = http.createServer((req, res) => {
   // Log requests
@@ -71,32 +86,26 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔════════════════════════════════════════╗
-║   CPFT Local Development Server       ║
+║   CPFT Network Development Server       ║
 ╚════════════════════════════════════════╝
 
-🚀 Server running at http://localhost:${PORT}
+🚀 Server running on your network!
+
+🏠 Local:   http://localhost:${PORT}
+🌐 Network: http://${LOCAL_IP}:${PORT}
 
 📍 URLs:
-  • Landing page:    http://localhost:${PORT}/
-  • Flutter app:     http://localhost:${PORT}/#/webshare
-  • Privacy route:   http://localhost:${PORT}/#/privacy
-  • Any route:       http://localhost:${PORT}/#/your-route
+  • Landing page:    http://${LOCAL_IP}:${PORT}/
+  • Flutter app:     http://${LOCAL_IP}:${PORT}/#/webshare
+  • Privacy route:   http://${LOCAL_IP}:${PORT}/#/privacy
 
 📦 Root Directory: ${ROOT_DIR}
 
-Structure:
-  dist/
-  ├── index.html         ← Landing page (served at /)
-  ├── app/               ← Flutter app (base-href /)
-  │   ├── index.html
-  │   ├── main.dart.js
-  │   └── ...
-  └── package.json
-
 💡 How it works:
+   • Accessible from other devices on the same WiFi
    • / → Landing page (index.html)
    • /#/webshare → Flutter app handles routing via hash
    • Static files (JS, CSS, etc.) → Served directly from /app/

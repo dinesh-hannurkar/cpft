@@ -108,7 +108,7 @@ class UpdateService {
         platformKey = 'macos';
 
       final response = await http.get(
-        Uri.parse('https://fylooo.com/releases.json'),
+        Uri.parse('http://192.168.1.181:3000/releases.json'),
       );
 
       if (response.statusCode == 200) {
