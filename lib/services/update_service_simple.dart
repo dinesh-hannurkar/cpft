@@ -16,7 +16,8 @@ import 'package:fylooo/shared/widgets/app_snackbar.dart';
 class UpdateService {
   static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
       ValueNotifier(null);
-  static String _baseUrl = 'http://192.168.1.181:3000';
+  static final ValueNotifier<double?> downloadProgress = ValueNotifier(null);
+  static String _baseUrl = 'http://192.168.1.179:3000';
   static Future<void> checkForUpdates(
     BuildContext context, {
     bool silent = true,
@@ -101,7 +102,7 @@ class UpdateService {
       else if (Platform.isMacOS)
         platformKey = 'macos';
 
-      final releasesUri = Uri.parse('http://192.168.1.181:3000/releases.json');
+      final releasesUri = Uri.parse('http://192.168.1.179:3000/releases.json');
       _baseUrl =
           '${releasesUri.scheme}://${releasesUri.host}${releasesUri.hasPort ? ':${releasesUri.port}' : ''}';
 
@@ -160,20 +161,46 @@ class UpdateService {
           ? updateUrl
           : '$_baseUrl$updateUrl';
 
-      // 1. Download ZIP
-      final response = await http.get(Uri.parse(fullUrl));
+      // Show Progress Dialog
+      _showProgressDialog(context);
+
+      // 1. Download ZIP with progress tracking
+      final client = http.Client();
+      final request = http.Request('GET', Uri.parse(fullUrl));
+      final response = await client.send(request);
+
       if (response.statusCode != 200) throw Exception('Download failed');
+
+      final totalBytes = response.contentLength ?? 0;
+      int receivedBytes = 0;
+      final List<int> bytes = [];
+
+      await for (var chunk in response.stream) {
+        bytes.addAll(chunk);
+        receivedBytes += chunk.length;
+        if (totalBytes > 0) {
+          downloadProgress.value = receivedBytes / totalBytes;
+        }
+      }
+
+      client.close();
 
       final tempDir = await getTemporaryDirectory();
       final zipFile = File(p.join(tempDir.path, 'update.zip'));
-      await zipFile.writeAsBytes(response.bodyBytes);
+      await zipFile.writeAsBytes(bytes);
+
+      downloadProgress.value = 1.0; // Complete
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (context.mounted) Navigator.of(context).pop(); // Close progress dialog
 
       // 2. Extract
       final updateDir = Directory(p.join(tempDir.path, 'fylooo_update'));
       if (await updateDir.exists()) await updateDir.delete(recursive: true);
       await updateDir.create();
 
-      final archive = ZipDecoder().decodeBytes(response.bodyBytes);
+      final archive = ZipDecoder().decodeBytes(
+        bytes,
+      ); // Changed from response.bodyBytes to bytes
       for (final file in archive) {
         final filename = file.name;
         if (file.isFile) {
@@ -201,7 +228,9 @@ class UpdateService {
       exit(0); // Exit app to let the script take over
     } catch (e) {
       debugPrint('Update failed: $e');
+      downloadProgress.value = null;
       if (context.mounted) {
+        Navigator.of(context).pop(); // Ensure progress dialog is closed
         AppSnackbar.showError(context, 'Update failed: $e');
       }
     }
@@ -437,6 +466,62 @@ echo "Failed to update after \$MAX_RETRIES attempts."
                   ],
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  } // Closing brace for _showUpdateDialog
+
+  static void _showProgressDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ValueListenableBuilder<double?>(
+              valueListenable: downloadProgress,
+              builder: (context, progress, _) {
+                final percent = progress != null ? (progress * 100).toInt() : 0;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Downloading Update',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: Colors.grey[200],
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '$percent%',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Please do not close the application.',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
