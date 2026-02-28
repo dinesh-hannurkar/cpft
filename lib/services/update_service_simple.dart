@@ -317,10 +317,21 @@ echo Failed to update after 5 attempts. >> "$logPath"
 pause
 ''';
     await File(scriptPath).writeAsString(script);
-    await Process.start('cmd', [
-      '/c',
-      scriptPath,
-    ], mode: ProcessStartMode.detached);
+
+    // Most robust Windows detachment: Use 'start' to spawn an entirely new process tree
+    // /b = no new window, "" = empty title
+    try {
+      debugPrint('Spawning detached Windows patch script...');
+      await Process.start('cmd', [
+        '/c',
+        'start',
+        '/b',
+        '""',
+        scriptPath,
+      ], mode: ProcessStartMode.detachedWithStdio);
+    } catch (e) {
+      debugPrint('Failed to spawn Windows patch script: $e');
+    }
   }
 
   static Future<void> _applyLinuxUpdate(
@@ -380,7 +391,17 @@ echo "Failed to update after \$MAX_RETRIES attempts."
 ''';
     await File(scriptPath).writeAsString(script);
     await Process.run('chmod', ['+x', scriptPath]);
-    await Process.start('bash', [scriptPath], mode: ProcessStartMode.detached);
+
+    // Robust Linux detachment: Redirect all I/O to /dev/null and background
+    try {
+      debugPrint('Spawning detached Linux patch script...');
+      await Process.start('bash', [
+        '-c',
+        'nohup "$scriptPath" </dev/null >/dev/null 2>&1 &',
+      ], mode: ProcessStartMode.detachedWithStdio);
+    } catch (e) {
+      debugPrint('Failed to spawn Linux patch script: $e');
+    }
   }
 
   static Future<void> _launchUrl(String url) async {
