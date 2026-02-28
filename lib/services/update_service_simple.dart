@@ -222,13 +222,20 @@ class UpdateService {
       }
 
       updateStatus.value = 'Restarting App...';
-      debugPrint('Update process complete. Finalizing shutdown...');
+      debugPrint('Initiating forced process shutdown...');
 
-      // Delay so user can see "Restarting App"
-      await Future.delayed(const Duration(milliseconds: 2000));
+      // Delay so user can see the message
+      await Future.delayed(const Duration(milliseconds: 1500));
 
-      debugPrint('Calling hard exit(0).');
-      exit(0);
+      // `pid` is the current Dart process PID from dart:io
+      debugPrint('Killing process PID $pid via sigterm...');
+      try {
+        Process.killPid(pid, ProcessSignal.sigterm);
+      } catch (e) {
+        debugPrint('killPid sigterm failed: $e');
+      }
+      await Future.delayed(const Duration(milliseconds: 300));
+      exit(0); // hard fallback
     } catch (e) {
       debugPrint('Update failed: $e');
       downloadProgress.value = null;
@@ -267,9 +274,8 @@ class UpdateService {
     final parentDir = p.dirname(sourceDir);
     final scriptPath = p.join(parentDir, 'patch.bat');
     final logPath = p.join(parentDir, 'patch.log');
-    final exeName = p.basename(exePath);
 
-    // Robust Windows Script using tasklist wait loop and xcopy
+    // Simple, reliable patch script: hard sleep 5s then robocopy
     final script =
         '''
 @echo off
@@ -279,38 +285,27 @@ set "LOG=$logPath"
 set "SRC=$sourceDir"
 set "DST=$destDir"
 set "EXE=$exePath"
-set "PROC=$exeName"
 
 echo === CPFT UPDATER === > "%LOG%"
 echo Source: %SRC% >> "%LOG%"
 echo Dest:   %DST% >> "%LOG%"
-echo Waiting 3s for app to exit... >> "%LOG%"
-timeout /t 3 /nobreak >nul
-echo Starting wait loop... >> "%LOG%"
+echo Sleeping 5s for app process to fully exit... >> "%LOG%"
+timeout /t 5 /nobreak >nul
 
-:WAIT
-tasklist /fi "IMAGENAME eq %PROC%" 2>nul | find /i "%PROC%" >nul 2>&1
-if not errorlevel 1 (
-    echo App still running, waiting 1s... >> "%LOG%"
-    timeout /t 1 /nobreak >nul
-    goto WAIT
-)
-echo App has exited. Copying files... >> "%LOG%"
+echo Starting file copy... >> "%LOG%"
+robocopy "%SRC%" "%DST%" /e /is /it /r:3 /w:2 /np /nfl /ndl >> "%LOG%" 2>&1
+set ERR=%ERRORLEVEL%
+echo Robocopy exit code: %ERR% >> "%LOG%"
 
-xcopy /e /i /y /q "%SRC%\\*" "%DST%\\" >> "%LOG%" 2>&1
-set XCOPY_ERR=%ERRORLEVEL%
-echo xcopy finished with code: %XCOPY_ERR% >> "%LOG%"
-
-if %XCOPY_ERR% EQU 0 (
-    echo Copy successful. Restarting app... >> "%LOG%"
+if %ERR% LEQ 7 (
+    echo Copy successful. Launching app... >> "%LOG%"
     start "" "%EXE%"
-    echo App restarted. >> "%LOG%"
+    echo Done. >> "%LOG%"
     del "%~f0"
     exit /b 0
-) else (
-    echo Copy FAILED with code %XCOPY_ERR%. >> "%LOG%"
-    exit /b 1
 )
+echo Copy FAILED with code %ERR% >> "%LOG%"
+exit /b 1
 ''';
     await File(scriptPath).writeAsString(script);
 
