@@ -244,23 +244,37 @@ class UpdateService {
     final parentDir = p.dirname(sourceDir);
     final scriptPath = p.join(parentDir, 'patch.bat');
     final logPath = p.join(parentDir, 'patch.log');
+    final exeName = p.basename(exePath);
 
-    // Robust Windows Script using robocopy and a retry loop
+    // Robust Windows Script using tasklist wait loop and robocopy
     final script =
         '''
 @echo off
 setlocal enabledelayedexpansion
-echo Starting update... > "$logPath"
+echo Starting update for $exeName... > "$logPath"
 
-:: Wait for app to exit
-timeout /t 3 /nobreak > nul
+:: Wait for app to exit by checking tasklist
+set WAIT_COUNT=0
+:WAIT_LOOP
+set /a WAIT_COUNT+=1
+echo Checking if $exeName is still running (Attempt %WAIT_COUNT%)... >> "$logPath"
+tasklist /fi "IMAGENAME eq $exeName" | find /i "$exeName" > nul
+if %ERRORLEVEL% equ 0 (
+    if %WAIT_COUNT% leq 20 (
+        timeout /t 1 /nobreak > nul
+        goto WAIT_LOOP
+    )
+    echo Timeout waiting for $exeName to exit. >> "$logPath"
+    exit /b 1
+)
+echo $exeName has exited. >> "$logPath"
 
 set RETRY=0
 :RETRY_LOOP
 set /a RETRY+=1
 echo Attempt !RETRY! to copy files... >> "$logPath"
 
-:: Use robocopy for robust copying (/is = include same, /it = include tweaked, /mt = multi-threaded)
+:: Use robocopy for robust copying
 robocopy "$sourceDir" "$destDir" /e /is /it /move /ndl /nfl /np /r:3 /w:2 >> "$logPath" 2>&1
 
 if %ERRORLEVEL% LEQ 7 (
@@ -294,16 +308,28 @@ pause
     final parentDir = p.dirname(sourceDir);
     final scriptPath = p.join(parentDir, 'patch.sh');
     final logPath = p.join(parentDir, 'patch.log');
+    final exeName = p.basename(exePath);
 
-    // Robust Linux Script with retry loop and process check
+    // Robust Linux Script with pgrep wait loop
     final script =
         '''
 #!/bin/bash
 exec > "$logPath" 2>&1
-echo "Starting Linux update..."
+echo "Starting Linux update for $exeName..."
 
-# Wait for process to exit
-sleep 3
+# Wait for process to exit using pgrep
+WAIT_COUNT=0
+while pgrep -x "$exeName" > /dev/null; do
+    WAIT_COUNT=\$((WAIT_COUNT+1))
+    echo "Waiting for $exeName to exit (Attempt \$WAIT_COUNT)..."
+    if [ \$WAIT_COUNT -gt 20 ]; then
+        echo "Timeout waiting for $exeName to exit."
+        exit 1
+    fi
+    sleep 1
+done
+
+echo "$exeName has exited."
 
 MAX_RETRIES=5
 RETRY=0
