@@ -235,21 +235,19 @@ class UpdateService {
       }
 
       updateStatus.value = 'Restarting App...';
-      debugPrint(
-        'Update process complete. Launching patch script and terminating...',
-      );
+      debugPrint('Update process complete. Terminating application...');
 
-      // Delay to allow UI status change to be seen
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // Delay to ensure status is visible to user
+      await Future.delayed(const Duration(milliseconds: 1500));
 
-      debugPrint('Initiating shutdown via SystemNavigator.pop().');
       try {
+        debugPrint('Attempting SystemNavigator.pop()...');
         await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
       } catch (e) {
-        debugPrint('SystemNavigator.pop failed, proceeding to exit(0): $e');
+        debugPrint('SystemNavigator.pop() error: $e');
       }
 
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 500));
       debugPrint('Final hard exit(0).');
       exit(0);
     } catch (e) {
@@ -423,13 +421,16 @@ echo "Failed to update after \$MAX_RETRIES attempts."
       barrierDismissible: false,
       builder: (_) => PopScope(
         canPop: false,
-        child: Material(
-          type: MaterialType.canvas,
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          elevation: 24,
+        child: Dialog(
+          backgroundColor: AppColors.white,
+          surfaceTintColor: AppColors.white,
+          insetPadding: const EdgeInsets.all(AppSizes.md),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 10,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+            padding: const EdgeInsets.all(AppSizes.lg),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -530,50 +531,78 @@ echo "Failed to update after \$MAX_RETRIES attempts."
       barrierDismissible: false,
       builder: (_) => PopScope(
         canPop: false,
-        child: Material(
-          type: MaterialType.canvas,
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          elevation: 24,
+        child: Dialog(
+          backgroundColor: AppColors.white,
+          surfaceTintColor: AppColors.white,
+          insetPadding: const EdgeInsets.all(AppSizes.md),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 10,
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(AppSizes.lg),
             child: ValueListenableBuilder<double?>(
               valueListenable: downloadProgress,
               builder: (context, progress, _) {
                 final percent = progress != null ? (progress * 100).toInt() : 0;
                 return Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     ValueListenableBuilder<String>(
                       valueListenable: updateStatus,
                       builder: (context, status, _) {
                         return Text(
                           status,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
                         );
                       },
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSizes.lg),
                     LinearProgressIndicator(
                       value: progress,
-                      backgroundColor: Colors.grey[200],
+                      minHeight: 8,
+                      backgroundColor: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
                       valueColor: AlwaysStoppedAnimation<Color>(
                         AppColors.primary,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '$percent%',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    const SizedBox(height: AppSizes.md),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '$percent%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const Text(
+                          'Updating Fylooo',
+                          style: TextStyle(
+                            color: AppColors.greyDark,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
+                    const SizedBox(height: AppSizes.md),
+                    Text(
                       'Please do not close the application.',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.greyDark.withValues(alpha: 0.7),
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 );
