@@ -236,11 +236,22 @@ class UpdateService {
 
       updateStatus.value = 'Restarting App...';
       debugPrint(
-        'Update process complete. Launching patch script and exiting...',
+        'Update process complete. Launching patch script and terminating...',
       );
-      await Future.delayed(const Duration(milliseconds: 800));
-      debugPrint('Calling exit(0) now.');
-      exit(0); // Exit app to let the script take over
+
+      // Delay to allow UI status change to be seen
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      debugPrint('Initiating shutdown via SystemNavigator.pop().');
+      try {
+        await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+      } catch (e) {
+        debugPrint('SystemNavigator.pop failed, proceeding to exit(0): $e');
+      }
+
+      await Future.delayed(const Duration(milliseconds: 200));
+      debugPrint('Final hard exit(0).');
+      exit(0);
     } catch (e) {
       debugPrint('Update failed: $e');
       downloadProgress.value = null;
@@ -412,13 +423,11 @@ echo "Failed to update after \$MAX_RETRIES attempts."
       barrierDismissible: false,
       builder: (_) => PopScope(
         canPop: false,
-        child: Dialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          elevation: 10,
+        child: Material(
+          type: MaterialType.canvas,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          elevation: 24,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
             child: Column(
@@ -521,12 +530,11 @@ echo "Failed to update after \$MAX_RETRIES attempts."
       barrierDismissible: false,
       builder: (_) => PopScope(
         canPop: false,
-        child: Dialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+        child: Material(
+          type: MaterialType.canvas,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          elevation: 24,
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: ValueListenableBuilder<double?>(
