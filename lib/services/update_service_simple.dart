@@ -14,6 +14,7 @@ import 'package:archive/archive.dart';
 import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import 'package:fylooo/shared/widgets/dialog_helpers.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 class UpdateService {
   static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
@@ -197,32 +198,18 @@ class UpdateService {
       final zipFile = File(p.join(tempDir.path, 'update.zip'));
       await zipFile.writeAsBytes(bytes);
 
-      downloadProgress.value = 1.0; // Complete
-      updateStatus.value = 'Preparing Files...';
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // 2. Extract
+      // 2. Extract in Background Isolate
       updateStatus.value = 'Extracting Update...';
+      debugPrint('Starting extraction in isolate...');
       final updateDir = Directory(p.join(tempDir.path, 'fylooo_update'));
       if (await updateDir.exists()) await updateDir.delete(recursive: true);
-      await updateDir.create();
+      await updateDir.create(recursive: true);
 
-      final archive = ZipDecoder().decodeBytes(
-        bytes,
-      ); // Changed from response.bodyBytes to bytes
-      for (final file in archive) {
-        final filename = file.name;
-        if (file.isFile) {
-          final data = file.content as List<int>;
-          File(p.join(updateDir.path, filename))
-            ..createSync(recursive: true)
-            ..writeAsBytesSync(data);
-        } else {
-          Directory(
-            p.join(updateDir.path, filename),
-          ).createSync(recursive: true);
-        }
-      }
+      await compute(_extractZipInIsolate, {
+        'bytes': bytes,
+        'path': updateDir.path,
+      });
+      debugPrint('Extraction complete.');
 
       // 3. Prepare Patch Script
       final currentExe = Platform.resolvedExecutable;
@@ -235,20 +222,12 @@ class UpdateService {
       }
 
       updateStatus.value = 'Restarting App...';
-      debugPrint('Update process complete. Terminating application...');
+      debugPrint('Update process complete. Finalizing shutdown...');
 
-      // Delay to ensure status is visible to user
-      await Future.delayed(const Duration(milliseconds: 1500));
+      // Delay so user can see "Restarting App"
+      await Future.delayed(const Duration(milliseconds: 2000));
 
-      try {
-        debugPrint('Attempting SystemNavigator.pop()...');
-        await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-      } catch (e) {
-        debugPrint('SystemNavigator.pop() error: $e');
-      }
-
-      await Future.delayed(const Duration(milliseconds: 500));
-      debugPrint('Final hard exit(0).');
+      debugPrint('Calling hard exit(0).');
       exit(0);
     } catch (e) {
       debugPrint('Update failed: $e');
@@ -256,6 +235,26 @@ class UpdateService {
       if (context.mounted) {
         Navigator.of(context).pop(); // Ensure progress dialog is closed
         AppSnackbar.showError(context, 'Update failed: $e');
+      }
+    }
+  }
+
+  static Future<void> _extractZipInIsolate(Map<String, dynamic> args) async {
+    final bytes = args['bytes'] as List<int>;
+    final path = args['path'] as String;
+
+    final archive = ZipDecoder().decodeBytes(bytes);
+    for (final file in archive) {
+      final filename = file.name;
+      final fullPath = p.join(path, filename);
+
+      if (file.isFile) {
+        final data = file.content as List<int>;
+        File(fullPath)
+          ..createSync(recursive: true)
+          ..writeAsBytesSync(data);
+      } else {
+        Directory(fullPath).createSync(recursive: true);
       }
     }
   }
