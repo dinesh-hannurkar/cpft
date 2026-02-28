@@ -12,6 +12,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive.dart';
 import 'package:fylooo/shared/widgets/app_snackbar.dart';
+import 'package:fylooo/shared/widgets/dialog_helpers.dart';
+import 'package:flutter/services.dart';
 
 class UpdateService {
   static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
@@ -165,7 +167,10 @@ class UpdateService {
           : '$_baseUrl$updateUrl';
 
       // Show Progress Dialog
-      _showProgressDialog(context);
+      if (context.mounted) {
+        debugPrint('Showing progress dialog...');
+        _showProgressDialog(context);
+      }
 
       // 1. Download ZIP with progress tracking
       final client = http.Client();
@@ -230,7 +235,11 @@ class UpdateService {
       }
 
       updateStatus.value = 'Restarting App...';
-      await Future.delayed(const Duration(milliseconds: 500));
+      debugPrint(
+        'Update process complete. Launching patch script and exiting...',
+      );
+      await Future.delayed(const Duration(milliseconds: 800));
+      debugPrint('Calling exit(0) now.');
       exit(0); // Exit app to let the script take over
     } catch (e) {
       debugPrint('Update failed: $e');
@@ -398,16 +407,17 @@ echo "Failed to update after \$MAX_RETRIES attempts."
     String appStoreUrl, {
     Map<String, dynamic>? desktopRelease,
   }) {
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => PopScope(
         canPop: false,
         child: Dialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          backgroundColor: Colors.white,
           elevation: 10,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
@@ -506,12 +516,14 @@ echo "Failed to update after \$MAX_RETRIES attempts."
   } // Closing brace for _showUpdateDialog
 
   static void _showProgressDialog(BuildContext context) {
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => PopScope(
         canPop: false,
         child: Dialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
