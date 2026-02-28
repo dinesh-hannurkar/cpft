@@ -269,52 +269,47 @@ class UpdateService {
     final logPath = p.join(parentDir, 'patch.log');
     final exeName = p.basename(exePath);
 
-    // Robust Windows Script using tasklist wait loop and robocopy
+    // Robust Windows Script using tasklist wait loop and xcopy
     final script =
         '''
 @echo off
-setlocal enabledelayedexpansion
-echo Starting update for $exeName... > "$logPath"
+setlocal
 
-:: Wait for app to exit by checking tasklist
-set WAIT_COUNT=0
-:WAIT_LOOP
-set /a WAIT_COUNT+=1
-echo Checking if $exeName is still running (Attempt %WAIT_COUNT%)... >> "$logPath"
-tasklist /fi "IMAGENAME eq $exeName" | find /i "$exeName" > nul
-if %ERRORLEVEL% equ 0 (
-    if %WAIT_COUNT% leq 20 (
-        timeout /t 1 /nobreak > nul
-        goto WAIT_LOOP
-    )
-    echo Timeout waiting for $exeName to exit. >> "$logPath"
+set "LOG=$logPath"
+set "SRC=$sourceDir"
+set "DST=$destDir"
+set "EXE=$exePath"
+set "PROC=$exeName"
+
+echo === CPFT UPDATER === > "%LOG%"
+echo Source: %SRC% >> "%LOG%"
+echo Dest:   %DST% >> "%LOG%"
+echo Exe:    %EXE% >> "%LOG%"
+echo Waiting for %PROC% to exit... >> "%LOG%"
+
+:WAIT
+tasklist /fi "IMAGENAME eq %PROC%" 2>nul | find /i "%PROC%" >nul 2>&1
+if not errorlevel 1 (
+    echo App still running, waiting 1s... >> "%LOG%"
+    timeout /t 1 /nobreak >nul
+    goto WAIT
+)
+echo App has exited. Copying files... >> "%LOG%"
+
+xcopy /e /i /y /q "%SRC%\\*" "%DST%\\" >> "%LOG%" 2>&1
+set XCOPY_ERR=%ERRORLEVEL%
+echo xcopy finished with code: %XCOPY_ERR% >> "%LOG%"
+
+if %XCOPY_ERR% EQU 0 (
+    echo Copy successful. Restarting app... >> "%LOG%"
+    start "" "%EXE%"
+    echo App restarted. >> "%LOG%"
+    del "%~f0"
+    exit /b 0
+) else (
+    echo Copy FAILED with code %XCOPY_ERR%. >> "%LOG%"
     exit /b 1
 )
-echo $exeName has exited. >> "$logPath"
-
-set RETRY=0
-:RETRY_LOOP
-set /a RETRY+=1
-echo Attempt !RETRY! to copy files... >> "$logPath"
-
-:: Use robocopy for robust copying
-robocopy "$sourceDir" "$destDir" /e /is /it /move /ndl /nfl /np /r:3 /w:2 >> "$logPath" 2>&1
-
-if %ERRORLEVEL% LEQ 7 (
-    echo Copy successful. >> "$logPath"
-    start "" "$exePath"
-    del "%~f0"
-    exit
-)
-
-if !RETRY! LEQ 5 (
-    echo Copy failed (Error %ERRORLEVEL%), retrying in 2s... >> "$logPath"
-    timeout /t 2 /nobreak > nul
-    goto RETRY_LOOP
-)
-
-echo Failed to update after 5 attempts. >> "$logPath"
-pause
 ''';
     await File(scriptPath).writeAsString(script);
 
