@@ -284,8 +284,9 @@ set "PROC=$exeName"
 echo === CPFT UPDATER === > "%LOG%"
 echo Source: %SRC% >> "%LOG%"
 echo Dest:   %DST% >> "%LOG%"
-echo Exe:    %EXE% >> "%LOG%"
-echo Waiting for %PROC% to exit... >> "%LOG%"
+echo Waiting 3s for app to exit... >> "%LOG%"
+timeout /t 3 /nobreak >nul
+echo Starting wait loop... >> "%LOG%"
 
 :WAIT
 tasklist /fi "IMAGENAME eq %PROC%" 2>nul | find /i "%PROC%" >nul 2>&1
@@ -313,17 +314,11 @@ if %XCOPY_ERR% EQU 0 (
 ''';
     await File(scriptPath).writeAsString(script);
 
-    // IMPORTANT: Use ProcessStartMode.detached NOT detachedWithStdio.
-    // detachedWithStdio keeps stdio pipes OPEN, preventing Flutter from exiting.
-    try {
-      debugPrint('Spawning detached Windows patch script...');
-      await Process.start('cmd', [
-        '/c',
-        scriptPath,
-      ], mode: ProcessStartMode.detached);
-    } catch (e) {
-      debugPrint('Failed to spawn Windows patch script: $e');
-    }
+    // Fire-and-forget: do NOT await Process.start — awaiting blocks UI thread on Windows
+    // The batch script has a built-in 3s delay so it starts after the app exits.
+    debugPrint('Launching patch script (fire-and-forget)...');
+    // ignore: unawaited_futures
+    Process.start('cmd', ['/c', scriptPath], mode: ProcessStartMode.detached);
   }
 
   static Future<void> _applyLinuxUpdate(
