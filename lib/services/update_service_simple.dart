@@ -318,17 +318,14 @@ pause
 ''';
     await File(scriptPath).writeAsString(script);
 
-    // Most robust Windows detachment: Use 'start' to spawn an entirely new process tree
-    // /b = no new window, "" = empty title
+    // IMPORTANT: Use ProcessStartMode.detached NOT detachedWithStdio.
+    // detachedWithStdio keeps stdio pipes OPEN, preventing Flutter from exiting.
     try {
       debugPrint('Spawning detached Windows patch script...');
       await Process.start('cmd', [
         '/c',
-        'start',
-        '/b',
-        '""',
         scriptPath,
-      ], mode: ProcessStartMode.detachedWithStdio);
+      ], mode: ProcessStartMode.detached);
     } catch (e) {
       debugPrint('Failed to spawn Windows patch script: $e');
     }
@@ -392,13 +389,13 @@ echo "Failed to update after \$MAX_RETRIES attempts."
     await File(scriptPath).writeAsString(script);
     await Process.run('chmod', ['+x', scriptPath]);
 
-    // Robust Linux detachment: Redirect all I/O to /dev/null and background
+    // IMPORTANT: Use ProcessStartMode.detached NOT detachedWithStdio.
+    // detachedWithStdio keeps stdio pipes OPEN, preventing Flutter from exiting.
     try {
       debugPrint('Spawning detached Linux patch script...');
       await Process.start('bash', [
-        '-c',
-        'nohup "$scriptPath" </dev/null >/dev/null 2>&1 &',
-      ], mode: ProcessStartMode.detachedWithStdio);
+        scriptPath,
+      ], mode: ProcessStartMode.detached);
     } catch (e) {
       debugPrint('Failed to spawn Linux patch script: $e');
     }
