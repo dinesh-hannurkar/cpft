@@ -1,0 +1,27 @@
+# ============================================================
+# Fylooo Linux Builder — Docker Image
+# Build a Linux .deb + update ZIP from any OS (macOS, Windows)
+#
+# Usage:
+#   docker build -t fylooo-linux-builder .
+#   docker run --rm -v $(pwd):/workspace fylooo-linux-builder 1.1.5
+# ============================================================
+
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
+
+# Install Linux desktop build dependencies
+RUN apt-get update && apt-get install -y \
+    clang cmake ninja-build pkg-config \
+    libgtk-3-dev liblzma-dev libstdc++-12-dev \
+    dpkg-dev zip python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy the deploy script into the image
+COPY deploy_linux.sh /usr/local/bin/deploy_linux.sh
+RUN chmod +x /usr/local/bin/deploy_linux.sh
+
+# Default entrypoint: run the deploy script with the version argument
+ENTRYPOINT ["/usr/local/bin/deploy_linux.sh"]
+CMD ["1.1.5"]
