@@ -17,6 +17,9 @@ class UpdateService {
   static final ValueNotifier<Map<String, dynamic>?> updateNotifier =
       ValueNotifier(null);
   static final ValueNotifier<double?> downloadProgress = ValueNotifier(null);
+  static final ValueNotifier<String> updateStatus = ValueNotifier(
+    'Downloading Update',
+  );
   static String _baseUrl = 'http://192.168.1.179:3000';
   static Future<void> checkForUpdates(
     BuildContext context, {
@@ -190,10 +193,11 @@ class UpdateService {
       await zipFile.writeAsBytes(bytes);
 
       downloadProgress.value = 1.0; // Complete
+      updateStatus.value = 'Preparing Files...';
       await Future.delayed(const Duration(milliseconds: 500));
-      if (context.mounted) Navigator.of(context).pop(); // Close progress dialog
 
       // 2. Extract
+      updateStatus.value = 'Extracting Update...';
       final updateDir = Directory(p.join(tempDir.path, 'fylooo_update'));
       if (await updateDir.exists()) await updateDir.delete(recursive: true);
       await updateDir.create();
@@ -225,6 +229,8 @@ class UpdateService {
         await _applyLinuxUpdate(updateDir.path, installDir, currentExe);
       }
 
+      updateStatus.value = 'Restarting App...';
+      await Future.delayed(const Duration(milliseconds: 500));
       exit(0); // Exit app to let the script take over
     } catch (e) {
       debugPrint('Update failed: $e');
@@ -518,11 +524,15 @@ echo "Failed to update after \$MAX_RETRIES attempts."
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Downloading Update',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    ValueListenableBuilder<String>(
+                      valueListenable: updateStatus,
+                      builder: (context, status, _) {
+                        return Text(
+                          status,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        );
+                      },
                     ),
                     const SizedBox(height: 20),
                     LinearProgressIndicator(
