@@ -552,24 +552,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                TextButton(
-                                  onPressed: () =>
-                                      UpdateService.checkForUpdates(
-                                        context,
-                                        silent: false,
-                                      ),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                    ),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    foregroundColor: AppColors.primary,
-                                  ),
-                                  child: const Text('Check for Updates'),
-                                ),
+                                // const SizedBox(width: 8),
+                                // TextButton(
+                                //   onPressed: () =>
+                                //       UpdateService.checkForUpdates(
+                                //         context,
+                                //         silent: false,
+                                //       ),
+                                //   style: TextButton.styleFrom(
+                                //     padding: const EdgeInsets.symmetric(
+                                //       horizontal: 12,
+                                //     ),
+                                //     minimumSize: Size.zero,
+                                //     tapTargetSize:
+                                //         MaterialTapTargetSize.shrinkWrap,
+                                //     foregroundColor: AppColors.primary,
+                                //   ),
+                                //   child: const Text('Check for Updates'),
+                                // ),
                               ],
                             ),
                           ),

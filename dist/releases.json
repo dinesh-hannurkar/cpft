@@ -3,20 +3,88 @@
         "platform": "windows",
         "version": "v1.1.5",
         "release_type": "Stable",
+        "filename": "Fylooo-Setup-1.1.1.exe",
+        "downloadUrl": "/desktop_releases/Fylooo-Setup-1.1.1.exe",
+        "update_zip": "/desktop_releases/fylooo-windows-update-1.1.1.zip",
+        "date": "2026-02-26",
+        "available": true,
+        "notes": "Windows Release with high-speed connection support and premium design."
+    },
+    {
+        "platform": "windows",
+        "version": "v1.1.0",
+        "release_type": "Stable",
+        "filename": "Fylooo-Setup-1.1.0.exe",
+        "downloadUrl": "/desktop_releases/Fylooo-Setup-1.1.0.exe",
+        "update_zip": "/desktop_releases/fylooo-windows-update-1.1.0.zip",
+        "date": "2026-01-20",
+        "available": false,
+        "notes": "Improved file transfer speeds and stability improvements."
+    },
+    {
+        "platform": "windows",
+        "version": "v1.0.5",
+        "release_type": "Stable",
+        "filename": "Fylooo-Setup-1.0.5.exe",
+        "downloadUrl": "/desktop_releases/Fylooo-Setup-1.0.5.exe",
+        "update_zip": "/desktop_releases/fylooo-windows-update-1.0.5.zip",
+        "date": "2025-12-15",
+        "available": false,
+        "notes": "Bug fixes and UI improvements."
+    },
+    {
+        "platform": "windows",
+        "version": "v1.0.0",
+        "release_type": "Stable",
         "filename": "Fylooo-Setup-1.0.0.exe",
         "downloadUrl": "/desktop_releases/Fylooo-Setup-1.0.0.exe",
-        "update_zip": "/desktop_releases/fylooo-windows-update.zip",
-        "date": "2025-02-26",
-        "notes": "Initial Windows Release with high-speed connection support and premium design."
+        "update_zip": "/desktop_releases/fylooo-windows-update-1.0.0.zip",
+        "date": "2025-11-01",
+        "available": false,
+        "notes": "Initial Windows release."
     },
     {
         "platform": "linux",
         "version": "v1.1.5",
         "release_type": "Stable",
+        "filename": "fylooo-1.1.5-amd64.deb",
+        "downloadUrl": "/desktop_releases/fylooo-1.1.5-amd64.deb",
+        "update_zip": "/desktop_releases/fylooo-linux-update-1.1.5.zip",
+        "date": "2026-02-26",
+        "available": true,
+        "notes": "Linux Release with optimized transfer speeds."
+    },
+    {
+        "platform": "linux",
+        "version": "v1.1.0",
+        "release_type": "Stable",
+        "filename": "fylooo-1.1.0-amd64.deb",
+        "downloadUrl": "/desktop_releases/fylooo-1.1.0-amd64.deb",
+        "update_zip": "/desktop_releases/fylooo-linux-update-1.1.0.zip",
+        "date": "2026-01-20",
+        "available": false,
+        "notes": "Improved stability and faster hotspot connections."
+    },
+    {
+        "platform": "linux",
+        "version": "v1.0.5",
+        "release_type": "Stable",
+        "filename": "fylooo-1.0.5-amd64.deb",
+        "downloadUrl": "/desktop_releases/fylooo-1.0.5-amd64.deb",
+        "update_zip": "/desktop_releases/fylooo-linux-update-1.0.5.zip",
+        "date": "2025-12-15",
+        "available": false,
+        "notes": "Bug fixes and UI improvements."
+    },
+    {
+        "platform": "linux",
+        "version": "v1.0.0",
+        "release_type": "Stable",
         "filename": "fylooo-1.0.0-amd64.deb",
         "downloadUrl": "/desktop_releases/fylooo-1.0.0-amd64.deb",
-        "update_zip": "/desktop_releases/fylooo-linux-update.zip",
-        "date": "2025-02-26",
-        "notes": "Initial Linux Release with optimized transfer speeds."
+        "update_zip": "/desktop_releases/fylooo-linux-update-1.0.0.zip",
+        "date": "2025-11-01",
+        "available": false,
+        "notes": "Initial Linux release."
     }
 ]

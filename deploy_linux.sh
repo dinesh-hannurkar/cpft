@@ -11,7 +11,7 @@ set -e  # Exit on any error
 APP_NAME="fylooo"
 EXE_NAME="cpft"
 VERSION="${1:-1.1.5}"
-MAINTAINER="Your Name <your@email.com>"
+MAINTAINER="info@omnity.com"
 DESCRIPTION="Fylooo — High-speed wireless file transfer"
 DIST_DIR="dist/desktop_releases"
 BUILD_DIR="build/linux/x64/release/bundle"

@@ -13,7 +13,6 @@ import 'package:path/path.dart' as p;
 import 'package:archive/archive.dart';
 import 'package:fylooo/shared/widgets/app_snackbar.dart';
 import 'package:fylooo/shared/widgets/dialog_helpers.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
 class UpdateService {
@@ -23,7 +22,7 @@ class UpdateService {
   static final ValueNotifier<String> updateStatus = ValueNotifier(
     'Downloading Update',
   );
-  static String _baseUrl = 'http://192.168.1.179:3000';
+  static String _baseUrl = 'http://fylooo.com';
   static Future<void> checkForUpdates(
     BuildContext context, {
     bool silent = true,
@@ -108,7 +107,7 @@ class UpdateService {
       else if (Platform.isMacOS)
         platformKey = 'macos';
 
-      final releasesUri = Uri.parse('http://192.168.1.179:3000/releases.json');
+      final releasesUri = Uri.parse('https://fylooo.com/releases.json');
       _baseUrl =
           '${releasesUri.scheme}://${releasesUri.host}${releasesUri.hasPort ? ':${releasesUri.port}' : ''}';
 
