@@ -34,13 +34,8 @@ class DpftpSocket {
       // Tune buffers for Android/Linux
       if (Platform.isAndroid) {
         // SO_SNDBUF = 7, SO_RCVBUF = 8 (Standard Linux constants)
-        // Linux: 16MB to match Android sender's buffer size (prevents kernel overhead)
-        // Android: 2MB is sufficient for mobile devices
-        final int bufferSize = Platform.isLinux
-            ? 16 *
-                  1024 *
-                  1024 // Linux: 16MB (match Android sender)
-            : 2 * 1024 * 1024; // Android: 2MB
+        // Android: 2MB is sufficient for most mobile hotspot/WiFi scenarios
+        const int bufferSize = 2 * 1024 * 1024;
 
         _socket.setRawOption(
           RawSocketOption.fromInt(

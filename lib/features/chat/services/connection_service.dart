@@ -2380,7 +2380,7 @@ class ConnectionService {
                 : (isRemoteWindows
                       ? 10 // Windows: 10 connections
                       : (isRemoteLinux
-                            ? 3 // Linux: 2 connections (reduced for stability)
+                            ? 2 // Linux: 2 connections (reduced for stability on hotspots)
                             : (isRemoteMacOS
                                   ? 6 // macOS: 6 connections
                                   : (isRemoteAndroid
@@ -2407,7 +2407,9 @@ class ConnectionService {
                             1024 *
                             1024) // 256MB for macOS (good default buffers)
                       : (isRemoteLinux
-                            ? (256 * 1024 * 1024) // 256MB for Linux
+                            ? (128 *
+                                  1024 *
+                                  1024) // 128MB for Linux (tighter for hotspots)
                             : (isRemoteAndroid
                                   ? (64 *
                                         1024 *

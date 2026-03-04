@@ -1252,8 +1252,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             // Share via Link: only supported on mobile (Android/iOS) and web.
             // flutter_webrtc data channels are not reliably supported on desktop.
-            if (kIsWeb ||
-                (!Platform.isMacOS && !Platform.isWindows && !Platform.isLinux))
+            if (kIsWeb || (!Platform.isMacOS))
               Showcase(
                 key: ShowcaseHelper.linkShareKey,
                 disableBarrierInteraction: false,
