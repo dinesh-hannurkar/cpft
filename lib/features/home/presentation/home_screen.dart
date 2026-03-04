@@ -1392,7 +1392,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSizes.xl),
           child: Text(
-            'Share files via link or create a local hotspot for direct connection',
+            (kIsWeb ||
+                    (!Platform.isMacOS &&
+                        !Platform.isWindows &&
+                        !Platform.isLinux))
+                ? 'Share files via link or create a local hotspot for direct connection'
+                : 'Connect devices to the same network for direct file sharing',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.greyLight,
