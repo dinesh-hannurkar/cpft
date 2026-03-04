@@ -1250,138 +1250,142 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Showcase(
-              key: ShowcaseHelper.linkShareKey,
-              disableBarrierInteraction: false,
-              targetPadding: const EdgeInsets.all(8),
-              title: 'Share via Link',
-              description: 'Share files via web without application.',
-              tooltipBackgroundColor: Colors.white,
-              textColor: Colors.black,
-              descTextStyle: const TextStyle(
-                fontSize: 12,
-                color: Colors.black87,
-              ),
-              titleTextStyle: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-                fontSize: 16,
-              ),
-              tooltipBorderRadius: BorderRadius.circular(12),
-              targetBorderRadius: BorderRadius.circular(12),
-              child: LinkShareButton(
-                onPressed: () async {
-                  if (!mounted) return;
-
-                  // Check if local-only hotspot is active (which blocks internet for WebRTC signaling)
-                  final hotspotRunning =
-                      await LocalHotspotService.isHotspotRunning();
-                  final lanIp = await NetworkUtils.getLanIPv4();
-                  final hasNetwork = lanIp != null;
-
-                  AppLogger.d(
-                    'Web share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
-                    tag: 'HomeScreen',
-                  );
-
-                  if (hotspotRunning) {
-                    // Local-only hotspot is active - this blocks internet access needed for WebRTC
-                    // Show dialog and let user choose to switch to WiFi
+            // Share via Link: only supported on mobile (Android/iOS) and web.
+            // flutter_webrtc data channels are not reliably supported on desktop.
+            if (kIsWeb ||
+                (!Platform.isMacOS && !Platform.isWindows && !Platform.isLinux))
+              Showcase(
+                key: ShowcaseHelper.linkShareKey,
+                disableBarrierInteraction: false,
+                targetPadding: const EdgeInsets.all(8),
+                title: 'Share via Link',
+                description: 'Share files via web without application.',
+                tooltipBackgroundColor: Colors.white,
+                textColor: Colors.black,
+                descTextStyle: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.black87,
+                ),
+                titleTextStyle: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                  fontSize: 16,
+                ),
+                tooltipBorderRadius: BorderRadius.circular(12),
+                targetBorderRadius: BorderRadius.circular(12),
+                child: LinkShareButton(
+                  onPressed: () async {
                     if (!mounted) return;
-                    final shouldSwitch = await app_dialog.showAppDialog<bool>(
-                      context: context,
-                      builder: (context) => AppConfirmDialog(
-                        title: 'Internet Connection Required',
-                        content: Text(
-                          'WebRTC connections require internet access for signaling. '
-                          'A local-only hotspot is currently active.\n\n'
-                          'Would you like to stop the hotspot and open WiFi settings to connect to a network with internet access?',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AppColors.darkPrimary),
-                        ),
-                        confirmLabel: 'Yes, Switch to WiFi',
-                        cancelLabel: 'Cancel',
-                        destructive: false,
-                      ),
+
+                    // Check if local-only hotspot is active (which blocks internet for WebRTC signaling)
+                    final hotspotRunning =
+                        await LocalHotspotService.isHotspotRunning();
+                    final lanIp = await NetworkUtils.getLanIPv4();
+                    final hasNetwork = lanIp != null;
+
+                    AppLogger.d(
+                      'Web share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
+                      tag: 'HomeScreen',
                     );
 
-                    if (shouldSwitch == true) {
-                      // User confirmed - stop hotspot and open WiFi settings
-                      try {
-                        await LocalHotspotService.stopHotspot();
-                        AppLogger.i(
-                          'Stopped local-only hotspot for WiFi switch',
-                          tag: 'HomeScreen',
-                        );
+                    if (hotspotRunning) {
+                      // Local-only hotspot is active - this blocks internet access needed for WebRTC
+                      // Show dialog and let user choose to switch to WiFi
+                      if (!mounted) return;
+                      final shouldSwitch = await app_dialog.showAppDialog<bool>(
+                        context: context,
+                        builder: (context) => AppConfirmDialog(
+                          title: 'Internet Connection Required',
+                          content: Text(
+                            'WebRTC connections require internet access for signaling. '
+                            'A local-only hotspot is currently active.\n\n'
+                            'Would you like to stop the hotspot and open WiFi settings to connect to a network with internet access?',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.darkPrimary),
+                          ),
+                          confirmLabel: 'Yes, Switch to WiFi',
+                          cancelLabel: 'Cancel',
+                          destructive: false,
+                        ),
+                      );
 
-                        // Clear hotspot info to update UI
-                        if (mounted) {
-                          setState(() {
-                            _hotspotInfo = null;
-                            _hotspotStarting = false;
-                          });
-                        }
+                      if (shouldSwitch == true) {
+                        // User confirmed - stop hotspot and open WiFi settings
+                        try {
+                          await LocalHotspotService.stopHotspot();
+                          AppLogger.i(
+                            'Stopped local-only hotspot for WiFi switch',
+                            tag: 'HomeScreen',
+                          );
 
-                        // Open WiFi settings
-                        await WifiService.openWifiSettings();
-                        AppLogger.i(
-                          'Opened WiFi settings for user',
-                          tag: 'HomeScreen',
-                        );
-
-                        // Refresh network name after a short delay to allow WiFi connection
-                        Future.delayed(const Duration(seconds: 2), () async {
+                          // Clear hotspot info to update UI
                           if (mounted) {
-                            await _initializeNetworkName();
-                            AppLogger.i(
-                              'Refreshed network name after WiFi switch',
-                              tag: 'HomeScreen',
+                            setState(() {
+                              _hotspotInfo = null;
+                              _hotspotStarting = false;
+                            });
+                          }
+
+                          // Open WiFi settings
+                          await WifiService.openWifiSettings();
+                          AppLogger.i(
+                            'Opened WiFi settings for user',
+                            tag: 'HomeScreen',
+                          );
+
+                          // Refresh network name after a short delay to allow WiFi connection
+                          Future.delayed(const Duration(seconds: 2), () async {
+                            if (mounted) {
+                              await _initializeNetworkName();
+                              AppLogger.i(
+                                'Refreshed network name after WiFi switch',
+                                tag: 'HomeScreen',
+                              );
+                            }
+                          });
+
+                          if (mounted) {
+                            AppSnackbar.showSuccess(
+                              context,
+                              'Hotspot stopped. Please connect to WiFi with internet access.',
                             );
                           }
-                        });
-
-                        if (mounted) {
-                          AppSnackbar.showSuccess(
-                            context,
-                            'Hotspot stopped. Please connect to WiFi with internet access.',
+                        } catch (e) {
+                          AppLogger.w(
+                            'Failed to stop hotspot or open WiFi settings: $e',
+                            tag: 'HomeScreen',
                           );
-                        }
-                      } catch (e) {
-                        AppLogger.w(
-                          'Failed to stop hotspot or open WiFi settings: $e',
-                          tag: 'HomeScreen',
-                        );
-                        if (mounted) {
-                          AppSnackbar.showError(context, 'Error: $e');
+                          if (mounted) {
+                            AppSnackbar.showError(context, 'Error: $e');
+                          }
                         }
                       }
+                      return;
                     }
-                    return;
-                  }
 
-                  showAppBottomSheet(
-                    context: context,
-                    title: 'Share via Link',
-                    subtitle:
-                        'Establish direct web connection for file sharing.',
-                    showCloseButton: true,
-                    child: WebRTCConnectionBottomSheet(
-                      webrtcService: _webrtcService,
-                      webShareService: _webShareService,
-                      onConnected: () {
-                        // Optionally navigate to file transfer screen or show success
-                      },
-                      onError: (error) {
-                        AppSnackbar.showError(
-                          context,
-                          'Connection Error: $error',
-                        );
-                      },
-                    ),
-                  );
-                },
+                    showAppBottomSheet(
+                      context: context,
+                      title: 'Share via Link',
+                      subtitle:
+                          'Establish direct web connection for file sharing.',
+                      showCloseButton: true,
+                      child: WebRTCConnectionBottomSheet(
+                        webrtcService: _webrtcService,
+                        webShareService: _webShareService,
+                        onConnected: () {
+                          // Optionally navigate to file transfer screen or show success
+                        },
+                        onError: (error) {
+                          AppSnackbar.showError(
+                            context,
+                            'Connection Error: $error',
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: AppSizes.md),
