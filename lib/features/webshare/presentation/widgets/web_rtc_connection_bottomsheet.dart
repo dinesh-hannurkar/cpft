@@ -5,6 +5,7 @@ import 'package:fylooo/features/webshare/presentation/widgets/status_indicator.d
 import 'package:fylooo/features/webshare/services/webrtc_file_transfer_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'dart:io' show Platform;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:fylooo/features/webshare/services/html_stub.dart'
     if (dart.library.html) 'dart:html'
@@ -472,8 +473,166 @@ class _WebRTCConnectionBottomSheetState
                   ),
                 ),
               ],
-              if (!kIsWeb) ...[
+              // Desktop (macOS/Windows/Linux): show code-entry + Start Sharing button
+              if (!kIsWeb &&
+                  (Platform.isMacOS ||
+                      Platform.isWindows ||
+                      Platform.isLinux)) ...[
+                const SizedBox(height: AppSizes.md),
+                const Text(
+                  'Enter a code from a mobile device, or create a new session:',
+                  style: TextStyle(
+                    fontSize: AppSizes.md,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.md),
+                TextField(
+                  controller: _peerIdController,
+                  style: const TextStyle(
+                    fontSize: AppSizes.md,
+                    color: AppColors.darkPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Enter code (e.g., "1234")',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: AppColors.primary,
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    prefixIcon: const Icon(
+                      Icons.meeting_room,
+                      color: AppColors.primary,
+                    ),
+                    helperText: 'Enter the code shown on the mobile device',
+                    helperStyle: TextStyle(
+                      fontSize: AppSizes.sm * 1.5,
+                      color: Colors.grey.shade600,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSizes.md,
+                      vertical: AppSizes.md,
+                    ),
+                  ),
+                  enabled: !_isConnecting,
+                  onSubmitted: (_) => _connectToPeer(),
+                ),
+                const SizedBox(height: AppSizes.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: OutlinedButton.icon(
+                          onPressed: _isConnecting
+                              ? null
+                              : () async {
+                                  setState(() {
+                                    _isConnecting = true;
+                                    _isStartingWebSharing = true;
+                                  });
+                                  try {
+                                    widget.webrtcService.setSignalingMode(
+                                      useLocal: false,
+                                    );
+                                    widget.webrtcService.setHostMode(false);
+                                    final id = await widget.webrtcService
+                                        .createAutoRoomAndConnect(
+                                          length: 4,
+                                          alphanumeric: false,
+                                        );
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _peerIdController.text = id;
+                                      _currentRoomId = id;
+                                      _hasJoinedRoom = true;
+                                      _isConnecting = false;
+                                      _isStartingWebSharing = false;
+                                    });
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _isConnecting = false;
+                                      _isStartingWebSharing = false;
+                                    });
+                                    widget.onError(e.toString());
+                                  }
+                                },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: _isConnecting && _isStartingWebSharing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.add_link, size: 20),
+                          label: Text(
+                            _isConnecting && _isStartingWebSharing
+                                ? 'Creating...'
+                                : 'New Session',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSizes.sm),
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _isConnecting ? null : _connectToPeer,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          icon: _isConnecting && !_isStartingWebSharing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(Icons.link, size: 20),
+                          label: Text(
+                            _isConnecting && !_isStartingWebSharing
+                                ? 'Joining...'
+                                : 'Join',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 // Mobile: Show QR code preview for web sharing
+              ] else if (!kIsWeb) ...[
                 if (_currentRoomId == null) ...[
                   // Show preview QR code with start button overlay
                   GestureDetector(
@@ -542,10 +701,9 @@ class _WebRTCConnectionBottomSheetState
                           ),
                           // Semi-transparent overlay
                           Container(
-                            // width: 250,
                             height: 250,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
