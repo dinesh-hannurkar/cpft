@@ -68,7 +68,7 @@ void _diskWriterIsolate(_IsolateStartup startup) async {
   try {
     // Open file
     final file = File(startup.filePath);
-    raf = await file.open(mode: FileMode.writeOnly);
+    raf = await file.open(mode: FileMode.write);
 
     // Pre-allocate
     try {
@@ -77,25 +77,60 @@ void _diskWriterIsolate(_IsolateStartup startup) async {
       debugPrint('[DiskWriter] Could not pre-allocate: $e');
     }
 
-    int currentPosition = 0;
+    // FIXED: Initialize to -1 to force SEEK on first chunk (Offset 0)
+    // Windows `truncate()` moves file ptr to end, so we MUST seek back to 0.
+    int currentPosition = -1;
+    int nextChunkToWrite = 0;
+    final chunkBuffer = <int, _WriteCommand>{};
 
     // Process write commands
     await for (final message in receivePort) {
       if (message is _WriteCommand) {
-        try {
-          // Smart seek: only seek if needed
-          if (currentPosition != message.offset) {
-            await raf.setPosition(message.offset);
-            currentPosition = message.offset;
+        // Add chunk to buffer
+        chunkBuffer[message.chunkId] = message;
+
+        // Check if we can write sequential chunks from the buffer
+        while (chunkBuffer.containsKey(nextChunkToWrite)) {
+          final command = chunkBuffer.remove(nextChunkToWrite)!;
+          try {
+            // Smart seek: only seek if the position is incorrect
+            if (currentPosition != command.offset) {
+              await raf.setPosition(command.offset);
+              // VERIFY SEEK for debugging
+              final actualPos = await raf.position();
+              if (actualPos != command.offset) {
+                debugPrint(
+                  '[DiskWriter] ❌ SEEK FAILED! Req: ${command.offset}, Act: $actualPos',
+                );
+              }
+              currentPosition = command.offset;
+            }
+
+            // DEBUG: Trace write
+            debugPrint(
+              '[DiskWriter] ✍️ Writing Chunk ${command.chunkId} at offset ${command.offset} (Len: ${command.data.length}). Pos: $currentPosition',
+            );
+
+            await raf.writeFrom(command.data);
+            currentPosition += command.data.length;
+
+            final postPos = await raf.position();
+            if (postPos != currentPosition) {
+              debugPrint(
+                '[DiskWriter] ⚠️ Position Mismatch after write! Expected: $currentPosition, Actual: $postPos',
+              );
+            }
+            nextChunkToWrite++; // Move to the next chunk
+
+            // Send completion acknowledgment
+            startup.sendPort.send(_WriteResult(chunkId: command.chunkId));
+          } catch (e) {
+            startup.sendPort.send(
+              _Error('Write failed for chunk ${command.chunkId}: $e'),
+            );
+            // Stop processing further to avoid corruption
+            break;
           }
-
-          await raf.writeFrom(message.data);
-          currentPosition += message.data.length;
-
-          // Send completion acknowledgment
-          startup.sendPort.send(_WriteResult(chunkId: message.chunkId));
-        } catch (e) {
-          startup.sendPort.send(_Error('Write failed: $e'));
         }
       } else if (message is _CloseCommand) {
         break;

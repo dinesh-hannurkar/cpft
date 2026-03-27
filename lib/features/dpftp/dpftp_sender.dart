@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
-import 'dpftp_types.dart';
+import 'package:fylooo/features/dpftp/dpftp_socket.dart';
+
+import '../../core/wifi_performance_service.dart';
+import 'adaptive_tuner.dart';
 import 'dpftp_socket_manager.dart';
-import 'dpftp_socket.dart';
+import 'dpftp_types.dart';
 
 /// Sender side of DPFTP v1 (Client).
 /// - Connects to Receiver
@@ -19,7 +22,7 @@ class DpftpSender {
   final int parallelConnections;
 
   final DpftpSocketManager _sockets = DpftpSocketManager();
-  RandomAccessFile? _raf;
+  final List<RandomAccessFile> _rafs = [];
   DpftpFileInfo? _serverInfo;
 
   // Transfer State
@@ -42,6 +45,10 @@ class DpftpSender {
   Completer<void>? _flowControlWait;
   int _socketIdx = 0;
 
+  // Adaptive tuning
+  final AdaptiveTuner _tuner = AdaptiveTuner();
+  bool _useAdaptiveTuning = true; // Re-enabled - transfers work, just slow
+
   DpftpSender({
     required this.ip,
     required this.port,
@@ -52,15 +59,26 @@ class DpftpSender {
     int? maxInFlightBytes,
     this.onProgress,
   }) : chunkSize = chunkSize ?? Dpftp.defaultChunkSize,
-       maxInFlightBytes = maxInFlightBytes ?? (16 * 1024 * 1024),
+       maxInFlightBytes =
+           maxInFlightBytes ??
+           (256 * 1024 * 1024), // 256MB window - maximum for extreme latency
        requestChunkCount =
-           (maxInFlightBytes ?? (16 * 1024 * 1024)) ~/
-           (chunkSize ?? Dpftp.defaultChunkSize);
+           (maxInFlightBytes ?? (256 * 1024 * 1024)) ~/
+           (chunkSize ?? Dpftp.defaultChunkSize) {
+    _tuner.configure(this.chunkSize, this.maxInFlightBytes);
+  }
 
   Future<void> start() async {
     try {
+      // Acquire all performance optimizations (WiFi lock, wake lock, performance mode)
+      await WiFiPerformanceService.acquireAllOptimizations();
+      debugPrint('dpftp-new-file: 🔒 Performance optimizations acquired');
+
       final fileSize = await file.length();
-      _raf = await file.open(mode: FileMode.read);
+      // Open a file handle for each parallel connection for true parallel IO.
+      for (int i = 0; i < parallelConnections; i++) {
+        _rafs.add(await file.open(mode: FileMode.read));
+      }
       _ackedBytes = 0;
       _pushedBytes = 0;
 
@@ -87,16 +105,24 @@ class DpftpSender {
 
       await _sockets.sendControl(Dpftp.typeHello, b.takeBytes());
 
-      // Now wait for FILE_INFO
+      debugPrint(
+        '📂 dpftp-new-file: ${file.uri.pathSegments.last} (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB) → $ip:$port | ID: $transferId',
+      );
     } catch (e) {
       debugPrint('[DPFTP] Sender Start Error: $e');
     }
   }
 
   Future<void> _connectSocket() async {
-    debugPrint('[DPFTP] Connecting socket to $ip:$port...');
+    final startTime = DateTime.now();
     final socket = await Socket.connect(ip, port);
+    final duration = DateTime.now().difference(startTime).inMilliseconds;
     _sockets.addSocket(socket);
+
+    // Log connection time for data sockets (not control)
+    if (_sockets.dataConnectionCount > 0) {
+      debugPrint('dpftp-new-file: ⚡ Socket connected in ${duration}ms');
+    }
   }
 
   Future<void> _handleControlMessage(DpftpMessage msg) async {
@@ -104,9 +130,6 @@ class DpftpSender {
     switch (msg.type) {
       case Dpftp.typeFileInfo:
         await _handleFileInfo(msg.payload);
-        break;
-      case Dpftp.typeAssignChunks:
-        _handleAssignChunks(msg.payload);
         break;
       case Dpftp.typeChunkAck:
         _handleChunkAck(msg.payload);
@@ -128,69 +151,53 @@ class DpftpSender {
   Future<void> _handleFileInfo(Uint8List payload) async {
     _serverInfo = DpftpFileInfo.fromBytes(payload);
     debugPrint(
-      '[DPFTP] Got FILE_INFO. Server has ${_serverInfo!.totalChunks} chunks active.',
+      'dpftp-new-file: Starting ${_serverInfo!.totalChunks} chunks (${(_serverInfo!.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)',
     );
 
-    // Establish Parallel Data Connections
-    for (int i = 0; i < parallelConnections; i++) {
-      await _connectSocket();
-    }
+    // Establish Parallel Data Connections (ALL AT ONCE!)
+    // This reduces connection time from 2-3s to ~500ms
+    await Future.wait([
+      for (int i = 0; i < parallelConnections; i++) _connectSocket(),
+    ]);
 
-    // Start Pump logic by requesting initial work
-    if (!_waitingForAssignment) {
-      _requestWork();
-    }
-  }
-
-  void _requestWork() {
-    // Only request if not already waiting
-    if (_waitingForAssignment) return;
-
-    _waitingForAssignment = true;
-    // Ask for window size appropriate amount (4 chunks = 32MB)
-    _sockets.sendControl(
-      Dpftp.typeRequestChunks,
-      Dpftp.int16(requestChunkCount),
+    // Proactively start sending chunks ("push" model)
+    // Enqueue all chunks and let the pump and flow control manage the rate.
+    _chunkQueue.addAll(
+      List.generate(_serverInfo!.totalChunks, (index) => index),
     );
-  }
-
-  void _handleAssignChunks(Uint8List payload) {
-    // Received assignment
-    _waitingForAssignment = false;
-
-    final count = Dpftp.readInt16(payload, 0);
-    int offset = 2;
-    final newChunks = <int>[];
-
-    for (int i = 0; i < count; i++) {
-      newChunks.add(Dpftp.readInt32(payload, offset));
-      offset += 4;
-    }
-
-    if (newChunks.isEmpty) {
-      // Receiver gave us nothing (shouldn't happen with current receiver logic, but handled gracefully)
-      // This might mean EOF or "Try Again Later"
-      return;
-    }
-
-    debugPrint('[DPFTP] Assigned ${newChunks.length} chunks. Enqueuing.');
-    _chunkQueue.addAll(newChunks);
-
-    // Trigger pump
     _pump();
   }
 
   void _handleChunkAck(Uint8List payload) {
+    final ackTime = DateTime.now();
     final id = Dpftp.readInt32(payload, 0);
+
+    // Track RTT for adaptive tuning
+    if (_useAdaptiveTuning) {
+      _tuner.recordChunkAck(id);
+    }
+
     // Flow Control Update
     if (_inflightSizes.containsKey(id)) {
       final size = _inflightSizes.remove(id)!;
       _ackedBytes += size;
 
+      if (id % 5 == 0) {
+        debugPrint('dpftp-new-file: ⏱️ Chunk $id ACK received');
+
+        // Log adaptive tuning stats periodically
+        if (_useAdaptiveTuning && id % 20 == 0) {
+          final stats = _tuner.getStats();
+          debugPrint(
+            'dpftp-new-file: 📊 Adaptive: RTT=${stats['avgRTT']}ms, Chunk=${stats['chunkSize']}MB, Window=${stats['windowSize']}MB',
+          );
+        }
+      }
+
       // Update Progress on ACK
       // Throttling isn't strictly necessary for ACKs as they are somewhat spaced out,
-      // but if chunks are small, might want to throttle.
-      // Here we assume 8MB chunks, so very infrequent.
+      // but we can still update progress here if needed.
+      // _updateProgress();
       onProgress?.call(
         DpftpProgress(
           transferId: transferId,
@@ -214,11 +221,19 @@ class DpftpSender {
   }
 
   void _handleTransferComplete() {
-    debugPrint('[DPFTP] Transfer Complete! ✅');
-
     final duration = _startTime != null
         ? DateTime.now().difference(_startTime!)
         : Duration.zero;
+
+    final speedMbps = _serverInfo != null && duration.inSeconds > 0
+        ? (_serverInfo!.fileSize * 8.0 / duration.inSeconds / 1000000)
+        : 0;
+    final speedMBps = _serverInfo != null && duration.inSeconds > 0
+        ? (_serverInfo!.fileSize / duration.inSeconds / (1024 * 1024))
+        : 0;
+    debugPrint(
+      'dpftp-new-file: ✅ COMPLETE! Speed: ${speedMbps.toStringAsFixed(1)} Mbps (${speedMBps.toStringAsFixed(1)} MB/s)',
+    );
 
     // Ensure 100%
     onProgress?.call(
@@ -257,20 +272,17 @@ class DpftpSender {
         // Cycle through available sockets (0, 1, 2, 3, 0, 1, 2, 3...)
         await _sendChunk(id, _socketIdx++ % parallelConnections);
 
-        // Pipelining: Request more work if queue is getting low
-        if (_chunkQueue.length < requestChunkCount / 2 &&
-            !_waitingForAssignment) {
-          _requestWork();
+        // 📊 Real-time speed monitoring every 10 chunks
+        if (id > 0 && id % 10 == 0 && _startTime != null) {
+          final elapsed = DateTime.now().difference(_startTime!).inSeconds;
+          if (elapsed > 0) {
+            final speedMBps = _ackedBytes / elapsed / (1024 * 1024);
+            final progress = (_ackedBytes / (_serverInfo?.fileSize ?? 1) * 100);
+            debugPrint(
+              'dpftp-new-file: ${speedMBps.toStringAsFixed(1)} MB/s | Progress: ${progress.toStringAsFixed(0)}% | Chunk: $id/${_serverInfo?.totalChunks ?? 0}',
+            );
+          }
         }
-      }
-
-      // If queue is empty, ensure we have requested next batch
-      if (_chunkQueue.isEmpty &&
-          !_waitingForAssignment &&
-          _serverInfo != null) {
-        // Simple check: do we think there is more?
-        // Receiver handles "No More", so we just ask.
-        _requestWork();
       }
     } catch (e) {
       debugPrint('[DPFTP] Pump Error: $e');
@@ -279,10 +291,8 @@ class DpftpSender {
     }
   }
 
-  Future<void> _ioLock = Future.value();
-
   Future<void> _sendChunk(int id, int socketIndex) async {
-    if (_raf == null || _serverInfo == null) return;
+    if (_rafs.isEmpty || _serverInfo == null) return;
 
     final offset = id * _serverInfo!.chunkSize;
 
@@ -298,27 +308,34 @@ class DpftpSender {
 
     final buffer = Uint8List(size);
 
-    // Atomic Read
-    final myLock = Completer<void>();
-    final prevLock = _ioLock;
-    _ioLock = myLock.future;
-
+    // Read using the dedicated file handle for this socket.
+    final raf = _rafs[socketIndex];
     try {
-      await prevLock;
-      if (_raf == null) return;
-      await _raf!.setPosition(offset);
-      await _raf!.readInto(buffer);
+      await raf.setPosition(offset);
+      await raf.readInto(buffer);
     } catch (e) {
       debugPrint('[DPFTP] Read error: $e');
       rethrow;
-    } finally {
-      myLock.complete();
     }
 
     // Send Data
     // [ChunkId:4][Len:4][Payload]
     // Note: sendDataChunk is async (flushes to socket buffer)
+    final sendTime = DateTime.now();
+
+    // Track send time for adaptive tuning
+    if (_useAdaptiveTuning) {
+      _tuner.recordChunkSent(id);
+    }
+
     await _sockets.sendDataChunk(socketIndex, id, size, buffer);
+    final sendDuration = DateTime.now().difference(sendTime).inMilliseconds;
+
+    if (id % 5 == 0) {
+      debugPrint(
+        'dpftp-new-file: ⏱️ Chunk $id SENT in ${sendDuration}ms (${(size / (1024 * 1024)).toStringAsFixed(1)}MB)',
+      );
+    }
 
     if (_startTime == null) _startTime = DateTime.now();
 
@@ -334,6 +351,9 @@ class DpftpSender {
 
   void stop() {
     _sockets.dispose();
-    _raf?.close();
+    for (var raf in _rafs) {
+      raf.close();
+    }
+    _rafs.clear();
   }
 }

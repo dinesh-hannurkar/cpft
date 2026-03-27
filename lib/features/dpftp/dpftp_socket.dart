@@ -16,8 +16,8 @@ class DpftpSocket {
 
   // Buffering
   final Uint8List _buf = Uint8List(
-    12 * 1024 * 1024,
-  ); // 10MB buffer is sufficient for 8MB chunk + header
+    20 * 1024 * 1024,
+  ); // 20MB buffer for 8MB chunks + overhead
   int _start = 0;
   int _end = 0;
 
@@ -28,12 +28,6 @@ class DpftpSocket {
   int get remotePort => _socket.remotePort;
 
   DpftpSocket(this._socket) {
-    // Disable Nagle's algorithm for lower latency on small control messages
-    try {
-      _socket.setOption(SocketOption.tcpNoDelay, true);
-    } catch (e) {
-      debugPrint('[DPFTP] Failed to set tcpNoDelay: $e');
-    }
     _socket.listen(
       _onData,
       onError: (e) {

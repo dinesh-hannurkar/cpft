@@ -28,8 +28,11 @@ class MainActivity : FlutterActivity() {
     private val NATIVE_SENDER_CHANNEL = "com.omnity.fylooo/native_sender"
     private val NATIVE_RECEIVER_CHANNEL = "com.omnity.fylooo/native_receiver"
     private val NATIVE_RECEIVER_PROGRESS_CHANNEL = "com.omnity.fylooo/native_receiver_progress"
+    private val WIFI_PERFORMANCE_CHANNEL = "com.omnity.fylooo/wifi_performance"
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var transferWakeLock: PowerManager.WakeLock? = null
     private var nsdManager: NsdManager? = null
     private lateinit var wifiManager: WifiManager
     private var hotspotReservation: WifiManager.LocalOnlyHotspotReservation? = null
@@ -91,6 +94,59 @@ class MainActivity : FlutterActivity() {
 
         // Native receiver progress channel
         nativeReceiverProgressChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NATIVE_RECEIVER_PROGRESS_CHANNEL)
+        
+        // WiFi Performance Lock Channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIFI_PERFORMANCE_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "acquireWifiLock" -> {
+                    acquireWifiPerformanceLock()
+                    result.success(true)
+                }
+                "releaseWifiLock" -> {
+                    releaseWifiPerformanceLock()
+                    result.success(true)
+                }
+                "acquireTransferWakeLock" -> {
+                    acquireTransferWakeLock()
+                    result.success(true)
+                }
+                "releaseTransferWakeLock" -> {
+                    releaseTransferWakeLock()
+                    result.success(true)
+                }
+                "enableSustainedPerformance" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        enableSustainedPerformanceMode()
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "disableSustainedPerformance" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        disableSustainedPerformanceMode()
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "requestBatteryOptimizationExemption" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        requestBatteryOptimizationExemption(result)
+                    } else {
+                        result.success(true) // Not needed on older versions
+                    }
+                }
+                "checkBatteryOptimizationStatus" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        checkBatteryOptimizationStatus(result)
+                    } else {
+                        result.success(true) // Not needed on older versions
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
         
         // WiFi info channel for frequency detection
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIFI_CHANNEL).setMethodCallHandler { call, result ->
@@ -385,6 +441,139 @@ class MainActivity : FlutterActivity() {
             }
         }
         wakeLock = null
+    }
+
+    private fun acquireWifiPerformanceLock() {
+        try {
+            if (wifiLock == null || !wifiLock!!.isHeld) {
+                // Use HIGH_PERF mode to prevent WiFi power saving
+                wifiLock = wifiManager.createWifiLock(
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                    "cpft:transfer_wifi_lock"
+                )
+                wifiLock?.setReferenceCounted(false)
+                wifiLock?.acquire()
+                android.util.Log.d("WiFiPerformance", "✅ High-performance WiFi lock acquired")
+                println("WiFi Performance Lock acquired - power saving disabled")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("WiFiPerformance", "Failed to acquire WiFi lock: ${e.message}")
+        }
+    }
+
+    private fun releaseWifiPerformanceLock() {
+        try {
+            wifiLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    android.util.Log.d("WiFiPerformance", "✅ High-performance WiFi lock released")
+                    println("WiFi Performance Lock released")
+                }
+            }
+            wifiLock = null
+        } catch (e: Exception) {
+            android.util.Log.e("WiFiPerformance", "Failed to release WiFi lock: ${e.message}")
+        }
+    }
+
+    private fun acquireTransferWakeLock() {
+        try {
+            if (transferWakeLock == null || !transferWakeLock!!.isHeld) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                
+                // Partial wake lock - keeps CPU running but allows screen off
+                transferWakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "cpft:transfer_wake_lock"
+                )
+                transferWakeLock?.setReferenceCounted(false)
+                // Acquire for 10 minutes max (auto-release safety)
+                transferWakeLock?.acquire(10 * 60 * 1000L)
+                android.util.Log.d("TransferWakeLock", "✅ Partial wake lock acquired (CPU stays awake)")
+                println("Transfer Wake Lock acquired - CPU will not sleep during transfer")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TransferWakeLock", "Failed to acquire wake lock: ${e.message}")
+        }
+    }
+
+    private fun releaseTransferWakeLock() {
+        try {
+            transferWakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    android.util.Log.d("TransferWakeLock", "✅ Partial wake lock released")
+                    println("Transfer Wake Lock released")
+                }
+            }
+            transferWakeLock = null
+        } catch (e: Exception) {
+            android.util.Log.e("TransferWakeLock", "Failed to release wake lock: ${e.message}")
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    private fun enableSustainedPerformanceMode() {
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            
+            if (powerManager.isSustainedPerformanceModeSupported) {
+                window.setSustainedPerformanceMode(true)
+                android.util.Log.d("Performance", "✅ Sustained performance mode enabled")
+                println("Sustained Performance Mode enabled - system will prioritize performance")
+            } else {
+                android.util.Log.d("Performance", "⚠️ Sustained performance mode not supported on this device")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("Performance", "Failed to enable sustained performance mode: ${e.message}")
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    private fun disableSustainedPerformanceMode() {
+        try {
+            window.setSustainedPerformanceMode(false)
+            android.util.Log.d("Performance", "✅ Sustained performance mode disabled")
+            println("Sustained Performance Mode disabled")
+        } catch (e: Exception) {
+            android.util.Log.e("Performance", "Failed to disable sustained performance mode: ${e.message}")
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun requestBatteryOptimizationExemption(result: MethodChannel.Result) {
+        try {
+            val packageName = packageName
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            
+            if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                android.util.Log.d("BatteryOpt", "✅ App is already exempt from battery optimization")
+                result.success(true)
+            } else {
+                // Request exemption from battery optimization
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                intent.data = android.net.Uri.parse("package:$packageName")
+                startActivity(intent)
+                android.util.Log.d("BatteryOpt", "📱 Requesting battery optimization exemption")
+                result.success(false)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BatteryOpt", "Failed to request battery optimization exemption: ${e.message}")
+            result.error("BATTERY_OPT_ERROR", e.message, null)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun checkBatteryOptimizationStatus(result: MethodChannel.Result) {
+        try {
+            val packageName = packageName
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val isExempt = powerManager.isIgnoringBatteryOptimizations(packageName)
+            result.success(isExempt)
+        } catch (e: Exception) {
+            android.util.Log.e("BatteryOpt", "Failed to check battery optimization status: ${e.message}")
+            result.error("BATTERY_OPT_ERROR", e.message, null)
+        }
     }
 
     private fun connectToWifi(ssid: String, password: String?, security: String, result: MethodChannel.Result) {

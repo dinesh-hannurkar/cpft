@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 // import 'package:crypto/crypto.dart'; // PERF: Disabled
+import '../../core/wifi_performance_service.dart';
 import 'dpftp_types.dart';
 import 'dpftp_socket_manager.dart';
 import 'dpftp_socket.dart';
@@ -60,9 +61,6 @@ class DpftpReceiver {
       );
     }
 
-    // Optimize socket buffers for high-speed transfer
-    _optimizeSocketBuffers(socket);
-
     _sessions[ip]!.addSocket(socket);
   }
 
@@ -70,28 +68,6 @@ class DpftpReceiver {
     await _server?.close();
     for (var s in _sessions.values) s.dispose();
     _sessions.clear();
-  }
-
-  /// Optimize socket buffers for high-speed transfer
-  void _optimizeSocketBuffers(Socket socket) {
-    if (kIsWeb) return;
-
-    try {
-      // Platform-specific constants
-      final solSocket = Platform.isWindows ? 0xFFFF : 1;
-      final soRcvbuf = Platform.isWindows ? 0x1002 : 8;
-      final soSndbuf = Platform.isWindows ? 0x1001 : 7;
-      const bufferSize = 2 * 1024 * 1024; // 2MB
-
-      final bufferBytes = ByteData(4);
-      bufferBytes.setInt32(0, bufferSize, Endian.host);
-      final bufferValue = bufferBytes.buffer.asUint8List();
-
-      socket.setRawOption(RawSocketOption(solSocket, soRcvbuf, bufferValue));
-      socket.setRawOption(RawSocketOption(solSocket, soSndbuf, bufferValue));
-    } catch (e) {
-      debugPrint('[DPFTP] Failed to optimize socket buffers: $e');
-    }
   }
 }
 
@@ -133,9 +109,6 @@ class _Session {
       switch (msg.type) {
         case Dpftp.typeHello:
           await _handleHello(msg.payload);
-          break;
-        case Dpftp.typeRequestChunks:
-          await _handleRequestChunks(msg.payload);
           break;
         case Dpftp.typeChunkDone:
           await _handleChunkDone(msg.payload);
@@ -190,6 +163,13 @@ class _Session {
     // Send to isolate disk writer (non-blocking!)
     if (_diskWriter != null) {
       _diskWriter!.writeChunk(chunkId, offset, data);
+
+      if (chunkId % 5 == 0) {
+        // PERF: Disable logging to speed up transfer
+        // debugPrint(
+        //   'dpftp-new-file: ⏱️ Chunk $chunkId RECEIVED (${(len / (1024 * 1024)).toStringAsFixed(1)}MB)',
+        // );
+      }
     } else {
       // Fallback to direct write (should not happen in normal flow)
       debugPrint(
@@ -199,6 +179,24 @@ class _Session {
     }
 
     _receivedBytes += len;
+
+    // ✅ CRITICAL FIX: Send ACK immediately when data is received
+    // Don't wait for CHUNK_DONE - it may arrive out of order on control channel
+    _fileInfo!.bitmap.markReceived(chunkId);
+    _inFlightChunks.remove(chunkId);
+    _sockets.sendControl(Dpftp.typeChunkAck, Dpftp.int32(chunkId));
+
+    if (chunkId % 5 == 0) {
+      // PERF: Disable logging
+      // debugPrint('dpftp-new-file: ✅ Chunk $chunkId ACK sent immediately');
+    }
+
+    // Save metadata and check completion
+    _saveMetadata();
+    if (_fileInfo!.bitmap.isComplete) {
+      _finishTransfer();
+    }
+
     // PERF: Throttled progress callbacks (chunk 0 + every 8 chunks for UI timing)
     if (chunkId == 0 || chunkId % 8 == 0 || _fileInfo!.bitmap.isComplete) {
       onProgress?.call(
@@ -212,10 +210,10 @@ class _Session {
       );
     }
 
-    // Check if CHUNK_DONE arrived early
+    // Still handle CHUNK_DONE if it arrives (for hash verification in future)
     if (_pendingDoneHashes.containsKey(chunkId)) {
-      final expected = _pendingDoneHashes.remove(chunkId)!;
-      _verifyChunk(chunkId, calculated, expected);
+      _pendingDoneHashes.remove(chunkId);
+      // Hash verification disabled for now
     }
   }
 
@@ -248,40 +246,12 @@ class _Session {
 
   // ... (handleHello in between)
 
-  Future<void> _handleRequestChunks(Uint8List payload) async {
-    // Payload: [MaxChunks:2]
-    final maxChunks = Dpftp.readInt16(payload, 0);
-
-    // Find missing chunks in bitmap
-    final missing = _fileInfo!.bitmap.getMissingChunks(
-      maxChunks + _inFlightChunks.length,
-    );
-
-    // Filter out in-flight
-    final assignable = missing
-        .where((id) => !_inFlightChunks.contains(id))
-        .take(maxChunks)
-        .toList();
-
-    if (assignable.isEmpty) {
-      if (_fileInfo!.bitmap.isComplete) {
-        return;
-      }
-      return;
-    }
-
-    // Send ASSIGN_CHUNKS
-    final b = BytesBuilder();
-    b.add(Dpftp.int16(assignable.length));
-    for (final id in assignable) {
-      b.add(Dpftp.int32(id));
-      _inFlightChunks.add(id); // Mark In-Flight
-    }
-
-    await _sockets.sendControl(Dpftp.typeAssignChunks, b.takeBytes());
-  }
-
   Future<void> _handleHello(Uint8List payload) async {
+    // Acquire all performance optimizations (WiFi lock, wake lock, performance mode)
+    await WiFiPerformanceService.acquireAllOptimizations();
+    debugPrint(
+      'dpftp-new-file: 🔒 Performance optimizations acquired (receiver)',
+    );
     // Payload: [NameLen:2][Name][Size:8] (Adapted)
     int offset = 0;
     final nameLen = Dpftp.readInt16(payload, offset);
@@ -319,32 +289,26 @@ class _Session {
       '[DPFTP] Hello: $_fileName ($fileSize bytes) from $ip (ID: $_transferId)',
     );
 
-    // Create session file info with unique filename if needed
-    String uniqueFileName = _fileName ?? 'unknown';
-    File file = File('$saveDir/$uniqueFileName');
+    // Generate unique filename with timestamp to avoid ANY conflict or overwrite logic
+    // This is the safest way to ensure clean writes on Windows
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final parts = _fileName!.split('.');
+    final extension = parts.length > 1 ? parts.last : '';
+    final baseName = parts.length > 1
+        ? parts.sublist(0, parts.length - 1).join('.')
+        : _fileName!;
 
-    // Generate unique filename if file already exists (avoid overwriting)
-    if (await file.exists() &&
-        !await File('$saveDir/$uniqueFileName.dpftp').exists()) {
-      int counter = 1;
-      final parts = uniqueFileName.split('.');
-      final extension = parts.length > 1 ? parts.last : '';
-      final baseName = parts.length > 1
-          ? parts.sublist(0, parts.length - 1).join('.')
-          : uniqueFileName;
+    _fileName = extension.isNotEmpty
+        ? '${baseName}_$timestamp.$extension'
+        : '${_fileName}_$timestamp';
 
-      while (await file.exists()) {
-        uniqueFileName = extension.isNotEmpty
-            ? '$baseName ($counter).$extension'
-            : '$uniqueFileName ($counter)';
-        file = File('$saveDir/$uniqueFileName');
-        counter++;
-        if (counter > 100) break; // Safety limit
-      }
+    final file = File('$saveDir/$_fileName');
+    debugPrint('[DPFTP] Using unique filename: $_fileName');
 
-      debugPrint('[DPFTP] File exists, using unique name: $uniqueFileName');
-      _fileName = uniqueFileName; // Update filename
-    }
+    /* 
+    // OLD LOGIC (Removed for stability) 
+    if (await file.exists() && ... ) { ... } 
+    */
 
     final metaFile = File('$saveDir/${_fileName}.dpftp');
 
@@ -379,17 +343,18 @@ class _Session {
         bitmap: ChunkBitmap(totalChunks),
       );
 
-      // Create file with proper mode (writeOnly creates if not exists)
-      _raf = await file.open(mode: FileMode.writeOnly);
-      // Pre-allocate space for large files (helps performance)
+      // FIXED: Do NOT open/truncate file here if using Isolate DiskWriter
+      // Double opening file (Main + Isolate) causes locking issues on Windows
+      // The DiskWriter isolate handles open/truncate itself.
+
+      /* 
+      _raf = await file.open(mode: FileMode.write);
       try {
         await _raf!.truncate(fileSize);
-      } catch (e) {
-        debugPrint(
-          '[DPFTP] Warning: Could not pre-allocate $fileSize bytes: $e',
-        );
-        // Continue anyway - file will grow as chunks are written
-      }
+      } catch (e) { ... } 
+      */
+
+      // _raf = null; // Ensure main thread doesn't hold handle
       _saveMetadata();
       _receivedBytes = 0;
 
@@ -400,7 +365,9 @@ class _Session {
     }
 
     if (_raf == null && _diskWriter == null) {
-      _raf = await file.open(mode: FileMode.append); // Re-open for resume
+      // FIXED: Force overwrite for now (FileMode.append + setPosition is unreliable on Windows)
+      // This disables Resume capability but prevents File Duplication bug
+      _raf = await file.open(mode: FileMode.write); // Re-open (Overwrite)
 
       // Calc received bytes (approx)
       final missing = _fileInfo!.bitmap.getMissingChunks(
@@ -443,7 +410,14 @@ class _Session {
     final id = Dpftp.readInt32(payload, 0);
     final hashBytes = payload.sublist(4, 36);
 
-    // 1. Check if we have data (from Data Channel)
+    // CRITICAL: Don't process CHUNK_DONE if we already sent ACK immediately
+    // This prevents duplicate ACKs that cause sender to re-send chunks
+    if (_fileInfo!.bitmap.hasChunk(id)) {
+      // Already processed and ACKed when data arrived - skip
+      return;
+    }
+
+    // Legacy path: Only if data hasn't arrived yet (shouldn't happen with immediate ACKs)
     if (_calculatedHashes.containsKey(id)) {
       _verifyChunk(id, _calculatedHashes[id]!, hashBytes);
     } else {

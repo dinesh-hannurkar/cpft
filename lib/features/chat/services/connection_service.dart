@@ -1063,7 +1063,7 @@ class ConnectionService {
   Future<void> _attemptWiFiDirectUpgrade() async {
     if (_wifiDirectAttempted) return;
     _wifiDirectAttempted = true;
-    return;
+    // return;
     // Only attempt WiFi Direct on Android
     if (!Platform.isAndroid) {
       debugPrint('[ConnectionService] 📡 WiFi Direct: Not Android, skipping');
@@ -1918,18 +1918,53 @@ class ConnectionService {
             }
 
             // Optimize DPFTP parameters based on remote platform
-            // Windows systems have more resources, so use aggressive settings
             final bool isRemoteWindows = _remotePlatform == 'windows';
-            final int parallelConns = isRemoteWindows ? 8 : 4;
+            final bool isRemoteLinux = _remotePlatform == 'linux';
+            final bool isRemoteAndroid = _remotePlatform == 'android';
+            final bool isRemoteMacOS = _remotePlatform == 'macos';
+
+            // Moderate connection count for router compatibility
+            final int parallelConns = isRemoteWindows
+                ? 10 // Windows: 10 connections (Aggressive Parallelism)
+                : (isRemoteLinux || isRemoteAndroid || isRemoteMacOS
+                      ? 6 // Linux/Android/macOS: 6 connections
+                      : 6); // Others: 6 connections
+
+            // FIXED: Use 2MB chunks for Windows to reduce CPU/Header overhead
+            // 4MB for optimal throughput on other platforms
             final int chunkSizeMB = isRemoteWindows
-                ? (8 * 1024 * 1024)
-                : (4 * 1024 * 1024);
+                ? 2 * 1024 * 1024
+                : 4 * 1024 * 1024;
+
+            // Windows-specific: Tighter window to consume data faster and reduce RTT
+            // 32MB is enough for 30+ MB/s even with high RTT.
+            // 512MB caused massive bufferbloat (RTT > 5s).
+            // Windows-specific: Aggressive Window for 10 connections
+            // 128MB allows 12.8MB per connection.
             final int windowMB = isRemoteWindows
-                ? (64 * 1024 * 1024)
-                : (16 * 1024 * 1024);
+                ? (128 * 1024 * 1024) // 128MB for Windows
+                : (isRemoteMacOS
+                      ? (256 *
+                            1024 *
+                            1024) // 256MB for macOS (good default buffers)
+                      : (isRemoteLinux || isRemoteAndroid
+                            ? (256 * 1024 * 1024) // 256MB for Linux/Android
+                            : (128 * 1024 * 1024))); // 128MB for others
 
             debugPrint(
-              '[ConnectionService] 🚀 DPFTP Config: ${isRemoteWindows ? "Windows-optimized" : "Standard"} (conns=$parallelConns, chunk=${chunkSizeMB ~/ (1024 * 1024)}MB, window=${windowMB ~/ (1024 * 1024)}MB)',
+              'dpftp-new-file: Config → ${isRemoteWindows
+                  ? "Windows"
+                  : isRemoteAndroid
+                  ? "Android"
+                  : isRemoteLinux
+                  ? "Linux"
+                  : isRemoteMacOS
+                  ? "macOS"
+                  : "Standard"} | Connections: $parallelConns | Chunk: ${chunkSizeMB ~/ (1024 * 1024)}MB | Window: ${windowMB ~/ (1024 * 1024)}MB)',
+            );
+
+            debugPrint(
+              'dpftp-new-file: 🔍 Platform detection: _remotePlatform="$_remotePlatform", isWindows=$isRemoteWindows, isAndroid=$isRemoteAndroid, isLinux=$isRemoteLinux, isMacOS=$isRemoteMacOS',
             );
 
             // Start DPFTP transfer

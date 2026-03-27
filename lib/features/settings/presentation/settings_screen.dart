@@ -21,6 +21,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:fylooo/features/settings/presentation/feedback_screen.dart';
 import 'package:fylooo/features/chat/services/connection_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String currentDeviceName;
@@ -42,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isApplying = false;
   bool _soundsEnabled = true;
   bool _useNativeReceiver = true; // Debug toggle for direct Dart I/O test
+  String _downloadPath = 'Downloads (Default)';
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadVersion();
     _loadDeviceNameFromPrefs();
     _loadSoundsEnabled();
+    _loadDownloadPath();
     _useNativeReceiver = ConnectionService.useNativeReceiver;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
@@ -102,10 +106,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleNativeReceiver(bool value) async {
     setState(() => _useNativeReceiver = value);
     ConnectionService.useNativeReceiver = value;
-    final msg = value ? 'Native receiver enabled' : 'Direct Dart I/O enabled (test mode)';
+    final msg = value
+        ? 'Native receiver enabled'
+        : 'Direct Dart I/O enabled (test mode)';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.white)), backgroundColor: AppColors.darkPrimary), 
+      SnackBar(
+        content: Text(
+          msg,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.white),
+        ),
+        backgroundColor: AppColors.darkPrimary,
+      ),
     );
+  }
+
+  Future<void> _loadDownloadPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    final path = prefs.getString('download_save_path');
+
+    // Check if it matches default
+    String? defaultPath;
+    try {
+      final downloads = await getDownloadsDirectory();
+      defaultPath =
+          (downloads ?? await getApplicationDocumentsDirectory()).path;
+    } catch (_) {}
+
+    if (path == null || (defaultPath != null && path == defaultPath)) {
+      if (mounted) setState(() => _downloadPath = 'Downloads (Default)');
+    } else {
+      if (mounted) setState(() => _downloadPath = path);
+    }
+  }
+
+  Future<void> _changeDownloadPath() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('download_save_path', selectedDirectory);
+      if (mounted) {
+        setState(() => _downloadPath = selectedDirectory);
+      }
+    }
   }
 
   Future<void> _launchUrl(String url) async {
@@ -116,16 +160,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open link: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not open link: $e')));
       }
     }
   }
 
   Future<void> _rateApp() async {
-    const String appStoreUrl = 'https://play.google.com/store/apps/details?id=com.cpft.app';
-    const String appStoreUrlIOS = 'https://apps.apple.com/app/cpft/id1234567890'; // Replace with actual App Store ID
+    const String appStoreUrl =
+        'https://play.google.com/store/apps/details?id=com.cpft.app';
+    const String appStoreUrlIOS =
+        'https://apps.apple.com/app/cpft/id1234567890'; // Replace with actual App Store ID
 
     try {
       if (Theme.of(context).platform == TargetPlatform.iOS) {
@@ -135,9 +181,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open app store: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not open app store: $e')));
       }
     }
   }
@@ -151,9 +197,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share app: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not share app: $e')));
       }
     }
   }
@@ -435,17 +481,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               activeColor: AppColors.primary,
                             ),
                           ),
+                          // Download Location
+                          if (!kIsWeb &&
+                              (Theme.of(context).platform ==
+                                      TargetPlatform.macOS ||
+                                  Theme.of(context).platform ==
+                                      TargetPlatform.windows ||
+                                  Theme.of(context).platform ==
+                                      TargetPlatform.linux))
+                            SettingsTile(
+                              icon: Icons.folder_open_rounded,
+                              title: 'Download Location',
+                              subtitle: _downloadPath,
+                              onTap: _changeDownloadPath,
+                            ),
                           // 🔬 Debug: Toggle between native receiver and direct Dart I/O
                           if (!kIsWeb)
                             SettingsTile(
                               icon: Icons.science_rounded,
                               title: 'Test Mode: Direct I/O',
-                              subtitle: _useNativeReceiver 
+                              subtitle: _useNativeReceiver
                                   ? 'Using native receiver (4 Mbps)'
                                   : 'Using direct Dart I/O (23 Mbps test)',
                               trailing: Switch(
                                 value: _useNativeReceiver,
-                                onChanged: (value) => _toggleNativeReceiver(value),
+                                onChanged: (value) =>
+                                    _toggleNativeReceiver(value),
                                 activeColor: AppColors.primary,
                               ),
                             ),
