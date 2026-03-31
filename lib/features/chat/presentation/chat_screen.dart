@@ -1422,26 +1422,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                   final tId = incomingKeys[extra];
                                   return TransferProgressTile(
                                     progress: _incomingProgress[tId]!,
-                                    onCancel: () {
-                                      _connectionService.cancelTransfer(tId);
-                                      setState(() {
-                                        _incomingProgress.remove(tId);
-                                        _outgoingProgress.remove(tId);
-                                      });
-                                    },
-                                    onResume: () async {
-                                      if (_incomingProgress.containsKey(tId)) {
-                                        await _connectionService.resumeIncoming(
-                                          tId,
-                                        );
-                                      } else if (_outgoingProgress.containsKey(
-                                        tId,
-                                      )) {
-                                        await _connectionService.requestResume(
-                                          tId,
-                                        );
-                                      }
-                                    },
+                                    // NetcatService doesn't support cancel/resume
+                                    onCancel: null,
+                                    onResume: null,
                                   );
                                 }
                                 final outExtra = extra - incomingKeys.length;
@@ -1450,26 +1433,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                   final tId = outKeys[outExtra];
                                   return TransferProgressTile(
                                     progress: _outgoingProgress[tId]!,
-                                    onCancel: () {
-                                      _connectionService.cancelTransfer(tId);
-                                      setState(() {
-                                        _incomingProgress.remove(tId);
-                                        _outgoingProgress.remove(tId);
-                                      });
-                                    },
-                                    onResume: () async {
-                                      if (_incomingProgress.containsKey(tId)) {
-                                        await _connectionService.resumeIncoming(
-                                          tId,
-                                        );
-                                      } else if (_outgoingProgress.containsKey(
-                                        tId,
-                                      )) {
-                                        await _connectionService.requestResume(
-                                          tId,
-                                        );
-                                      }
-                                    },
+                                    // NetcatService doesn't support cancel/resume
+                                    onCancel: null,
+                                    onResume: null,
                                   );
                                 }
                                 return const SizedBox.shrink();
