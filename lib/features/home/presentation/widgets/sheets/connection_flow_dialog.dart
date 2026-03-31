@@ -47,10 +47,13 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     );
     _service.addStatusListener(_onStatus);
     _connect();
-    
+
     // Auto-close after 1 minute if no response
     _timeoutTimer = Timer(const Duration(minutes: 1), () {
-      if (!_disposed && mounted && !_completed && _status == ConnectionStatus.connecting) {
+      if (!_disposed &&
+          mounted &&
+          !_completed &&
+          _status == ConnectionStatus.connecting) {
         debugPrint('[ConnectionFlowDialog] Connection timeout after 1 minute');
         if (!_disposed && mounted) {
           setState(() {
@@ -141,7 +144,9 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
       // Provide quick feedback to the initiator if rejected/disconnected
       if (!_disposed && mounted) {
         final messenger = ScaffoldMessenger.maybeOf(context);
-        final isRejected = (info.error ?? '').toLowerCase().contains('rejected');
+        final isRejected = (info.error ?? '').toLowerCase().contains(
+          'rejected',
+        );
         messenger?.showSnackBar(
           SnackBar(
             content: Text(
@@ -179,10 +184,9 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
     _disposed = true;
     _timeoutTimer?.cancel();
     _service.removeStatusListener(_onStatus);
-    // If not connected yet, cancel the attempt
-    if (_status != ConnectionStatus.connected) {
-      _service.disconnect();
-    }
+    // Don't call disconnect() here - let ConnectionManager handle cleanup.
+    // Calling disconnect() here was causing successful connections to be
+    // immediately disconnected when the dialog closed.
     super.dispose();
   }
 
@@ -226,10 +230,7 @@ class _ConnectionFlowDialogState extends State<ConnectionFlowDialog> {
                 Navigator.of(context).pop();
               },
               padding: const EdgeInsets.all(4),
-              constraints: const BoxConstraints(
-                minWidth: 32,
-                minHeight: 32,
-              ),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
           ),
         ],

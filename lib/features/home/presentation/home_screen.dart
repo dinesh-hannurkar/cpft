@@ -64,7 +64,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late HomeController controller;
   String? _networkName;
-  bool _autoHotspotEnabled = true;
+  bool _autoHotspotEnabled =
+      false; // Disabled auto-start, user must manually start hotspot
   bool _hotspotStarting = false;
   HotspotInfo? _hotspotInfo;
   Timer? _autoHotspotCooldown;
@@ -109,7 +110,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onConnectionEstablished: () {
         if (!mounted) return;
         debugPrint('[HomeScreen] 🎉 WebRTC Connection Established!');
-        AppSnackbar.showSuccess(context, 'WebRTC Connected! Ready to transfer files.');
+        AppSnackbar.showSuccess(
+          context,
+          'WebRTC Connected! Ready to transfer files.',
+        );
       },
       onConnectionLost: () {
         if (!mounted) return;
@@ -159,28 +163,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           '[HomeScreen] 📲 Auto-navigating to chat for INCOMING connection from $deviceName',
         );
         if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                deviceName: deviceName,
-                ipAddress: service.currentConnection?.ipAddress ?? '',
-                port: DiscoveryService.p2pPort,
-                myDeviceName: widget.myDeviceName,
-                connectionManager: cm,
-                initialDeviceId: deviceName,
+          // Defer navigation to avoid setState during build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatScreen(
+                  deviceName: deviceName,
+                  ipAddress: service.currentConnection?.ipAddress ?? '',
+                  port: DiscoveryService.p2pPort,
+                  myDeviceName: widget.myDeviceName,
+                  connectionManager: cm,
+                  initialDeviceId: deviceName,
+                ),
               ),
-            ),
-          );
+            );
+          });
         }
       }
 
       // Listen for status changes
       service.addStatusListener((info) {
-        if (mounted) setState(() {});
+        if (mounted) {
+          // Defer setState to avoid calling during build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+        }
       });
 
-      if (mounted) setState(() {});
+      if (mounted) {
+        // Defer setState to avoid calling during build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() {});
+        });
+      }
     };
 
     cm.addConnectionListener(_connectionListener!);
@@ -249,7 +267,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else if (result == false) {
       await decline();
       if (!mounted) return;
-      AppSnackbar.showInfo(context, 'You rejected the request from $deviceName');
+      AppSnackbar.showInfo(
+        context,
+        'You rejected the request from $deviceName',
+      );
     }
   }
 
@@ -263,12 +284,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       if (isNowDisconnected && !wasDisconnected) {
         widget.discoveryService.clearDevices();
-        // Don't pause radar if iOS user is in manual hotspot mode or Android hotspot is active
-        if (!_iosManualHotspotMode && _hotspotInfo == null) {
+        // On Android, keep radar active since WiFi Direct discovery is still running
+        // Only pause radar on iOS if not in manual hotspot mode
+        if (Platform.isIOS && !_iosManualHotspotMode && _hotspotInfo == null) {
           controller.pauseRadar();
         }
-        // Auto-start hotspot when no Wi‑Fi
-        _maybeStartHotspot();
+        // Note: Auto-start hotspot is disabled, user must manually start it
         if (mounted) setState(() {});
       } else if (!isNowDisconnected && wasDisconnected) {
         // We reconnected to some network. If hotspot is active, keep it
@@ -360,7 +381,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _hotspotStarting = true;
     });
-    
+
     try {
       final info = await LocalHotspotService.startHotspot();
       if (info != null && mounted) {
@@ -368,10 +389,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _hotspotInfo = info;
           _hotspotStarting = false;
         });
-        
+
         // Resume radar when hotspot is active
         controller.resumeRadar();
-        
+
         // Auto-show QR code when manually switching to hotspot
         if (autoShowQr && mounted) {
           // Small delay to ensure UI is updated
@@ -795,7 +816,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: InkWell(
             onTap: () {
               Clipboard.setData(ClipboardData(text: value));
-              AppSnackbar.showSuccess(context, '$label copied', duration: const Duration(milliseconds: 1500));
+              AppSnackbar.showSuccess(
+                context,
+                '$label copied',
+                duration: const Duration(milliseconds: 1500),
+              );
             },
             borderRadius: BorderRadius.circular(8),
             child: Container(
@@ -849,9 +874,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             title: 'Permission Required',
             content: Text(
               'To create a temporary hotspot, please allow the required permissions (Location and Nearby devices) in Settings.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.darkPrimary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.darkPrimary),
             ),
             confirmLabel: 'Open Settings',
             cancelLabel: 'Cancel',
@@ -863,22 +888,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           await AppPermissions.openSystemLocationSettings();
         }
       } else {
-        AppSnackbar.showError(
-          context,
-          'Nearby devices permission denied.',
-        );
+        AppSnackbar.showError(context, 'Nearby devices permission denied.');
       }
       return;
     }
 
     _autoHotspotEnabled = true;
-    if (_networkName != 'Not Connected') {
-      // Disconnect from Wi‑Fi first, then start hotspot
+
+    // Disconnect from WiFi if currently connected
+    if (_networkName != null && _networkName != 'Not Connected') {
+      // Disconnect from WiFi before starting hotspot
+      // The native layer will handle WiFi state correctly:
+      // - Android 10+: Keeps WiFi enabled, just disconnects
+      // - Android 9-: Fully disables WiFi
       try {
         await WifiService.disconnectWifi();
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 500));
     }
+
     _maybeStartHotspot(autoShowQr: true);
   }
 
@@ -907,7 +935,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final prefs = await SharedPreferences.getInstance();
         final hasSeenShowcase = prefs.getBool('home_showcase_seen') ?? false;
-        
+
         if (!hasSeenShowcase && mounted) {
           Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) {
@@ -921,7 +949,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
       _didStartShowcase = true;
     }
-    
+
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -929,7 +957,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _networkName != null && _networkName != 'Not Connected';
         // On iOS, if manual hotspot mode is active, treat it as having network
         // On Android, if hotspot is active, treat it as having network
-        final effectiveHasNetwork = hasNetwork || _iosManualHotspotMode || _hotspotInfo != null;
+        final effectiveHasNetwork =
+            hasNetwork || _iosManualHotspotMode || _hotspotInfo != null;
         final devices = effectiveHasNetwork
             ? controller.devices.values.where((d) => d.ip != _localIp).toList()
             : <DeviceInfo>[];
@@ -953,7 +982,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               setState(() {
                 _dragging = false;
               });
-              
+
               // Handle dropped files
               if (detail.files.isNotEmpty) {
                 await _handleDroppedFiles(detail.files);
@@ -986,7 +1015,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         // Show shared content banner if available (only on mobile)
                         if (!kIsWeb) const SharedContentBanner(),
                         // Show dropped files banner if files are waiting
-                        if (_droppedFiles.isNotEmpty) _buildDroppedFilesBanner(),
+                        if (_droppedFiles.isNotEmpty)
+                          _buildDroppedFilesBanner(),
                         const SizedBox(height: AppSizes.spaceBtwSections),
                         Padding(
                           padding: const EdgeInsets.symmetric(
@@ -1003,9 +1033,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         height: 20,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            AppColors.primary,
-                                          ),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                AppColors.primary,
+                                              ),
                                         ),
                                       )
                                     : Icon(
@@ -1022,7 +1053,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               Flexible(
                                 child: Text(
                                   'Finding nearby devices....',
-                                  style: Theme.of(context).textTheme.headlineMedium
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
                                       ?.copyWith(
                                         color: AppColors.primary,
                                         fontWeight: FontWeight.w400,
@@ -1059,7 +1092,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           hotspotStarting: _hotspotStarting,
                           hotspotName:
                               _hotspotInfo?.ssid ??
-                              (_iosManualHotspotMode ? 'Personal Hotspot' : null),
+                              (_iosManualHotspotMode
+                                  ? 'Personal Hotspot'
+                                  : null),
                           iosPersonalHotspot: _iosManualHotspotMode,
                           onSwitchToWifi:
                               (_hotspotInfo != null || _iosManualHotspotMode)
@@ -1069,10 +1104,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ? _showHotspotQrCode
                               : null,
                           onSwitchToHotspot:
-                              (_networkName != null &&
-                                  _networkName != 'Not Connected' &&
-                                  _hotspotInfo == null &&
-                                  !_iosManualHotspotMode)
+                              (_hotspotInfo == null && !_iosManualHotspotMode)
                               ? _switchToHotspot
                               : null,
                         ),
@@ -1085,14 +1117,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ),
                   // Drag overlay
-                  ...(_dragging ? [
-                    DragOverlay(
-                      title: 'Drop files to share',
-                      subtitle: 'Release to send files to nearby devices',
-                      iconSize: 48,
-                      showBorder: false,
-                    ),
-                  ] : []),
+                  ...(_dragging
+                      ? [
+                          DragOverlay(
+                            title: 'Drop files to share',
+                            subtitle: 'Release to send files to nearby devices',
+                            iconSize: 48,
+                            showBorder: false,
+                          ),
+                        ]
+                      : []),
                 ],
               ),
             ),
@@ -1180,12 +1214,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       connectionManager: manager,
       discoveryService: widget.discoveryService,
       myDeviceName: widget.myDeviceName,
-      droppedFiles: _droppedFiles.isNotEmpty ? List<XFile>.from(_droppedFiles) : null,
-      onFilesSent: _droppedFiles.isNotEmpty ? () {
-        setState(() {
-          _droppedFiles.clear();
-        });
-      } : null,
+      droppedFiles: _droppedFiles.isNotEmpty
+          ? List<XFile>.from(_droppedFiles)
+          : null,
+      onFilesSent: _droppedFiles.isNotEmpty
+          ? () {
+              setState(() {
+                _droppedFiles.clear();
+              });
+            }
+          : null,
     );
   }
 
@@ -1247,115 +1285,128 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               description: 'Share files via web without application.',
               tooltipBackgroundColor: Colors.white,
               textColor: Colors.black,
-              descTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-              titleTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
+              descTextStyle: const TextStyle(
+                fontSize: 12,
+                color: Colors.black87,
+              ),
+              titleTextStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+                fontSize: 16,
+              ),
               tooltipBorderRadius: BorderRadius.circular(12),
               targetBorderRadius: BorderRadius.circular(12),
               child: LinkShareButton(
-              onPressed: () async {
-                if (!mounted) return;
-
-                // Check if local-only hotspot is active (which blocks internet for WebRTC signaling)
-                final hotspotRunning =
-                    await LocalHotspotService.isHotspotRunning();
-                final lanIp = await NetworkUtils.getLanIPv4();
-                final hasNetwork = lanIp != null;
-
-                AppLogger.d(
-                  'Link share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
-                  tag: 'HomeScreen',
-                );
-
-                if (hotspotRunning) {
-                  // Local-only hotspot is active - this blocks internet access needed for WebRTC
-                  // Show dialog and let user choose to switch to WiFi
+                onPressed: () async {
                   if (!mounted) return;
-                  final shouldSwitch = await app_dialog.showAppDialog<bool>(
-                    context: context,
-                    builder: (context) => AppConfirmDialog(
-                      title: 'Internet Connection Required',
-                      content: Text(
-                        'WebRTC connections require internet access for signaling. '
-                        'A local-only hotspot is currently active.\n\n'
-                        'Would you like to stop the hotspot and open WiFi settings to connect to a network with internet access?',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.darkPrimary,
-                        ),
-                      ),
-                      confirmLabel: 'Yes, Switch to WiFi',
-                      cancelLabel: 'Cancel',
-                      destructive: false,
-                    ),
+
+                  // Check if local-only hotspot is active (which blocks internet for WebRTC signaling)
+                  final hotspotRunning =
+                      await LocalHotspotService.isHotspotRunning();
+                  final lanIp = await NetworkUtils.getLanIPv4();
+                  final hasNetwork = lanIp != null;
+
+                  AppLogger.d(
+                    'Link share check: hotspotRunning=$hotspotRunning, hasNetwork=$hasNetwork, lanIp=$lanIp',
+                    tag: 'HomeScreen',
                   );
 
-                  if (shouldSwitch == true) {
-                    // User confirmed - stop hotspot and open WiFi settings
-                    try {
-                      await LocalHotspotService.stopHotspot();
-                      AppLogger.i(
-                        'Stopped local-only hotspot for WiFi switch',
-                        tag: 'HomeScreen',
-                      );
+                  if (hotspotRunning) {
+                    // Local-only hotspot is active - this blocks internet access needed for WebRTC
+                    // Show dialog and let user choose to switch to WiFi
+                    if (!mounted) return;
+                    final shouldSwitch = await app_dialog.showAppDialog<bool>(
+                      context: context,
+                      builder: (context) => AppConfirmDialog(
+                        title: 'Internet Connection Required',
+                        content: Text(
+                          'WebRTC connections require internet access for signaling. '
+                          'A local-only hotspot is currently active.\n\n'
+                          'Would you like to stop the hotspot and open WiFi settings to connect to a network with internet access?',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.darkPrimary),
+                        ),
+                        confirmLabel: 'Yes, Switch to WiFi',
+                        cancelLabel: 'Cancel',
+                        destructive: false,
+                      ),
+                    );
 
-                      // Clear hotspot info to update UI
-                      if (mounted) {
-                        setState(() {
-                          _hotspotInfo = null;
-                          _hotspotStarting = false;
-                        });
-                      }
+                    if (shouldSwitch == true) {
+                      // User confirmed - stop hotspot and open WiFi settings
+                      try {
+                        await LocalHotspotService.stopHotspot();
+                        AppLogger.i(
+                          'Stopped local-only hotspot for WiFi switch',
+                          tag: 'HomeScreen',
+                        );
 
-                      // Open WiFi settings
-                      await WifiService.openWifiSettings();
-                      AppLogger.i(
-                        'Opened WiFi settings for user',
-                        tag: 'HomeScreen',
-                      );
-
-                      // Refresh network name after a short delay to allow WiFi connection
-                      Future.delayed(const Duration(seconds: 2), () async {
+                        // Clear hotspot info to update UI
                         if (mounted) {
-                          await _initializeNetworkName();
-                          AppLogger.i(
-                            'Refreshed network name after WiFi switch',
-                            tag: 'HomeScreen',
+                          setState(() {
+                            _hotspotInfo = null;
+                            _hotspotStarting = false;
+                          });
+                        }
+
+                        // Open WiFi settings
+                        await WifiService.openWifiSettings();
+                        AppLogger.i(
+                          'Opened WiFi settings for user',
+                          tag: 'HomeScreen',
+                        );
+
+                        // Refresh network name after a short delay to allow WiFi connection
+                        Future.delayed(const Duration(seconds: 2), () async {
+                          if (mounted) {
+                            await _initializeNetworkName();
+                            AppLogger.i(
+                              'Refreshed network name after WiFi switch',
+                              tag: 'HomeScreen',
+                            );
+                          }
+                        });
+
+                        if (mounted) {
+                          AppSnackbar.showSuccess(
+                            context,
+                            'Hotspot stopped. Please connect to WiFi with internet access.',
                           );
                         }
-                      });
-
-                      if (mounted) {
-                        AppSnackbar.showSuccess(context, 'Hotspot stopped. Please connect to WiFi with internet access.');
-                      }
-                    } catch (e) {
-                      AppLogger.w(
-                        'Failed to stop hotspot or open WiFi settings: $e',
-                        tag: 'HomeScreen',
-                      );
-                      if (mounted) {
-                        AppSnackbar.showError(context, 'Error: $e');
+                      } catch (e) {
+                        AppLogger.w(
+                          'Failed to stop hotspot or open WiFi settings: $e',
+                          tag: 'HomeScreen',
+                        );
+                        if (mounted) {
+                          AppSnackbar.showError(context, 'Error: $e');
+                        }
                       }
                     }
+                    return;
                   }
-                  return;
-                }
 
-                showAppBottomSheet(
-                  context: context,
-                  title: 'Link Share',
-                  subtitle: 'Establish direct web connection for file sharing.',
-                  showCloseButton: true,
-                  child: WebRTCConnectionBottomSheet(
-                    webrtcService: _webrtcService,
-                    webShareService: _webShareService,
-                    onConnected: () {
-                      // Optionally navigate to file transfer screen or show success
-                    },
-                    onError: (error) {
-                      AppSnackbar.showError(context, 'Connection Error: $error');
-                    },
-                  ),
-                );
-              },
+                  showAppBottomSheet(
+                    context: context,
+                    title: 'Link Share',
+                    subtitle:
+                        'Establish direct web connection for file sharing.',
+                    showCloseButton: true,
+                    child: WebRTCConnectionBottomSheet(
+                      webrtcService: _webrtcService,
+                      webShareService: _webShareService,
+                      onConnected: () {
+                        // Optionally navigate to file transfer screen or show success
+                      },
+                      onError: (error) {
+                        AppSnackbar.showError(
+                          context,
+                          'Connection Error: $error',
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -1457,16 +1508,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: ConnectedDevicesBottomSheet(
         connectionManager: connectionManager,
         onDeviceTap: _navigateToDeviceChat,
-        onFilesSent: _droppedFiles.isNotEmpty ? () {
-          setState(() {
-            _droppedFiles.clear();
-          });
-        } : null,
+        onFilesSent: _droppedFiles.isNotEmpty
+            ? () {
+                setState(() {
+                  _droppedFiles.clear();
+                });
+              }
+            : null,
       ),
     );
   }
 
-  void _navigateToDeviceChat(String deviceId, [String? ipAddress, int? port, VoidCallback? onFilesSent]) {
+  void _navigateToDeviceChat(
+    String deviceId, [
+    String? ipAddress,
+    int? port,
+    VoidCallback? onFilesSent,
+  ]) {
     final connectionManager = widget.discoveryService.connectionManager;
     if (connectionManager == null) return;
 
@@ -1480,7 +1538,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           myDeviceName: widget.myDeviceName,
           connectionManager: connectionManager,
           initialDeviceId: deviceId,
-          droppedFiles: _droppedFiles.isNotEmpty ? List<XFile>.from(_droppedFiles) : null,
+          droppedFiles: _droppedFiles.isNotEmpty
+              ? List<XFile>.from(_droppedFiles)
+              : null,
           onFilesSent: onFilesSent,
         ),
       ),
@@ -1501,7 +1561,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     // Show confirmation that files are ready
-    AppSnackbar.showInfo(context, '${_droppedFiles.length} file${_droppedFiles.length > 1 ? 's' : ''} ready to send - tap a device to share');
+    AppSnackbar.showInfo(
+      context,
+      '${_droppedFiles.length} file${_droppedFiles.length > 1 ? 's' : ''} ready to send - tap a device to share',
+    );
   }
 
   Widget _buildDroppedFilesBanner() {
@@ -1549,11 +1612,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               });
               AppSnackbar.showInfo(context, 'Files cleared');
             },
-            icon: const Icon(
-              Icons.close,
-              color: Colors.white,
-              size: 20,
-            ),
+            icon: const Icon(Icons.close, color: Colors.white, size: 20),
             tooltip: 'Clear files',
           ),
         ],

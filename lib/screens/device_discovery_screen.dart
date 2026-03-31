@@ -204,7 +204,10 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
       final webLink = await _discoveryService.getWebLink();
       if (webLink == null) {
         if (!mounted) return;
-        AppSnackbar.showWarning(context, 'Unable to generate web link. Check network connection.');
+        AppSnackbar.showWarning(
+          context,
+          'Unable to generate web link. Check network connection.',
+        );
         return;
       }
 
@@ -270,7 +273,11 @@ class _DeviceDiscoveryScreenState extends State<DeviceDiscoveryScreen> {
                         tooltip: 'Copy link',
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: webLink));
-                          AppSnackbar.showSuccess(context, 'Link copied to clipboard!', duration: const Duration(seconds: 2));
+                          AppSnackbar.showSuccess(
+                            context,
+                            'Link copied to clipboard!',
+                            duration: const Duration(seconds: 2),
+                          );
                         },
                       ),
                     ],

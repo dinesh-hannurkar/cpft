@@ -14,7 +14,9 @@ import 'multicast_platform_helper.dart';
 import 'bonjour_service.dart';
 import 'incoming_connection_service.dart';
 import '../../features/chat/services/connection_manager.dart';
+import 'package:fylooo/features/dpftp/dpftp_service.dart';
 import 'background_service.dart';
+import 'package:fylooo/features/wifi_direct/wifi_direct_service.dart';
 
 class DiscoveryService {
   MulticastService? _multicastService;
@@ -46,8 +48,16 @@ class DiscoveryService {
   Timer? _cleanupTimer;
   Timer? _networkScanTimer;
   Timer? _healthCheckTimer;
+  Timer? _connectivityCheckTimer;
   Completer<void>? _readyCompleter;
   static const int p2pPort = 53318;
+
+  // WiFi Direct
+  final _wifiDirectService = WiFiDirectService();
+  StreamSubscription<List<WiFiDirectPeer>>? _wifiDirectPeersSub;
+  bool _isWifiDirectDiscoveryActive = false;
+  bool _wasConnectedToWifi =
+      true; // Assume connected initially to trigger first check
 
   DiscoveryService({
     required this.alias,
@@ -315,6 +325,22 @@ class DiscoveryService {
           );
         }
       }
+
+      // Initialize WiFi Direct service if on Android
+      if (Platform.isAndroid) {
+        AppLogger.d('[DiscoveryService] Initializing WiFi Direct service...');
+        await _wifiDirectService.initialize();
+        if (_wifiDirectService.isSupported) {
+          _wifiDirectPeersSub = _wifiDirectService.peersStream.listen(
+            _onWifiDirectPeersFound,
+          );
+        }
+      }
+
+      // Start connectivity monitoring for conditional discovery
+      _startConnectivityCheckTimer();
+      // Perform immediate check
+      _checkConnectivityAndStartDiscovery();
     } catch (e) {
       AppLogger.w(
         'Some discovery services failed to initialize: $e',
@@ -343,6 +369,20 @@ class DiscoveryService {
         }
       }
     } catch (_) {}
+
+    // Check for parallel connection auto-accept
+    if (_sharedConnectionManager != null) {
+      bool accepted = await _sharedConnectionManager!.tryAutoAcceptConnection(
+        socket,
+      );
+      if (accepted) {
+        AppLogger.d(
+          'Auto-accepted incoming connection from $ip',
+          tag: 'Discovery',
+        );
+        return;
+      }
+    }
 
     // If no listeners yet, queue the request to avoid losing the prompt
     if (_incomingRequestListeners.isEmpty) {
@@ -548,6 +588,143 @@ class DiscoveryService {
     );
   }
 
+  /// Handle WiFi Direct peers found
+  void _onWifiDirectPeersFound(List<WiFiDirectPeer> peers) {
+    bool changed = false;
+
+    for (final peer in peers) {
+      // Find existing device by name (fuzzy match) or p2pPeerId
+      String? existingKey;
+      DeviceInfo? existingDevice;
+
+      for (final entry in _discoveredDevices.entries) {
+        if (entry.value.p2pPeerId == peer.id) {
+          existingKey = entry.key;
+          existingDevice = entry.value;
+          break;
+        }
+        // Fallback: match by name if we don't have p2pId yet
+        if (entry.value.name == peer.name && entry.value.p2pPeerId == null) {
+          existingKey = entry.key;
+          existingDevice = entry.value;
+          break;
+        }
+      }
+
+      if (existingKey != null && existingDevice != null) {
+        // Update existing device with P2P capability
+        if (existingDevice.p2pPeerId != peer.id) {
+          _discoveredDevices[existingKey] = DeviceInfo(
+            name: existingDevice.name,
+            ip: existingDevice.ip,
+            port: existingDevice.port,
+            lastSeen: DateTime.now(),
+            p2pPeerId: peer.id,
+          );
+          changed = true;
+          AppLogger.d(
+            '[DiscoveryService] 🔗 Associated P2P ID ${peer.id} with ${existingDevice.name}',
+          );
+        } else {
+          // Just update last seen
+          _discoveredDevices[existingKey] = DeviceInfo(
+            name: existingDevice.name,
+            ip: existingDevice.ip,
+            port: existingDevice.port,
+            lastSeen: DateTime.now(),
+            p2pPeerId: peer.id,
+          );
+        }
+      } else {
+        // New P2P-only device
+        // Use a special key format for P2P-only devices
+        final key = 'p2p:${peer.id}';
+
+        // Use 0.0.0.0 as placeholder IP for P2P-only devices
+        _discoveredDevices[key] = DeviceInfo(
+          name: peer.name,
+          ip: '0.0.0.0',
+          port: 0,
+          lastSeen: DateTime.now(),
+          p2pPeerId: peer.id,
+        );
+        changed = true;
+        AppLogger.d(
+          '[DiscoveryService] 🆕 Found P2P-only device: ${peer.name} (${peer.id})',
+        );
+      }
+    }
+
+    if (changed) {
+      // Notify listeners
+      for (var listener in _discoveryListeners) {
+        // We pass empty strings to just trigger a refresh, actual data is pulled from discoveredDevices
+        try {
+          listener('', '', 0);
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Start periodic connectivity check
+  void _startConnectivityCheckTimer() {
+    _connectivityCheckTimer?.cancel();
+    _connectivityCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _checkConnectivityAndStartDiscovery();
+    });
+  }
+
+  /// Check connectivity and switch discovery modes
+  Future<void> _checkConnectivityAndStartDiscovery() async {
+    if (!_isInitialized) return;
+
+    final localIp = await _getLocalIpAddress();
+    final isConnectedToWifi = localIp != null && localIp != '127.0.0.1';
+
+    if (isConnectedToWifi == _wasConnectedToWifi && _isInitialized) {
+      // No change in state
+      return;
+    }
+
+    _wasConnectedToWifi = isConnectedToWifi;
+
+    if (isConnectedToWifi) {
+      AppLogger.i(
+        '[DiscoveryService] 📶 WiFi connected ($localIp). Using standard discovery.',
+        tag: 'Discovery',
+      );
+
+      // STOP P2P Discovery
+      if (_wifiDirectService.isSupported && _isWifiDirectDiscoveryActive) {
+        await _wifiDirectService.stopDiscovery();
+        _isWifiDirectDiscoveryActive = false;
+        AppLogger.d(
+          '[DiscoveryService] Started WiFi Direct discovery (WiFi connected mode)',
+        );
+      }
+
+      // Ensure Standard Discovery is active
+      // (Re-announcing helps refresh mDNS)
+      announce();
+    } else {
+      AppLogger.i(
+        '[DiscoveryService] 📶 WiFi disconnected. Switching to P2P discovery.',
+        tag: 'Discovery',
+      );
+
+      // START P2P Discovery
+      if (_wifiDirectService.isSupported && !_isWifiDirectDiscoveryActive) {
+        final success = await _wifiDirectService.startDiscovery();
+        _isWifiDirectDiscoveryActive = success;
+        if (success) {
+          AppLogger.d(
+            '[DiscoveryService] Started WiFi Direct discovery (P2P mode active)',
+          );
+        }
+      }
+    }
+  }
+
   /// Send announcement (trigger discovery)
   Future<void> announce() async {
     if (!_isInitialized) {
@@ -580,7 +757,15 @@ class DiscoveryService {
     _cleanupTimer?.cancel();
     _networkScanTimer?.cancel();
     _healthCheckTimer?.cancel();
+    _healthCheckTimer?.cancel();
+    _connectivityCheckTimer?.cancel();
     _multicastService?.dispose();
+    DpftpService().stop(); // Release port 61234
+
+    _wifiDirectPeersSub?.cancel();
+    if (_isWifiDirectDiscoveryActive) {
+      await _wifiDirectService.stopDiscovery();
+    }
 
     // Properly await Bonjour service disposal (important for iOS/macOS)
     if (_bonjourService != null) {
@@ -952,13 +1137,17 @@ class DeviceInfo {
   final String ip;
   final int port;
   final DateTime lastSeen;
+  final String? p2pPeerId;
 
   DeviceInfo({
     required this.name,
     required this.ip,
     required this.port,
     required this.lastSeen,
+    this.p2pPeerId,
   });
+
+  bool get isP2PAvailable => p2pPeerId != null;
 }
 
 /// Internal model for queued incoming connection prompts

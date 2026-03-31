@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:fylooo/models/hotspot_info.dart';
 import 'package:flutter/services.dart';
+import 'package:fylooo/services/wifi_service.dart';
 
 class LocalHotspotService {
   static const platform = MethodChannel('com.omnity.fylooo/hotspot');
@@ -9,9 +10,10 @@ class LocalHotspotService {
       return null;
     }
     try {
+      // Disconnect from WiFi before starting hotspot
+      // Native layer handles WiFi state correctly for each Android version
       try {
-        const wifiChannel = MethodChannel('com.omnity.fylooo/wifi');
-        await wifiChannel.invokeMethod('disconnectWifi');
+        await WifiService.disconnectWifi();
       } catch (_) {}
 
       final result = await platform.invokeMethod('startLocalOnlyHotspot');
